@@ -686,7 +686,6 @@ export const Chat: React.FC = () => {
 
     setClosingConversation(true);
 
-    // Invoca a Edge Function que encerra o atendimento e envia a pesquisa CSAT de 0 a 5
     const { data, error } = await supabase.functions.invoke(
       "close-conversation",
       {
@@ -717,7 +716,6 @@ export const Chat: React.FC = () => {
     toast.success("Atendimento encerrado. Pesquisa de satisfação enviada!");
     setClosingConversation(false);
 
-    // Retorna o operador para a tela de listagem
     navigate("/inbox");
   }, [id, navigate]);
 
@@ -866,7 +864,6 @@ export const Chat: React.FC = () => {
       console.log(canSend);
 
       if (!canSend) {
-        // mantém a mensagem e marca como falha (não some)
         markLocalMessage(tempId, {
           localStatus: "failed",
           localError: get24hBlockMessage(conversation.channel),
@@ -910,7 +907,6 @@ export const Chat: React.FC = () => {
         return;
       }
 
-      // marca como enviando
       markLocalMessage(tempId, { localStatus: "sending", localError: null });
 
       let nonce: string;
@@ -961,7 +957,6 @@ export const Chat: React.FC = () => {
         return;
       }
 
-      // documento: persist filename se necessário
       if (outboundType === "document" && filename && inserted.id) {
         const { error: filenameError } = await supabase
           .from("messages")
@@ -988,7 +983,6 @@ export const Chat: React.FC = () => {
         text: persisted.text,
       };
 
-      // substitui o local pela persistida (sem “piscar”)
       setMessages((prev) => {
         const withoutTemp = prev.filter((m) => m.id !== tempId);
         const idx = withoutTemp.findIndex((m) => m.id === merged.id);
@@ -1114,6 +1108,28 @@ export const Chat: React.FC = () => {
     [id, setMessages],
   );
 
+  // 🔥 ADICIONADO: Função para deletar a mensagem física no Supabase e atualizar a interface localmente
+  const handleDeleteMessage = useCallback(
+    async (messageId: string) => {
+      try {
+        const { error } = await supabase
+          .from("messages")
+          .delete()
+          .eq("id", messageId);
+
+        if (error) throw error;
+
+        // Atualiza a lista local de mensagens removendo a deletada (Abordagem Otimista)
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+        toast.success("Mensagem apagada com sucesso!");
+      } catch (err) {
+        console.error("Erro ao deletar mensagem:", err);
+        toast.error("Não foi possível apagar a mensagem.");
+      }
+    },
+    [setMessages],
+  );
+
   if (!id) {
     return null;
   }
@@ -1195,11 +1211,13 @@ export const Chat: React.FC = () => {
             {timelineItems.map((item) =>
               item.kind === "message" ? (
                 <div key={`message-${item.message.id}`}>
+                  {/* 🔥 CORRIGIDO: Propriedade onDeleteMessage devidamente associada à nova função criada */}
                   <MessageBubble
                     message={item.message}
                     contactName={conversation?.contactName ?? ""}
                     onRetry={handleRetryLocalMessage}
                     onRetryTranscript={handleRetryAudioTranscript}
+                    onDeleteMessage={handleDeleteMessage}
                   />
                 </div>
               ) : (

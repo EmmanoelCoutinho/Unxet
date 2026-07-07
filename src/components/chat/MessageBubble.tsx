@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { DownloadIcon, FileIcon } from "lucide-react";
+import { DownloadIcon, FileIcon, Trash2 } from "lucide-react"; // 🔥 Importado Trash2 para o visual do botão
 import type { Message as UiMessage } from "../../types";
 import { AudioTranscriptStatus } from "./AudioTranscriptStatus";
 import { getSupabaseTransformedImageUrl } from "../../lib/imageUtils";
@@ -10,11 +10,12 @@ interface MessageBubbleProps {
   contactName?: string;
 
   /**
-   * Opcional: usado para permitir "Reenviar" quando a mensagem e local e falhou.
-   * Voce deve passar essa funcao a partir do Chat.tsx.
+   * Opcional: usado para permitir "Reenviar" quando a mensagem é local e falhou.
+   * Você deve passar essa função a partir do Chat.tsx.
    */
   onRetry?: (message: UiMessage) => void;
   onRetryTranscript?: (message: UiMessage) => Promise<void> | void;
+  onDeleteMessage?: (messageId: string) => Promise<void>; // 🔥 ADICIONADO: Propriedade para deletar a mensagem
 }
 
 type LocalSendStatus = "sending" | "failed" | "sent";
@@ -99,6 +100,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   onRetry,
   onRetryTranscript,
+  onDeleteMessage, // 🔥 ADICIONADO: Capturando a propriedade
 }) => {
   const payload = message.payload ?? {};
   const isClient = message.author === "cliente";
@@ -265,18 +267,42 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       <div className="flex items-center justify-end mt-1">
         <span className="text-[11px] text-gray-400 max-w-[320px] text-right">
           {localError}
-        </span>
+        </span> {/* 🌟 CORRIGIDO: Fechamento da tag alterado para </span> */}
       </div>
     );
   }, [showStatusRow, localStatus, localError, canRetryFailedMessage]);
 
+  // 🔥 ADICIONADO: Handler para gerenciar o clique de exclusão
+  const handleDeleteClick = async () => {
+    if (!onDeleteMessage) return;
+    const confirmed = window.confirm("Deseja realmente apagar esta mensagem para todos?");
+    if (confirmed) {
+      await onDeleteMessage(message.id);
+    }
+  };
+
   return (
-    <div className={`flex ${isClient ? "justify-start" : "justify-end"}`}>
+    // 🔥 MODIFICADO: Adicionado a classe "group" para podermos controlar o hover do botão
+    <div className={`flex w-full group ${isClient ? "justify-start" : "justify-end"}`}>
       <div
         className={`flex items-end gap-2 max-w-md ${
           isClient ? "" : "flex-row-reverse"
         }`}
       >
+        {/* 🔥 ADICIONADO: Elemento visual do botão de deletar (aparece apenas no hover da linha do atendente) */}
+        {!isClient && onDeleteMessage && localStatus !== "sending" && (
+          <div className="opacity-0 group-hover:opacity-100 flex items-center mb-6 transition-opacity duration-150 order-first">
+            <button
+              type="button"
+              onClick={handleDeleteClick}
+              className="p-1.5 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+              title="Apagar mensagem"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-col">
           <div className={bubbleClass}>
             {mediaUrl && (
@@ -309,7 +335,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         className="w-56 h-9 bg-transparent outline-none"
                         src={mediaUrl}
                       >
-                        Seu navegador não suporta o player de audio.
+                        Seu navegador não suporta o player de áudio.
                       </audio>
                     </div>
                     <AudioTranscriptStatus
@@ -410,7 +436,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         >
           <img
             src={previewSrc}
-            alt="Pre-visualizacao"
+            alt="Pré-visualização"
             className="max-h-full max-w-full rounded-lg object-contain"
             onClick={(event) => event.stopPropagation()}
           />

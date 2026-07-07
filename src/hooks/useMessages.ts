@@ -19,6 +19,7 @@ type DbMessage = {
   filename?: string | null;
   transcript_status?: "PENDING" | "PROCESSING" | "DONE" | "FAILED" | null;
   transcript_text?: string | null;
+  is_deleted?: boolean | null; // Adicionado caso use soft delete
 };
 
 const safeParsePayload = (raw: any) => {
@@ -138,20 +139,23 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
     payload?.deepgram?.transcript ??
     undefined;
 
+  // Se a mensagem foi marcada como deletada no banco, altera o texto visual
+  const isDeleted = row.is_deleted || payload?.is_deleted || false;
+  const textContent = isDeleted ? "🚫 Mensagem apagada" : (row.text ?? caption ?? "");
+
   return {
     id: row.id,
     conversationId: row.conversation_id,
     direction,
     author: row.direction === "inbound" ? "cliente" : "atendente",
-    text: row.text ?? caption ?? "",
-    type,
-    mediaUrl: mediaUrl ?? undefined,
-    mediaMimeType: mediaMimeType ?? undefined,
-    filename: filename ?? undefined,
-    fileSize: fileSize ?? undefined,
-    transcriptStatus: transcriptStatus ?? undefined,
-    transcriptText:
-      typeof transcriptText === "string" ? transcriptText : undefined,
+    text: textContent,
+    type: isDeleted ? "text" : type,
+    mediaUrl: isDeleted ? undefined : (mediaUrl ?? undefined),
+    mediaMimeType: isDeleted ? undefined : (mediaMimeType ?? undefined),
+    filename: isDeleted ? undefined : (filename ?? undefined),
+    fileSize: isDeleted ? undefined : (fileSize ?? undefined),
+    transcriptStatus: isDeleted ? undefined : (transcriptStatus ?? undefined),
+    transcriptText: isDeleted ? undefined : (typeof transcriptText === "string" ? transcriptText : undefined),
     payload,
     createdAt: row.sent_at ?? row.created_at ?? new Date().toISOString(),
   };
@@ -163,14 +167,9 @@ function isLocalOptimisticId(id: any) {
   return typeof id === "string" && id.startsWith("local-");
 }
 
-/**
- * Merge que preserva mensagens otimistas locais (local-*) quando o hook refaz fetch.
- * Assim o refetch/realtime de conversations não "apaga" o optimistic.
- */
 function mergeDbWithLocalOptimistics(prev: UiMessage[], db: UiMessage[]) {
   const locals = prev.filter((m) => isLocalOptimisticId(m.id));
   if (!locals.length) {
-    // garante ordenação
     return [...db].sort(
       (a, b) =>
         new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
@@ -179,17 +178,13 @@ function mergeDbWithLocalOptimistics(prev: UiMessage[], db: UiMessage[]) {
 
   const merged: UiMessage[] = [...db];
 
-  // Heurística segura: manter local se ainda não existe "equivalente" no DB.
-  // (melhor ainda quando você adicionar nonce depois)
   for (const lm of locals) {
     const lmAt = new Date(lm.createdAt).getTime();
     const exists = merged.some((m) => {
-      // só tenta equivalência para outbound do atendente
       if (m.author !== "atendente") return false;
 
       const mAt = new Date(m.createdAt).getTime();
 
-      // janela de 60s (evita duplicar quando DB já tem a mesma msg)
       const closeInTime =
         Number.isFinite(lmAt) &&
         Number.isFinite(mAt) &&
@@ -211,19 +206,12 @@ function mergeDbWithLocalOptimistics(prev: UiMessage[], db: UiMessage[]) {
   return merged;
 }
 
-/**
- * Quando chega INSERT de uma mensagem do atendente e existe optimistic local-*,
- * substitui a última optimistic compatível (mesmo type) para evitar:
- * - duplicar
- * - "sumir e voltar"
- */
 function replaceLastLocalOptimisticWithPersisted(
   current: UiMessage[],
   persisted: UiMessage,
 ) {
   if (persisted.author !== "atendente") return null;
 
-  // Procura a última optimistic local-* compatível pelo type
   for (let i = current.length - 1; i >= 0; i--) {
     const m = current[i];
     if (!isLocalOptimisticId(m.id)) continue;
@@ -338,7 +326,6 @@ export function useMessages(conversationId: string | null) {
 
       const mapped = (data ?? []).map((row) => mapDbMessage(row as DbMessage));
 
-      // ✅ IMPORTANTE: não sobrescrever state com mapped (isso apaga local-*)
       setMessages((prev) => {
         const next = mergeDbWithLocalOptimistics(prev, mapped);
         messagesCache.set(conversationId, next);
@@ -386,7 +373,6 @@ export function useMessages(conversationId: string | null) {
           const newMsg = mapDbMessage(payload.new as DbMessage);
 
           setMessages((current) => {
-            // 1) Se já existe exatamente pelo ID, só mescla
             const existingIdx = current.findIndex((m) => m.id === newMsg.id);
             if (existingIdx >= 0) {
               const existing = current[existingIdx];
@@ -407,7 +393,6 @@ export function useMessages(conversationId: string | null) {
               return next;
             }
 
-            // 2) Se veio do atendente e existe local-*, substitui a última optimistic compatível
             const replaced = replaceLastLocalOptimisticWithPersisted(
               current,
               newMsg,
@@ -417,7 +402,6 @@ export function useMessages(conversationId: string | null) {
               return replaced;
             }
 
-            // 3) Caso geral: adiciona no final
             const next = [...current, newMsg].sort(
               (a, b) =>
                 new Date(a.createdAt).getTime() -
@@ -453,9 +437,31 @@ export function useMessages(conversationId: string | null) {
               mediaUrl: updatedMsg.mediaUrl ?? existing.mediaUrl,
               mediaMimeType: updatedMsg.mediaMimeType ?? existing.mediaMimeType,
               text: updatedMsg.text ?? existing.text,
+              type: updatedMsg.type ?? existing.type,
             };
 
             const next = current.map((m, i) => (i === existingIdx ? merged : m));
+            messagesCache.set(conversationId, next);
+            return next;
+          });
+        },
+      )
+      // 🔥 ADICIONADO: Captura o evento de remoção física da linha (DELETE) no Supabase
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const deletedId = payload.old?.id;
+          if (!deletedId) return;
+
+          setMessages((current) => {
+            // Remove a mensagem diretamente do estado visual ou transforma em um placeholder "apagada"
+            const next = current.filter((m) => m.id !== deletedId);
             messagesCache.set(conversationId, next);
             return next;
           });
@@ -480,6 +486,20 @@ export function useMessages(conversationId: string | null) {
     [conversationId],
   );
 
+  // 🛠️ FUNÇÃO ADICIONADA: Permite disparar a exclusão direto do front-end
+  const deleteMessage = useCallback(async (messageId: string) => {
+    try {
+      const { error } = await supabase
+        .from("messages")
+        .delete()
+        .eq("id", messageId);
+
+      if (error) throw error;
+    } catch (err) {
+      console.error("Erro ao deletar mensagem local:", err);
+    }
+  }, []);
+
   return {
     messages,
     loading,
@@ -487,5 +507,6 @@ export function useMessages(conversationId: string | null) {
     error,
     refetch: () => fetchMessages({ reason: "refetch" }),
     setMessages: setMessagesSafe,
+    deleteMessage, // Retornada aqui para uso nos balões de chat
   };
 }
