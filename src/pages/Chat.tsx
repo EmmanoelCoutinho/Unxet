@@ -726,7 +726,7 @@ export const Chat: React.FC = () => {
 
       setTransferringConversation(true);
 
-      const { data, error } = await supabase.functions.invoke(
+      const { error } = await supabase.functions.invoke(
         "transfer-conversation",
         {
           body: {
@@ -735,8 +735,6 @@ export const Chat: React.FC = () => {
           },
         },
       );
-
-      console.log(data);
 
       if (error) {
         console.error("Erro ao transferir conversa:", error);
@@ -861,8 +859,6 @@ export const Chat: React.FC = () => {
       const isMetaProvider = conversation.provider === "meta";
       const canSend = !isMetaProvider || isInside24hWindow(lastInboundAt);
 
-      console.log(canSend);
-
       if (!canSend) {
         markLocalMessage(tempId, {
           localStatus: "failed",
@@ -892,8 +888,6 @@ export const Chat: React.FC = () => {
         });
         return;
       }
-
-      console.log("props", conversation);
 
       const functionName = getSendFunctionName(
         conversation.channel,

@@ -8,6 +8,47 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SECRET_KEY")! // ✅ usa a nova secret key
 );
 
+const encoder = new TextEncoder();
+
+const toHex = (buffer: ArrayBuffer) =>
+  Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+// Comparação em tempo constante para não vazar a assinatura por timing
+const safeEqual = (a: string, b: string) => {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+};
+
+// Valida o header X-Hub-Signature-256 enviado pela Meta (HMAC-SHA256 do corpo bruto)
+const isValidSignature = async (
+  rawBody: string,
+  signatureHeader: string | null,
+  appSecret: string,
+) => {
+  if (!signatureHeader?.startsWith("sha256=")) return false;
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(appSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(rawBody),
+  );
+
+  return safeEqual(`sha256=${toHex(signature)}`, signatureHeader);
+};
+
 serve(async (req) => {
   try {
     const url = new URL(req.url);
@@ -17,8 +58,9 @@ serve(async (req) => {
       const mode = url.searchParams.get("hub.mode");
       const token = url.searchParams.get("hub.verify_token");
       const challenge = url.searchParams.get("hub.challenge");
+      const verifyToken = Deno.env.get("META_VERIFY_TOKEN");
 
-      if (mode === "subscribe" && token === Deno.env.get("META_VERIFY_TOKEN")) {
+      if (mode === "subscribe" && verifyToken && token === verifyToken) {
         console.log("✅ Webhook verificado com sucesso!");
         return new Response(challenge, { status: 200 });
       }
@@ -28,7 +70,25 @@ serve(async (req) => {
 
     // 2️⃣ POST — Recebimento de mensagens
     if (req.method === "POST") {
-      const body = await req.json();
+      const appSecret = Deno.env.get("META_APP_SECRET");
+      if (!appSecret) {
+        console.error("❌ META_APP_SECRET não configurado");
+        return new Response("Internal error", { status: 500 });
+      }
+
+      const rawBody = await req.text();
+      const validSignature = await isValidSignature(
+        rawBody,
+        req.headers.get("x-hub-signature-256"),
+        appSecret,
+      );
+
+      if (!validSignature) {
+        console.warn("⚠️ Assinatura inválida no webhook Meta");
+        return new Response("Invalid signature", { status: 401 });
+      }
+
+      const body = JSON.parse(rawBody);
 
       for (const entry of body.entry ?? []) {
         for (const change of entry.changes ?? []) {
@@ -36,6 +96,23 @@ serve(async (req) => {
           const contacts = change.value?.contacts;
           if (!messages || !contacts) continue;
 
+          // 🧩 0. Identifica a clínica dona do número que recebeu a mensagem
+          const phoneNumberId = change.value?.metadata?.phone_number_id;
+          if (!phoneNumberId) continue;
+
+          const { data: connection, error: connectionError } = await supabase
+            .from("channel_connections")
+            .select("clinic_id")
+            .eq("meta_phone_number_id", phoneNumberId)
+            .maybeSingle();
+
+          if (connectionError) throw connectionError;
+          if (!connection?.clinic_id) {
+            console.warn("⚠️ Nenhuma conexão para phone_number_id", phoneNumberId);
+            continue;
+          }
+
+          const clinicId = connection.clinic_id;
           const contact = contacts[0];
           const waId = contact.wa_id;
           const name = contact.profile?.name;
@@ -52,20 +129,16 @@ serve(async (req) => {
               msg.document?.caption ??
               null;
 
-            // 🧩 1. Upsert do contato
-            const { data: contactData, error: contactError } = await supabase
-              .from("contacts")
-              .upsert(
-                {
-                  meta_contact_id: waId,
-                  name,
-                  phone: waId,
-                  last_seen_at: timestamp,
-                },
-                { onConflict: "meta_contact_id" }
-              )
-              .select()
-              .single();
+            // 🧩 1. Busca ou cria o contato dentro da clínica
+            const { data: contactId, error: contactError } = await supabase.rpc(
+              "find_or_create_contact_for_conversation",
+              {
+                p_clinic_id: clinicId,
+                p_phone: waId,
+                p_name: name ?? null,
+                p_meta_contact_id: waId,
+              },
+            );
 
             if (contactError) throw contactError;
 
@@ -73,7 +146,8 @@ serve(async (req) => {
             let { data: conversation } = await supabase
               .from("conversations")
               .select("*")
-              .eq("contact_id", contactData.id)
+              .eq("clinic_id", clinicId)
+              .eq("contact_id", contactId)
               .eq("status", "open")
               .maybeSingle();
 
@@ -81,7 +155,8 @@ serve(async (req) => {
               const { data: newConv, error: convError } = await supabase
                 .from("conversations")
                 .insert({
-                  contact_id: contactData.id,
+                  clinic_id: clinicId,
+                  contact_id: contactId,
                   status: "open",
                   channel: "whatsapp",
                   assigned_user_id: null,

@@ -26,15 +26,6 @@ const META_WA_CONFIG_ID = import.meta.env.VITE_META_WA_CONFIG_ID as
 const META_REDIRECT_URI = import.meta.env.VITE_META_REDIRECT_URI as
   | string
   | undefined;
-const EVOLUTION_API_URL = import.meta.env.VITE_EVOLUTION_API_URL as
-  | string
-  | undefined;
-const EVOLUTION_API_KEY = import.meta.env.VITE_EVOLUTION_API_KEY as
-  | string
-  | undefined;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_CLIENT_KEY as
-  | string
-  | undefined;
 
 type Connection = {
   id: string;
@@ -324,13 +315,6 @@ export const MetaIntegrationsPage: React.FC = () => {
   const startEvolutionConnection = useCallback(async () => {
     if (!clinicId) return;
 
-    if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
-      setErrorMsg(
-        "Configuracao Evolution ausente (VITE_EVOLUTION_API_URL / VITE_EVOLUTION_API_KEY).",
-      );
-      return;
-    }
-
     setErrorMsg(null);
     setQrLoading(true);
 
@@ -351,8 +335,6 @@ export const MetaIntegrationsPage: React.FC = () => {
             channel: "whatsapp",
             status: "disconnected",
             session_name: `clinic_${clinicId}`,
-            evolution_api_url: EVOLUTION_API_URL,
-            evolution_api_key: EVOLUTION_API_KEY,
           })
           .select(
             "id,provider,channel,meta_waba_id,meta_phone_number_id,meta_page_id,meta_ig_user_id,qr_code,connected_phone,connected_name,session_name,last_connection_at,last_disconnection_at,status,updated_at",
@@ -397,25 +379,18 @@ export const MetaIntegrationsPage: React.FC = () => {
     setDisconnectLoading(true);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      const response = await fetch(
-        "https://ketolvqnptmdczkzrqba.supabase.co/functions/v1/disconnect-evolution-connection",
+      const { error: fnError } = await supabase.functions.invoke(
+        "disconnect-evolution-connection",
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY } : {}),
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          },
-          body: JSON.stringify({
+          body: {
             connectionId: whatsappEvolution.id,
-          }),
+          },
         },
       );
 
-      if (!response.ok) {
-        const errorPayload = (await response.json().catch(() => null)) as {
+      if (fnError) {
+        const response = (fnError as { context?: Response }).context;
+        const errorPayload = (await response?.json?.().catch(() => null)) as {
           error?: string;
           message?: string;
         } | null;

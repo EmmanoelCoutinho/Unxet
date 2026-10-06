@@ -197,9 +197,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     setMessage(`${message}${emoji}`);
   };
 
-  const AUDIO_CONVERTER_URL = import.meta.env.VITE_AUDIO_CONVERTER_URL;
-  const AUDIO_CONVERTER_KEY = import.meta.env.VITE_AUDIO_CONVERTER_KEY;
-
   const normalizeMimeType = (value?: string | null) =>
     (value || "").toLowerCase().trim();
 
@@ -417,22 +414,21 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const fd = new FormData();
     fd.append("file", webmBlob, `voice-${Date.now()}.webm`);
 
-    const res = await fetch(`${AUDIO_CONVERTER_URL}/v1/convert-webm-to-ogg`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${AUDIO_CONVERTER_KEY}`,
-      },
+    // A conversão passa pela edge function para não expor a chave do conversor
+    const { data, error } = await supabase.functions.invoke("convert-audio", {
       body: fd,
     });
 
-    if (!res.ok) {
-      const maybeJson = await res.json().catch(() => null);
+    if (error) {
+      const response = (error as { context?: Response }).context;
+      const maybeJson = await response?.json?.().catch(() => null);
       const msg =
-        maybeJson?.error || `Falha ao converter áudio (HTTP ${res.status})`;
+        maybeJson?.error ||
+        `Falha ao converter áudio${response?.status ? ` (HTTP ${response.status})` : ""}`;
       throw new Error(msg);
     }
 
-    const oggBlob = await res.blob();
+    const oggBlob = data instanceof Blob ? data : null;
 
     if (!oggBlob || oggBlob.size === 0) {
       throw new Error("Conversão retornou arquivo vazio");
@@ -496,7 +492,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       .getPublicUrl(filePath);
 
     const publicUrl = publicData.publicUrl;
-    console.log(`[uploadFileToSupabase] ${kind} URL pública:`, publicUrl);
 
     return { publicUrl, path: filePath };
   };
