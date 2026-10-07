@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import logo from "../../assets/logo-unxet.png";
 import { useAuth } from "../../contexts/AuthContext";
 import { useClinic } from "../../contexts/ClinicContext";
+import { ProfileModal } from "./ProfileModal";
 
 function getInitials(name: string) {
   return name
@@ -25,6 +26,8 @@ export const Header = () => {
   );
 
   const [open, setOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const isAdmin = profile?.role === "admin";
 
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -67,7 +70,7 @@ export const Header = () => {
             className="w-9 h-9 rounded-full bg-[#0A84FF] text-white flex items-center justify-center font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0A84FF]"
             aria-haspopup="menu"
             aria-expanded={open}
-            aria-label="Abrir menu do usuÃ¡rio"
+            aria-label="Abrir menu do usuário"
           >
             {initials}
           </button>
@@ -75,7 +78,7 @@ export const Header = () => {
             <div
               ref={menuRef}
               role="menu"
-              className="absolute right-10 -bottom-32 mt-2 w-64 rounded-lg border border-[#E5E7EB] bg-white shadow-lg z-50 overflow-hidden"
+              className="absolute right-10 top-full mt-2 w-64 rounded-lg border border-[#E5E7EB] bg-white shadow-lg z-50 overflow-hidden"
             >
               <div className="px-4 py-3 bg-[#F9FAFB]">
                 <div className="text-[#1E1E1E] font-medium">
@@ -88,18 +91,26 @@ export const Header = () => {
                 )}
               </div>
               <div className="py-1">
-                {/* <button
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-[#F3F4F6]"
-                  onClick={() => setOpen(false)}
-                >
-                  Perfil
-                </button>
                 <button
                   className="w-full text-left px-4 py-2 text-sm hover:bg-[#F3F4F6]"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setOpen(false);
+                    setProfileOpen(true);
+                  }}
                 >
-                  Configurações
-                </button> */}
+                  Meu perfil
+                </button>
+                {isAdmin && (
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-[#F3F4F6]"
+                    onClick={() => {
+                      setOpen(false);
+                      navigate("/inbox/settings");
+                    }}
+                  >
+                    Configurações
+                  </button>
+                )}
                 <div className="my-1 h-px bg-[#E5E7EB]" />
                 <button
                   className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -113,6 +124,7 @@ export const Header = () => {
           <span>{clinic?.name}</span>
         </div>
       </div>
+      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
     </header>
   );
 };

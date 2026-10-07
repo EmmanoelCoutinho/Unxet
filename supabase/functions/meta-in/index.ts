@@ -1053,6 +1053,22 @@ serve(async (req)=>{
           continue;
         }
         let conversation = foundConvByMeta;
+        // Reabertura automática desligada: mantém a conversa encerrada e abre um
+        // novo atendimento. meta_conversation_id é único, então a conversa antiga
+        // é desvinculada antes de criar a nova.
+        if (conversation && conversation.status === STATUS_CLOSED && direction === DIRECTION_INBOUND && automationSettings.reopen_on_inbound_enabled !== true) {
+          const { error: detachErr } = await supabase.from("conversations").update({
+            meta_conversation_id: null
+          }).eq("id", conversation.id);
+          if (detachErr) {
+            logSbError(rid, "conversations.detach_closed", detachErr, {
+              conversationId: conversation.id,
+              channel
+            });
+            continue;
+          }
+          conversation = null;
+        }
         if (!conversation) {
           const insertConversationPayload = {
             clinic_id: clinicId,

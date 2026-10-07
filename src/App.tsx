@@ -32,6 +32,7 @@ import { ContactsPage } from "./pages/Contacts";
 import { MassMessagesPage } from "./pages/MassMessages"; 
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { FEATURES, type FeatureKey } from "./constants/features";
 
 type RequireAuthProps = {
   children: ReactNode;
@@ -60,6 +61,15 @@ const RequireAuth = ({ children }: RequireAuthProps) => {
 
   return <>{children}</>;
 };
+
+// Módulos desligados em FEATURES redirecionam para o início do inbox
+const FeatureGate = ({
+  feature,
+  children,
+}: {
+  feature: FeatureKey;
+  children: ReactNode;
+}) => (FEATURES[feature] ? <>{children}</> : <Navigate to="/inbox" replace />);
 
 function RoutedApp() {
   const location = useLocation();
@@ -106,11 +116,21 @@ function RoutedApp() {
             <Route path="quick-messages" element={<QuickMessagesPage />} />
             <Route
               path="marketing-campaigns"
-              element={<MarketingCampaignsPage />}
+              element={
+                <FeatureGate feature="marketingCampaigns">
+                  <MarketingCampaignsPage />
+                </FeatureGate>
+              }
             />
             
-            {/* 2. ADICIONADO A ROTA DO MASS MESSAGES DENTRO DO INBOX */}
-            <Route path="mass-messages" element={<MassMessagesPage />} />
+            <Route
+              path="mass-messages"
+              element={
+                <FeatureGate feature="massMessages">
+                  <MassMessagesPage />
+                </FeatureGate>
+              }
+            />
 
             <Route
               path="settings/integrations/meta"

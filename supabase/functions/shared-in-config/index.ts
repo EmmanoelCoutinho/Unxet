@@ -132,7 +132,8 @@ serve(async (req)=>{
       channelConnectionId,
       whatsappNumberId,
       defaultDepartmentId,
-      timestampIso
+      timestampIso,
+      reopenOnInbound: automationSettings.reopen_on_inbound_enabled === true
     });
     const wasClosed = conversation.status === STATUS_CLOSED;
     // ── 7. Processamento de mídia ─────────────────────────────────────────
@@ -454,7 +455,7 @@ async function findOrCreateContact(params) {
   return contact;
 }
 async function findOrCreateConversation(params) {
-  const { supabase, clinicId, contactId, channelConnectionId, whatsappNumberId, defaultDepartmentId, timestampIso } = params;
+  const { supabase, clinicId, contactId, channelConnectionId, whatsappNumberId, defaultDepartmentId, timestampIso, reopenOnInbound } = params;
   // Busca conversa existente filtrando por channel_connection_id —
   // isso garante isolamento correto entre Meta e Evolution mesmo que
   // o mesmo número de telefone exista em ambos os providers.
@@ -471,6 +472,12 @@ async function findOrCreateConversation(params) {
     throw new Error("Conversation lookup error");
   }
   let conversation = foundConversations?.[0];
+  // Reabertura automática desligada: a conversa encerrada permanece encerrada
+  // e a nova mensagem abre um novo atendimento (antes ela ficava "escondida"
+  // dentro da conversa encerrada).
+  if (conversation?.status === STATUS_CLOSED && !reopenOnInbound) {
+    conversation = undefined;
+  }
   // -------------------------------------------------------------------
   // CREATE
   // -------------------------------------------------------------------

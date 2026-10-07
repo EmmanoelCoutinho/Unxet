@@ -265,9 +265,9 @@ export const BotBindingsEditor = ({
               Selecione quais canais de atendimento disponíveis usarão este bot.
             </p>
           </div>
-          {/* <Button variant="ghost" size="sm" onClick={load}>
+          <Button variant="ghost" size="sm" onClick={load}>
             Recarregar
-          </Button> */}
+          </Button>
         </div>
       </Card>
 

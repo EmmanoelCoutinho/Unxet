@@ -451,9 +451,9 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             minutesError={formErrors.autoCloseAfterMinutes}
           />
 
-          {/* <AutomationCard
+          <AutomationCard
             title="Reabrir conversa automaticamente"
-            description="Se o cliente enviar nova mensagem, a conversa encerrada e reaberta automaticamente."
+            description="Ligado: se o cliente enviar nova mensagem, a conversa encerrada volta para a fila de espera com todo o histórico. Desligado: a conversa encerrada é mantida e um novo atendimento é aberto."
             enabled={formValues.reopenOnInboundEnabled}
             onEnabledChange={(value) =>
               handleToggleChange({
@@ -461,7 +461,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
               })
             }
             showMinutesInput={false}
-          /> */}
+          />
 
           <div className="flex items-center justify-end pt-2">
             <Button
