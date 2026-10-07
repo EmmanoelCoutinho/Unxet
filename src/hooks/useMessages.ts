@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Message as UiMessage } from "../types";
 import { supabase } from "../lib/supabaseClient";
 
+export const DELETED_MESSAGE_TEXT = "🚫 Mensagem apagada";
+
 type DbMessage = {
   id: string;
   conversation_id: string;
@@ -19,7 +21,8 @@ type DbMessage = {
   filename?: string | null;
   transcript_status?: "PENDING" | "PROCESSING" | "DONE" | "FAILED" | null;
   transcript_text?: string | null;
-  is_deleted?: boolean | null; // Adicionado caso use soft delete
+  deleted_at?: string | null;
+  deleted_for_everyone?: boolean | null;
 };
 
 const safeParsePayload = (raw: any) => {
@@ -139,9 +142,9 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
     payload?.deepgram?.transcript ??
     undefined;
 
-  // Se a mensagem foi marcada como deletada no banco, altera o texto visual
-  const isDeleted = row.is_deleted || payload?.is_deleted || false;
-  const textContent = isDeleted ? "🚫 Mensagem apagada" : (row.text ?? caption ?? "");
+  // Exclusão lógica (edge function delete-message): mantém a linha e oculta o conteúdo
+  const isDeleted = !!row.deleted_at;
+  const textContent = isDeleted ? DELETED_MESSAGE_TEXT : (row.text ?? caption ?? "");
 
   return {
     id: row.id,
@@ -157,6 +160,8 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
     transcriptStatus: isDeleted ? undefined : (transcriptStatus ?? undefined),
     transcriptText: isDeleted ? undefined : (typeof transcriptText === "string" ? transcriptText : undefined),
     payload,
+    deletedAt: row.deleted_at ?? undefined,
+    deletedForEveryone: row.deleted_for_everyone ?? undefined,
     createdAt: row.sent_at ?? row.created_at ?? new Date().toISOString(),
   };
 };
@@ -310,7 +315,9 @@ export function useMessages(conversationId: string | null) {
             media_mime_type,
             filename,
             transcript_status,
-            transcript_text
+            transcript_text,
+            deleted_at,
+            deleted_for_everyone
           `,
         )
         .eq("conversation_id", conversationId)
@@ -486,20 +493,6 @@ export function useMessages(conversationId: string | null) {
     [conversationId],
   );
 
-  // 🛠️ FUNÇÃO ADICIONADA: Permite disparar a exclusão direto do front-end
-  const deleteMessage = useCallback(async (messageId: string) => {
-    try {
-      const { error } = await supabase
-        .from("messages")
-        .delete()
-        .eq("id", messageId);
-
-      if (error) throw error;
-    } catch (err) {
-      console.error("Erro ao deletar mensagem local:", err);
-    }
-  }, []);
-
   return {
     messages,
     loading,
@@ -507,6 +500,5 @@ export function useMessages(conversationId: string | null) {
     error,
     refetch: () => fetchMessages({ reason: "refetch" }),
     setMessages: setMessagesSafe,
-    deleteMessage, // Retornada aqui para uso nos balões de chat
   };
 }

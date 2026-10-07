@@ -44,6 +44,21 @@ const getEventText = (event: ConversationEvent) => {
     case "conversation_reopened":
       return `${actor} reabriu a conversa`;
 
+    case "message_deleted":
+      return meta.deleted_for_everyone
+        ? `${actor} apagou uma mensagem para todos`
+        : `${actor} removeu uma mensagem do Unxet`;
+
+    case "satisfaction_survey_sent":
+      return "Sistema enviou a pesquisa de satisfação";
+
+    case "satisfaction_survey_answered": {
+      const score = meta.score;
+      return score
+        ? `Cliente avaliou o atendimento com nota ${score}`
+        : "Cliente respondeu a pesquisa de satisfação";
+    }
+
     case "reopened_automatically": {
       const reason = meta.reason;
       if (reason === "incoming_message") {

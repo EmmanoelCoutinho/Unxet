@@ -366,6 +366,8 @@ serve(async (req)=>{
       conversation_id: conversation.id,
       direction: "outbound",
       type: outboundType,
+      // ID da mensagem no WhatsApp (necessário para apagar e para status)
+      meta_message_id: evolutionResponse?.key?.id ?? null,
       sender: session,
       receiver: number,
       text: text ?? "",

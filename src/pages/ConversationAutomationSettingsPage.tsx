@@ -4,6 +4,7 @@ import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
+import { Textarea } from "../components/ui/Textarea";
 import { Card } from "../components/ui/Card";
 import { SettingsTabs } from "../components/settings/SettingsTabs";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
@@ -18,6 +19,10 @@ type ConversationAutomationSettingsRow = {
   reopen_on_inbound_enabled: boolean;
   sla_first_response_enabled: boolean;
   sla_first_response_after_minutes: number | null;
+  satisfaction_survey_enabled: boolean;
+  satisfaction_survey_message: string;
+  satisfaction_survey_thanks_message: string | null;
+  satisfaction_survey_window_minutes: number;
   created_at: string;
   updated_at: string;
 };
@@ -30,13 +35,22 @@ type AutomationFormValues = {
   reopenOnInboundEnabled: boolean;
   slaFirstResponseEnabled: boolean;
   slaFirstResponseAfterMinutes: string;
+  surveyEnabled: boolean;
+  surveyMessage: string;
+  surveyThanksMessage: string;
+  surveyWindowHours: string;
 };
 
 type AutomationFormErrors = {
   returnToPendingAfterMinutes?: string;
   autoCloseAfterMinutes?: string;
   slaFirstResponseAfterMinutes?: string;
+  surveyMessage?: string;
+  surveyWindowHours?: string;
 };
+
+// Limites do banco: 5 minutos a 7 dias
+const SURVEY_MAX_WINDOW_HOURS = 168;
 
 const DEFAULT_SETTINGS: AutomationFormValues = {
   returnToPendingEnabled: false,
@@ -46,6 +60,11 @@ const DEFAULT_SETTINGS: AutomationFormValues = {
   reopenOnInboundEnabled: true,
   slaFirstResponseEnabled: false,
   slaFirstResponseAfterMinutes: "5",
+  surveyEnabled: false,
+  surveyMessage:
+    "Como você avalia o nosso atendimento? Responda com uma nota de 1 a 5, sendo 1 muito insatisfeito e 5 muito satisfeito.",
+  surveyThanksMessage: "Obrigado pela sua avaliação!",
+  surveyWindowHours: "24",
 };
 
 const parsePositiveInteger = (value: string) => {
@@ -76,6 +95,13 @@ const mapRowToForm = (
     slaFirstResponseAfterMinutes:
       row.sla_first_response_after_minutes?.toString() ??
       DEFAULT_SETTINGS.slaFirstResponseAfterMinutes,
+    surveyEnabled: row.satisfaction_survey_enabled ?? false,
+    surveyMessage:
+      row.satisfaction_survey_message ?? DEFAULT_SETTINGS.surveyMessage,
+    surveyThanksMessage: row.satisfaction_survey_thanks_message ?? "",
+    surveyWindowHours: row.satisfaction_survey_window_minutes
+      ? Math.max(1, Math.round(row.satisfaction_survey_window_minutes / 60)).toString()
+      : DEFAULT_SETTINGS.surveyWindowHours,
   };
 };
 
@@ -214,6 +240,15 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
       }
     }
 
+    if (!values.surveyMessage.trim()) {
+      nextErrors.surveyMessage = "Informe a mensagem da pesquisa.";
+    }
+
+    const surveyHours = parsePositiveInteger(values.surveyWindowHours);
+    if (!surveyHours || surveyHours > SURVEY_MAX_WINDOW_HOURS) {
+      nextErrors.surveyWindowHours = `Informe de 1 a ${SURVEY_MAX_WINDOW_HOURS} horas.`;
+    }
+
     setFormErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   }, []);
@@ -286,6 +321,12 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
         sla_first_response_after_minutes: parsePositiveInteger(
           values.slaFirstResponseAfterMinutes,
         ),
+        satisfaction_survey_enabled: values.surveyEnabled,
+        satisfaction_survey_message: values.surveyMessage.trim(),
+        satisfaction_survey_thanks_message:
+          values.surveyThanksMessage.trim() || null,
+        satisfaction_survey_window_minutes:
+          (parsePositiveInteger(values.surveyWindowHours) ?? 24) * 60,
         updated_at: new Date().toISOString(),
       };
 
@@ -462,6 +503,85 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             }
             showMinutesInput={false}
           />
+
+          <Card className="p-6">
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="max-w-3xl">
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    Pesquisa de satisfação
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Ao finalizar um atendimento, o cliente recebe a pergunta e
+                    responde com uma nota de 1 a 5. A nota é registrada sem
+                    reabrir a conversa e aparece no painel de atendimentos.
+                  </p>
+                </div>
+                <SettingsToggle
+                  checked={formValues.surveyEnabled}
+                  onChange={(value) =>
+                    handleToggleChange({ surveyEnabled: value })
+                  }
+                  label="Pesquisa de satisfação"
+                />
+              </div>
+
+              <Textarea
+                label="Mensagem da pesquisa"
+                value={formValues.surveyMessage}
+                onChange={(event) =>
+                  setFormValues((prev) => ({
+                    ...prev,
+                    surveyMessage: event.target.value,
+                  }))
+                }
+                maxLength={1000}
+                disabled={!formValues.surveyEnabled}
+                error={formErrors.surveyMessage}
+              />
+
+              <Textarea
+                label="Mensagem de agradecimento (opcional)"
+                value={formValues.surveyThanksMessage}
+                onChange={(event) =>
+                  setFormValues((prev) => ({
+                    ...prev,
+                    surveyThanksMessage: event.target.value,
+                  }))
+                }
+                maxLength={500}
+                disabled={!formValues.surveyEnabled}
+                placeholder="Deixe em branco para não enviar agradecimento."
+              />
+
+              <div className="max-w-xs">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={SURVEY_MAX_WINDOW_HOURS}
+                  step={1}
+                  label="Prazo para resposta (horas)"
+                  value={formValues.surveyWindowHours}
+                  onChange={(event) =>
+                    setFormValues((prev) => ({
+                      ...prev,
+                      surveyWindowHours: event.target.value,
+                    }))
+                  }
+                  disabled={!formValues.surveyEnabled}
+                  error={formErrors.surveyWindowHours}
+                />
+              </div>
+
+              <p className="text-xs text-slate-500">
+                A pesquisa é enviada quando um atendente finaliza a conversa
+                (não no fechamento automático). No WhatsApp oficial, o envio
+                depende da janela de 24 horas desde a última mensagem do
+                cliente.
+              </p>
+            </div>
+          </Card>
 
           <div className="flex items-center justify-end pt-2">
             <Button
