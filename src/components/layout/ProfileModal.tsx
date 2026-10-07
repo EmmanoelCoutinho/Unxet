@@ -5,28 +5,23 @@ import { useAuth } from "../../contexts/AuthContext";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 
-const MIN_PASSWORD_LENGTH = 8;
-
 export const ProfileModal: React.FC<{
   open: boolean;
   onClose: () => void;
 }> = ({ open, onClose }) => {
-  const { authUser, profile, refreshProfile } = useAuth();
+  const { authUser, profile, refreshProfile, sendPasswordResetEmail } =
+    useAuth();
 
   const [name, setName] = useState("");
   const [savingName, setSavingName] = useState(false);
 
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [savingPassword, setSavingPassword] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setName(profile?.name ?? "");
-    setPassword("");
-    setConfirmPassword("");
-    setPasswordError(null);
+    setResetSent(false);
   }, [open, profile?.name]);
 
   if (!open) return null;
@@ -55,38 +50,22 @@ export const ProfileModal: React.FC<{
     toast.success("Nome atualizado.");
   };
 
-  const handleChangePassword = async () => {
-    setPasswordError(null);
+  // A troca de senha usa o mesmo fluxo do "Esqueci a senha": um link enviado
+  // ao e-mail do usuário, para que só quem tem acesso ao e-mail possa trocá-la.
+  const handleSendPasswordReset = async () => {
+    if (!authUser?.email) return;
 
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setPasswordError(
-        `A senha deve ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`,
-      );
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setPasswordError("As senhas não conferem.");
-      return;
-    }
-
-    setSavingPassword(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setSavingPassword(false);
+    setSendingReset(true);
+    const { error } = await sendPasswordResetEmail(authUser.email);
+    setSendingReset(false);
 
     if (error) {
-      console.error("Erro ao alterar senha:", error);
-      setPasswordError(
-        error.message?.toLowerCase().includes("different")
-          ? "A nova senha deve ser diferente da atual."
-          : "Não foi possível alterar a senha.",
-      );
+      console.error("Erro ao enviar e-mail de redefinição:", error);
+      toast.error("Não foi possível enviar o e-mail. Tente novamente.");
       return;
     }
 
-    setPassword("");
-    setConfirmPassword("");
-    toast.success("Senha alterada.");
+    setResetSent(true);
   };
 
   return (
@@ -124,30 +103,27 @@ export const ProfileModal: React.FC<{
             <h4 className="text-sm font-semibold text-gray-900">
               Alterar senha
             </h4>
-            <Input
-              label="Nova senha"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <Input
-              label="Confirmar nova senha"
-              type="password"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              error={passwordError ?? undefined}
-            />
+            {resetSent ? (
+              <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                Enviamos um link para <strong>{authUser?.email}</strong>. Abra o
+                e-mail e siga as instruções para definir a nova senha.
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500">
+                Por segurança, a troca de senha é feita por um link enviado ao
+                seu e-mail.
+              </p>
+            )}
             <div className="flex justify-end">
               <Button
                 type="button"
                 size="sm"
-                onClick={handleChangePassword}
-                isLoading={savingPassword}
-                disabled={!password || !confirmPassword}
+                variant={resetSent ? "secondary" : "primary"}
+                onClick={handleSendPasswordReset}
+                isLoading={sendingReset}
+                disabled={!authUser?.email}
               >
-                Alterar senha
+                {resetSent ? "Reenviar link" : "Enviar link por e-mail"}
               </Button>
             </div>
           </section>

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import { canSetPassword, clearSetPasswordGrant } from "../lib/passwordLink";
 
 export const SetPassword: React.FC = () => {
   const navigate = useNavigate();
@@ -10,16 +11,23 @@ export const SetPassword: React.FC = () => {
   const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [allowed, setAllowed] = useState(false);
 
   const canSubmit = useMemo(() => {
-    return password.length >= 8 && password === confirm && !loading;
-  }, [confirm, loading, password]);
+    return allowed && password.length >= 8 && password === confirm && !loading;
+  }, [allowed, confirm, loading, password]);
 
   useEffect(() => {
     const check = async () => {
       const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        setError("Sessão não encontrada. Abra novamente o link do convite.");
+      // Só libera para quem acabou de abrir um link de convite/redefinição.
+      // Uma sessão comum (já logada) precisa pedir o link por e-mail.
+      if (canSetPassword(data.session)) {
+        setAllowed(true);
+      } else {
+        setError(
+          "Este acesso expirou ou não veio de um link enviado por e-mail. Solicite um novo link para definir sua senha.",
+        );
       }
       setCheckingSession(false);
     };
@@ -44,6 +52,7 @@ export const SetPassword: React.FC = () => {
       const { error: updError } = await supabase.auth.updateUser({ password });
       if (updError) throw updError;
 
+      clearSetPasswordGrant();
       navigate("/inbox", { replace: true });
     } catch (e: any) {
       setError(e?.message ?? "Erro ao definir senha.");
@@ -55,7 +64,7 @@ export const SetPassword: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-lg font-semibold text-gray-900">Crie sua senha</h1>
+        <h1 className="text-lg font-semibold text-gray-900">Defina sua senha</h1>
         <p className="mt-2 text-sm text-gray-600">
           Defina uma senha para acessar o sistema.
         </p>
@@ -67,6 +76,14 @@ export const SetPassword: React.FC = () => {
             {error && (
               <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {error}
+                {!allowed && (
+                  <Link
+                    to="/forgot-password"
+                    className="mt-2 block font-medium underline"
+                  >
+                    Receber novo link por e-mail
+                  </Link>
+                )}
               </div>
             )}
 
@@ -96,7 +113,7 @@ export const SetPassword: React.FC = () => {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!canSubmit || (error?.includes("Sessão") ?? false)}
+                disabled={!canSubmit}
                 className="mt-2 w-full rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
               >
                 {loading ? "Salvando…" : "Salvar senha"}
