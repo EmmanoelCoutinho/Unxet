@@ -242,9 +242,9 @@ export const BotSimulator = ({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* <Button variant="ghost" size="sm" onClick={() => load()}>
+            <Button variant="ghost" size="sm" onClick={() => load()}>
               Recarregar dados
-            </Button> */}
+            </Button>
             <Button
               className="bg-green-500 hover:bg-green-400"
               variant="secondary"

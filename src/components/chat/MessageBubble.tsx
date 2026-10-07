@@ -15,7 +15,12 @@ interface MessageBubbleProps {
    */
   onRetry?: (message: UiMessage) => void;
   onRetryTranscript?: (message: UiMessage) => Promise<void> | void;
-  onDeleteMessage?: (messageId: string) => Promise<void>; // 🔥 ADICIONADO: Propriedade para deletar a mensagem
+  onDeleteMessage?: (messageId: string) => Promise<void>;
+  /**
+   * "everyone": o provedor apaga também no WhatsApp do cliente (Evolution).
+   * "system": a API não permite (Meta); a mensagem some apenas do Unxet.
+   */
+  deleteMode?: "everyone" | "system";
 }
 
 type LocalSendStatus = "sending" | "failed" | "sent";
@@ -100,7 +105,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   onRetry,
   onRetryTranscript,
-  onDeleteMessage, // 🔥 ADICIONADO: Capturando a propriedade
+  onDeleteMessage,
+  deleteMode = "system",
 }) => {
   const payload = message.payload ?? {};
   const isClient = message.author === "cliente";
@@ -272,31 +278,43 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     );
   }, [showStatusRow, localStatus, localError, canRetryFailedMessage]);
 
-  // 🔥 ADICIONADO: Handler para gerenciar o clique de exclusão
+  const deleteLabel =
+    deleteMode === "everyone" ? "Apagar para todos" : "Remover do Unxet";
+
   const handleDeleteClick = async () => {
     if (!onDeleteMessage) return;
-    const confirmed = window.confirm("Deseja realmente apagar esta mensagem para todos?");
+    const confirmed = window.confirm(
+      deleteMode === "everyone"
+        ? "Apagar esta mensagem para todos? Ela também será apagada no WhatsApp do cliente."
+        : "Remover esta mensagem do Unxet? Este canal não permite apagar mensagens já entregues, então o cliente continuará vendo a mensagem.",
+    );
     if (confirmed) {
       await onDeleteMessage(message.id);
     }
   };
 
+  const canDelete =
+    !isClient &&
+    !!onDeleteMessage &&
+    !message.deletedAt &&
+    !message.id.startsWith("local-") &&
+    localStatus !== "sending";
+
   return (
-    // 🔥 MODIFICADO: Adicionado a classe "group" para podermos controlar o hover do botão
     <div className={`flex w-full group ${isClient ? "justify-start" : "justify-end"}`}>
       <div
         className={`flex items-end gap-2 max-w-md ${
           isClient ? "" : "flex-row-reverse"
         }`}
       >
-        {/* 🔥 ADICIONADO: Elemento visual do botão de deletar (aparece apenas no hover da linha do atendente) */}
-        {!isClient && onDeleteMessage && localStatus !== "sending" && (
+        {canDelete && (
           <div className="opacity-0 group-hover:opacity-100 flex items-center mb-6 transition-opacity duration-150 order-first">
             <button
               type="button"
               onClick={handleDeleteClick}
               className="p-1.5 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-              title="Apagar mensagem"
+              title={deleteLabel}
+              aria-label={deleteLabel}
             >
               <Trash2 className="h-4 w-4" />
             </button>

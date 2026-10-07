@@ -17,6 +17,8 @@ import { QuickMessagesPicker } from "./QuickMessagesPicker";
 import type { QuickMessage } from "../../services/quickMessages";
 import { compressImageFile } from "../../lib/imageUtils";
 
+const MAX_AUDIO_FILE_BYTES = 16 * 1024 * 1024;
+
 type SendableInput =
   | string
   | {
@@ -626,6 +628,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     fileInputRef.current?.click();
   };
 
+  const handleAudioOption = () => {
+    if (disabled) return;
+
+    setShowAttachments(false);
+    audioInputRef.current?.click();
+  };
+
   const openQuickMessagesPicker = (
     event?: React.MouseEvent<HTMLButtonElement>,
   ) => {
@@ -743,6 +752,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     if (!files || files.length === 0) return;
 
     const file = files[0];
+
+    // Limite de áudio do WhatsApp
+    if (file.size > MAX_AUDIO_FILE_BYTES) {
+      toast.info("O áudio deve ter no máximo 16 MB.");
+      e.target.value = "";
+      return;
+    }
+
     const validAudio = await validateAudioFile(file);
 
     if (!validAudio) {
@@ -899,7 +916,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                   <span className="text-xs text-[#6B7280]">Selecionar</span>
                 </button>
 
-                {/* <button
+                <button
                   type="button"
                   onClick={handleAudioOption}
                   className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-[#F3F4F6] transition-colors"
@@ -909,7 +926,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     Áudio
                   </span>
                   <span className="text-xs text-[#6B7280]">Selecionar</span>
-                </button> */}
+                </button>
 
                 <button
                   type="button"

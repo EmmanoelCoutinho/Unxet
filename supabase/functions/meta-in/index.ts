@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 const VERIFY_TOKEN = Deno.env.get("META_VERIFY_TOKEN") ?? "";
 const META_APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
 const ALLOW_UNSIGNED_TESTS = (Deno.env.get("META_ALLOW_UNSIGNED_TESTS") ?? "false") === "true";
@@ -1034,6 +1035,36 @@ serve(async (req)=>{
           });
           continue;
         }
+        // Resposta (nota 1 a 5) de pesquisa de satisfação pendente: registra na
+        // conversa encerrada, sem reabrir nem criar novo atendimento.
+        if (direction === DIRECTION_INBOUND && dbType === MESSAGE_TYPE_TEXT && channelConnectionId && contact?.id) {
+          const surveyAnswer = await matchSurveyAnswer(supabase, {
+            clinicId,
+            contactId: contact.id,
+            channelConnectionId,
+            text
+          });
+          if (surveyAnswer) {
+            const { error: surveyMsgErr } = await supabase.from("messages").insert({
+              conversation_id: surveyAnswer.conversationId,
+              meta_message_id: providerMessageId || `no-mid:${Date.now()}:${counterpartyId}`,
+              direction,
+              type: dbType,
+              sender: senderId,
+              receiver: metaInboxId,
+              text,
+              payload: e.raw,
+              sent_at: timestampIso,
+              is_automated: false
+            });
+            if (surveyMsgErr) {
+              logSbError(rid, "messages.insert.survey_answer", surveyMsgErr, {
+                conversationId: surveyAnswer.conversationId
+              });
+            }
+            continue;
+          }
+        }
         const { data: foundConvByMeta, error: convMetaErr } = await supabase.from("conversations").select(`
             id,
             status,
@@ -1053,6 +1084,22 @@ serve(async (req)=>{
           continue;
         }
         let conversation = foundConvByMeta;
+        // Reabertura automática desligada: mantém a conversa encerrada e abre um
+        // novo atendimento. meta_conversation_id é único, então a conversa antiga
+        // é desvinculada antes de criar a nova.
+        if (conversation && conversation.status === STATUS_CLOSED && direction === DIRECTION_INBOUND && automationSettings.reopen_on_inbound_enabled !== true) {
+          const { error: detachErr } = await supabase.from("conversations").update({
+            meta_conversation_id: null
+          }).eq("id", conversation.id);
+          if (detachErr) {
+            logSbError(rid, "conversations.detach_closed", detachErr, {
+              conversationId: conversation.id,
+              channel
+            });
+            continue;
+          }
+          conversation = null;
+        }
         if (!conversation) {
           const insertConversationPayload = {
             clinic_id: clinicId,

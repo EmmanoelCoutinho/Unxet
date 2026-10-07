@@ -1,5 +1,4 @@
 import { supabase } from "../../../lib/supabaseClient";
-import { mockContactNotes, mockContacts } from "../mocks/contacts";
 import type {
   Contact,
   ContactListFilters,
@@ -35,8 +34,16 @@ type ClinicUserNameRow = {
   name: string | null;
 };
 
-const shouldUseMockData = (tenantId: string | null) =>
-  !tenantId || tenantId === "mock-tenant";
+const EMPTY_METRICS: ContactMetrics = {
+  total: 0,
+  active: 0,
+  inactive7Days: 0,
+  inactive30Days: 0,
+};
+
+// Remove caracteres com significado na sintaxe de filtros do PostgREST
+// (vírgula, parênteses, aspas) para o texto da busca não alterar a consulta.
+const sanitizeSearch = (value: string) => value.replace(/[,()"'\\%*]/g, " ").trim();
 
 const loadUserNames = async (userIds: string[]) => {
   const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
@@ -138,35 +145,11 @@ const mapNote = (
   created_at: row.created_at,
 });
 
-const applyMockFilters = (
-  contacts: Contact[],
-  filters: ContactListFilters,
-): ContactListResult => {
-  const normalizedSearch = filters.search.trim().toLowerCase();
-  const filtered = contacts.filter((contact) => {
-    const matchesSearch =
-      !normalizedSearch ||
-      contact.name.toLowerCase().includes(normalizedSearch) ||
-      contact.phone.toLowerCase().includes(normalizedSearch);
-    const matchesStatus =
-      filters.status === "all" || contact.status === filters.status;
-    return matchesSearch && matchesStatus;
-  });
-
-  const start = (filters.page - 1) * filters.pageSize;
-  return {
-    contacts: filtered.slice(start, start + filters.pageSize),
-    total: filtered.length,
-  };
-};
-
 export const listContacts = async (
   tenantId: string | null,
   filters: ContactListFilters,
 ): Promise<ContactListResult> => {
-  if (shouldUseMockData(tenantId)) {
-    return applyMockFilters(mockContacts, filters);
-  }
+  if (!tenantId) return { contacts: [], total: 0 };
 
   let query = supabase
     .from("contacts")
@@ -176,7 +159,7 @@ export const listContacts = async (
     .eq("clinic_id", tenantId)
     .order("last_seen_at", { ascending: false, nullsFirst: false });
 
-  const search = filters.search.trim();
+  const search = sanitizeSearch(filters.search);
   if (search) {
     query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
   }
@@ -214,22 +197,16 @@ export const listContacts = async (
 export const getContactMetrics = async (
   tenantId: string | null,
 ): Promise<ContactMetrics> => {
-  const source = shouldUseMockData(tenantId)
-    ? mockContacts
-    : (
-        await supabase
-          .from("contacts")
-          .select("last_seen_at")
-          .eq("clinic_id", tenantId)
-      );
+  if (!tenantId) return EMPTY_METRICS;
 
-  if (!Array.isArray(source)) {
-    if (source.error) throw source.error;
-  }
+  const { data, error } = await supabase
+    .from("contacts")
+    .select("last_seen_at")
+    .eq("clinic_id", tenantId);
 
-  const contacts = Array.isArray(source)
-    ? source
-    : ((source.data ?? []) as Array<{ last_seen_at: string | null }>);
+  if (error) throw error;
+
+  const contacts = (data ?? []) as Array<{ last_seen_at: string | null }>;
 
   const now = Date.now();
   const daysSince = (date: string | null) =>
@@ -237,27 +214,14 @@ export const getContactMetrics = async (
 
   return {
     total: contacts.length,
-    active: contacts.filter((contact) => {
-      const lastSeenAt =
-        "last_contact_at" in contact
-          ? contact.last_contact_at
-          : contact.last_seen_at;
-      return daysSince(lastSeenAt) < 30;
-    }).length,
-    inactive7Days: contacts.filter((contact) => {
-      const lastSeenAt =
-        "last_contact_at" in contact
-          ? contact.last_contact_at
-          : contact.last_seen_at;
-      return daysSince(lastSeenAt) >= 7;
-    }).length,
-    inactive30Days: contacts.filter((contact) => {
-      const lastSeenAt =
-        "last_contact_at" in contact
-          ? contact.last_contact_at
-          : contact.last_seen_at;
-      return daysSince(lastSeenAt) >= 30;
-    }).length,
+    active: contacts.filter((contact) => daysSince(contact.last_seen_at) < 30)
+      .length,
+    inactive7Days: contacts.filter(
+      (contact) => daysSince(contact.last_seen_at) >= 7,
+    ).length,
+    inactive30Days: contacts.filter(
+      (contact) => daysSince(contact.last_seen_at) >= 30,
+    ).length,
   };
 };
 
@@ -265,11 +229,7 @@ export const listContactNotes = async (
   tenantId: string | null,
   contactId: string | null,
 ): Promise<ContactNote[]> => {
-  if (!contactId) return [];
-
-  if (shouldUseMockData(tenantId)) {
-    return mockContactNotes.filter((note) => note.contact_id === contactId);
-  }
+  if (!tenantId || !contactId) return [];
 
   const { data, error } = await supabase
     .from("contact_notes")
@@ -289,16 +249,7 @@ export const createContactNote = async (
   tenantId: string | null,
   input: CreateContactNoteInput,
 ): Promise<ContactNote> => {
-  if (shouldUseMockData(tenantId)) {
-    return {
-      id: `note-${Date.now()}`,
-      contact_id: input.contactId,
-      user_id: input.userId,
-      user_name: "Você",
-      note: input.note.trim(),
-      created_at: new Date().toISOString(),
-    };
-  }
+  if (!tenantId) throw new Error("Empresa não identificada.");
 
   const { data, error } = await supabase
     .from("contact_notes")
@@ -321,7 +272,7 @@ export const deleteContactNote = async (
   tenantId: string | null,
   noteId: string,
 ) => {
-  if (shouldUseMockData(tenantId)) return;
+  if (!tenantId) throw new Error("Empresa não identificada.");
 
   const { error } = await supabase.from("contact_notes").delete().eq("id", noteId);
   if (error) throw error;

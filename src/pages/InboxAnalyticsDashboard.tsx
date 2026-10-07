@@ -5,9 +5,11 @@ import { supabase } from "../lib/supabaseClient";
 import {
   fetchBacklog,
   fetchInboxAnalytics,
+  fetchSatisfactionSummary,
   type AnalyticsFilters,
   type AnalyticsResponse,
   type BacklogItem,
+  type SatisfactionSummary,
 } from "../services/inboxAnalytics";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { MessageCircleIcon } from "lucide-react";
@@ -222,6 +224,9 @@ export const InboxAnalyticsDashboard: React.FC = () => {
 
   const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
   const [backlog, setBacklog] = useState<BacklogItem[]>([]);
+  const [satisfaction, setSatisfaction] = useState<SatisfactionSummary | null>(
+    null,
+  );
 
   const [departments, setDepartments] = useState<
     Array<{ id: string; name: string }>
@@ -294,13 +299,20 @@ export const InboxAnalyticsDashboard: React.FC = () => {
       setError(null);
 
       try {
-        const [analyticsResult, backlogResult] = await Promise.all([
-          fetchInboxAnalytics(filters),
-          fetchBacklog(filters),
-        ]);
+        const [analyticsResult, backlogResult, satisfactionResult] =
+          await Promise.all([
+            fetchInboxAnalytics(filters),
+            fetchBacklog(filters),
+            // A pesquisa é opcional: uma falha aqui não derruba o painel
+            fetchSatisfactionSummary(filters).catch((surveyError) => {
+              console.error("Erro ao carregar pesquisa de satisfação:", surveyError);
+              return null;
+            }),
+          ]);
 
         setAnalytics(analyticsResult);
         setBacklog(backlogResult);
+        setSatisfaction(satisfactionResult);
       } catch (fetchError: unknown) {
         const message =
           fetchError instanceof Error
@@ -555,11 +567,10 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                 />
               </article>
 
-              {/* CARD ADICIONADO: TOP ATENDENTES */}
               <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <SectionHeader title="Top Atendentes" subtitle="Distribuição de novos leads por responsável" />
                 <HorizontalBars
-                  rows={analytics.leadsByUserId || []}
+                  rows={analytics.leadsByUserId}
                   labelKey="userName"
                   valueKey="leads"
                   color="#f59e0b"
@@ -570,6 +581,96 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                 <SectionHeader title="Evolução diária de leads" />
                 <DailyLeadsChart rows={analytics.dailyLeads} />
               </article>
+
+              {satisfaction ? (
+                <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
+                  <SectionHeader
+                    title="Satisfação dos clientes"
+                    subtitle="Notas de 1 a 5 enviadas pelos clientes após o encerramento do atendimento."
+                  />
+                  {satisfaction.sent === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      Nenhuma pesquisa enviada no período. Ative a pesquisa em
+                      Configurações → Automações do chat.
+                    </p>
+                  ) : (
+                    <div className="space-y-5">
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                        {[
+                          {
+                            label: "Nota média",
+                            value:
+                              satisfaction.averageScore !== null
+                                ? satisfaction.averageScore.toFixed(1)
+                                : "-",
+                          },
+                          {
+                            label: "Satisfeitos (4 e 5)",
+                            value:
+                              satisfaction.csatPct !== null
+                                ? `${Math.round(satisfaction.csatPct)}%`
+                                : "-",
+                          },
+                          {
+                            label: "Taxa de resposta",
+                            value:
+                              satisfaction.responseRatePct !== null
+                                ? `${Math.round(satisfaction.responseRatePct)}%`
+                                : "-",
+                          },
+                          {
+                            label: "Respondidas / enviadas",
+                            value: `${satisfaction.answered} / ${satisfaction.sent}`,
+                          },
+                        ].map((kpi) => (
+                          <div
+                            key={kpi.label}
+                            className="rounded-lg border border-slate-100 bg-slate-50 p-3"
+                          >
+                            <p className="text-xs text-slate-500">{kpi.label}</p>
+                            <p className="mt-1 text-xl font-semibold text-slate-900">
+                              {kpi.value}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid gap-6 lg:grid-cols-2">
+                        <div>
+                          <p className="mb-3 text-sm font-medium text-slate-700">
+                            Distribuição das notas
+                          </p>
+                          <HorizontalBars
+                            rows={[...satisfaction.distribution]
+                              .reverse()
+                              .map((item) => ({
+                                nota: `Nota ${item.score}`,
+                                respostas: item.count,
+                              }))}
+                            labelKey="nota"
+                            valueKey="respostas"
+                            color="#8b5cf6"
+                          />
+                        </div>
+                        <div>
+                          <p className="mb-3 text-sm font-medium text-slate-700">
+                            Nota média por atendente
+                          </p>
+                          <HorizontalBars
+                            rows={satisfaction.byAgent.slice(0, 10).map((item) => ({
+                              atendente: `${item.name} (${item.answered})`,
+                              media: item.averageScore,
+                            }))}
+                            labelKey="atendente"
+                            valueKey="media"
+                            color="#8b5cf6"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              ) : null}
 
               <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
                 <SectionHeader

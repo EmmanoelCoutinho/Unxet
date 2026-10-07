@@ -11,7 +11,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { useClinic } from "../contexts/ClinicContext";
 import type { Conversation, Message, Channel } from "../types";
-import { useMessages, mapDbMessage } from "../hooks/useMessages";
+import {
+  useMessages,
+  mapDbMessage,
+  DELETED_MESSAGE_TEXT,
+} from "../hooks/useMessages";
 import { useConversationEvents } from "../hooks/useConversationEvents";
 import { useQuickMessages } from "../hooks/useQuickMessages";
 import { Button } from "../components/ui/Button";
@@ -713,7 +717,7 @@ export const Chat: React.FC = () => {
       );
     }
 
-    toast.success("Atendimento encerrado. Pesquisa de satisfação enviada!");
+    toast.success("Atendimento encerrado.");
     setClosingConversation(false);
 
     navigate("/inbox");
@@ -1103,23 +1107,50 @@ export const Chat: React.FC = () => {
   );
 
   // 🔥 ADICIONADO: Função para deletar a mensagem física no Supabase e atualizar a interface localmente
+  // Evolution apaga também no WhatsApp do cliente; a API da Meta não permite
+  const deleteMode: "everyone" | "system" =
+    conversation?.provider === "evolution" ? "everyone" : "system";
+
   const handleDeleteMessage = useCallback(
     async (messageId: string) => {
-      try {
-        const { error } = await supabase
-          .from("messages")
-          .delete()
-          .eq("id", messageId);
+      const { data, error } = await supabase.functions.invoke(
+        "delete-message",
+        { body: { messageId } },
+      );
 
-        if (error) throw error;
-
-        // Atualiza a lista local de mensagens removendo a deletada (Abordagem Otimista)
-        setMessages((prev) => prev.filter((m) => m.id !== messageId));
-        toast.success("Mensagem apagada com sucesso!");
-      } catch (err) {
-        console.error("Erro ao deletar mensagem:", err);
-        toast.error("Não foi possível apagar a mensagem.");
+      if (error) {
+        const response = (error as { context?: Response }).context;
+        const payload = await response?.json?.().catch(() => null);
+        console.error("Erro ao apagar mensagem:", error);
+        toast.error(payload?.error ?? "Não foi possível apagar a mensagem.");
+        return;
       }
+
+      const deletedAt = new Date().toISOString();
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                text: DELETED_MESSAGE_TEXT,
+                type: "text",
+                mediaUrl: undefined,
+                mediaMimeType: undefined,
+                filename: undefined,
+                fileSize: undefined,
+                transcriptStatus: undefined,
+                transcriptText: undefined,
+                deletedAt,
+                deletedForEveryone: !!data?.deletedForEveryone,
+              }
+            : m,
+        ),
+      );
+      toast.success(
+        data?.deletedForEveryone
+          ? "Mensagem apagada para todos."
+          : "Mensagem removida do Unxet.",
+      );
     },
     [setMessages],
   );
@@ -1205,13 +1236,13 @@ export const Chat: React.FC = () => {
             {timelineItems.map((item) =>
               item.kind === "message" ? (
                 <div key={`message-${item.message.id}`}>
-                  {/* 🔥 CORRIGIDO: Propriedade onDeleteMessage devidamente associada à nova função criada */}
                   <MessageBubble
                     message={item.message}
                     contactName={conversation?.contactName ?? ""}
                     onRetry={handleRetryLocalMessage}
                     onRetryTranscript={handleRetryAudioTranscript}
                     onDeleteMessage={handleDeleteMessage}
+                    deleteMode={deleteMode}
                   />
                 </div>
               ) : (

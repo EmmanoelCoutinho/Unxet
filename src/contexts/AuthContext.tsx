@@ -29,6 +29,8 @@ type AuthContextType = {
   // 1. ADICIONADO A TIPAGEM DO NOVO MÉTODO
   sendPasswordResetEmail: (email: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  // Recarrega o perfil (clinic_users) do usuário logado, ignorando o cache
+  refreshProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -227,8 +229,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // 3. INCLUÍDO O NOVO MÉTODO NO USEMEMO E NO RETORNO DO PROVIDER
+  const reloadProfile = async () => {
+    if (authUser?.id) await refreshProfile(authUser.id);
+  };
+
   const value = useMemo(
-    () => ({ authUser, profile, loading, signInWithEmail, sendPasswordResetEmail, signOut }),
+    () => ({
+      authUser,
+      profile,
+      loading,
+      signInWithEmail,
+      sendPasswordResetEmail,
+      signOut,
+      refreshProfile: reloadProfile,
+    }),
     [authUser, profile, loading]
   );
 

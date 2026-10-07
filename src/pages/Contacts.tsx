@@ -26,7 +26,7 @@ const DEFAULT_FILTERS: ContactListFilters = {
 export const ContactsPage: React.FC = () => {
   const { authUser } = useAuth();
   const { clinicId, loading: clinicLoading } = useClinic();
-  const tenantId = clinicId ?? "mock-tenant";
+  const tenantId = clinicId;
   const [filters, setFilters] = useState<ContactListFilters>(DEFAULT_FILTERS);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
 
@@ -64,12 +64,13 @@ export const ContactsPage: React.FC = () => {
 
   const emptyStateLabel = useMemo(() => {
     if (clinicLoading) return "Carregando empresa...";
-    if (!clinicId) return "Exibindo dados mockados até identificar a empresa.";
+    if (!clinicId) return "Não foi possível identificar a empresa do seu usuário.";
     return null;
   }, [clinicId, clinicLoading]);
 
   const handleCreateNote = async (note: string) => {
-    await createNote(authUser?.id ?? "mock-user", note);
+    if (!authUser?.id) return;
+    await createNote(authUser.id, note);
     toast.success("Nota criada.");
   };
 

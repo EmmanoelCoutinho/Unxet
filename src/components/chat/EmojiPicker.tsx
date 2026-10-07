@@ -9,14 +9,110 @@ type EmojiPickerProps = {
   onPick: (emoji: string) => void;
 };
 
+// Termos de busca (pt/en) para os emojis mais usados em atendimento
 const EMOJI_NAME_HINTS: Record<string, string[]> = {
-  "😂": ["risada", "haha", "rindo", "laugh"],
-  "❤️": ["coração", "amor", "love", "heart"],
-  "👍": ["like", "ok", "boa", "joinha", "thumb"],
-  "🙏": ["obrigado", "por favor", "rezar", "pray"],
+  "😀": ["feliz", "sorriso", "alegre", "smile", "happy"],
+  "😃": ["feliz", "sorriso", "alegre", "smile"],
+  "😄": ["feliz", "sorriso", "risada", "smile"],
+  "😁": ["sorriso", "dentes", "grin"],
+  "😆": ["risada", "rindo", "haha"],
+  "😅": ["alivio", "ufa", "suor", "nervoso"],
+  "🤣": ["risada", "rolando", "kkk", "haha", "rofl"],
+  "😂": ["risada", "haha", "rindo", "kkk", "laugh"],
+  "🙂": ["sorriso", "ok", "simpatico"],
+  "😉": ["piscadela", "piscar", "wink"],
+  "😊": ["feliz", "timido", "sorriso", "blush"],
+  "😇": ["anjo", "inocente", "angel"],
+  "🥰": ["apaixonado", "amor", "carinho"],
+  "😍": ["apaixonado", "amei", "olhos de coracao", "love"],
+  "🤩": ["incrivel", "estrela", "uau", "wow"],
+  "😘": ["beijo", "kiss"],
+  "😋": ["delicia", "gostoso", "yum"],
+  "😜": ["brincadeira", "lingua", "zoeira"],
+  "🤗": ["abraco", "hug"],
+  "🤭": ["ops", "risadinha"],
+  "🤫": ["silencio", "segredo", "shh"],
+  "🤔": ["pensando", "duvida", "hmm", "think"],
+  "😐": ["neutro", "serio", "sem expressao"],
+  "😏": ["malicioso", "sorriso de lado"],
+  "😒": ["entediado", "chateado"],
+  "🙄": ["revirar olhos", "aff", "tedio"],
+  "😬": ["constrangido", "eita", "nervoso"],
+  "😌": ["aliviado", "tranquilo", "calmo"],
+  "😔": ["pensativo", "triste", "desanimado"],
+  "😴": ["sono", "dormindo", "sleep"],
+  "😷": ["doente", "mascara", "gripe", "sick"],
+  "🤒": ["febre", "doente", "termometro"],
+  "🤕": ["machucado", "ferido", "dor"],
+  "🤢": ["enjoo", "nausea"],
+  "🥳": ["festa", "comemorar", "parabens", "aniversario"],
+  "😎": ["oculos", "estiloso", "cool"],
+  "🤓": ["nerd", "estudioso"],
+  "😕": ["confuso", "duvida"],
+  "😟": ["preocupado", "worried"],
+  "😮": ["surpreso", "uau", "wow"],
+  "😲": ["chocado", "surpreso", "espanto"],
+  "🥺": ["por favor", "pidao", "fofo"],
+  "😢": ["triste", "choro", "lagrima", "sad", "cry"],
+  "😭": ["chorando", "choro", "triste", "cry"],
+  "😱": ["medo", "susto", "grito", "scream"],
+  "😤": ["bravo", "irritado", "bufando"],
+  "😡": ["raiva", "bravo", "angry"],
+  "🤬": ["xingando", "raiva", "palavrao"],
+  "👋": ["oi", "ola", "tchau", "acenar", "hi", "bye"],
+  "👌": ["ok", "perfeito", "certo"],
+  "✌️": ["paz", "vitoria", "peace"],
+  "🤞": ["sorte", "dedos cruzados", "torcendo"],
+  "👍": ["like", "ok", "boa", "joinha", "positivo", "thumb"],
+  "👎": ["dislike", "negativo", "ruim"],
+  "👏": ["palmas", "parabens", "aplausos", "clap"],
+  "🙌": ["comemorar", "aleluia", "maos para cima"],
+  "🤝": ["acordo", "aperto de mao", "parceria", "deal"],
+  "🙏": ["obrigado", "por favor", "gratidao", "rezar", "pray"],
+  "💪": ["forca", "forte", "musculo", "strong"],
+  "👀": ["olhos", "olhando", "vendo"],
+  "❤️": ["coracao", "amor", "love", "heart"],
+  "🧡": ["coracao laranja", "amor"],
+  "💛": ["coracao amarelo", "amor"],
+  "💚": ["coracao verde", "amor"],
+  "💙": ["coracao azul", "amor"],
+  "💜": ["coracao roxo", "amor"],
+  "🖤": ["coracao preto"],
+  "💔": ["coracao partido", "triste", "broken"],
+  "💯": ["cem", "perfeito", "100"],
+  "✅": ["check", "feito", "confirmado", "ok", "certo"],
+  "❌": ["erro", "cancelado", "nao", "x"],
+  "⚠️": ["atencao", "aviso", "alerta", "warning"],
+  "❓": ["pergunta", "duvida", "interrogacao"],
+  "❗": ["exclamacao", "importante"],
+  "⭐": ["estrela", "favorito", "star"],
+  "✨": ["brilho", "novidade", "magica"],
   "🔥": ["fogo", "top", "hype", "fire"],
-  "🎉": ["festa", "parabéns", "party"],
-  "😢": ["triste", "choro", "sad", "cry"],
+  "🎉": ["festa", "parabens", "comemorar", "party"],
+  "🎁": ["presente", "gift"],
+  "🎂": ["bolo", "aniversario", "birthday"],
+  "📅": ["calendario", "agenda", "data", "agendamento"],
+  "⏰": ["alarme", "horario", "despertador"],
+  "⏳": ["aguarde", "espera", "ampulheta"],
+  "📞": ["telefone", "ligacao", "ligar", "phone"],
+  "📱": ["celular", "telefone", "whatsapp"],
+  "💻": ["computador", "notebook"],
+  "📧": ["email", "e-mail"],
+  "📍": ["local", "endereco", "localizacao", "pin"],
+  "📎": ["anexo", "clipe"],
+  "📄": ["documento", "arquivo", "pagina"],
+  "📝": ["anotacao", "formulario", "escrever", "nota"],
+  "💰": ["dinheiro", "pagamento", "money"],
+  "💳": ["cartao", "pagamento", "credito"],
+  "🏥": ["hospital", "clinica", "saude"],
+  "💊": ["remedio", "medicamento", "pilula"],
+  "🩺": ["estetoscopio", "medico", "consulta"],
+  "🦷": ["dente", "dentista"],
+  "🚗": ["carro", "transporte"],
+  "🏠": ["casa", "home"],
+  "☀️": ["sol", "bom dia", "sun"],
+  "🌙": ["lua", "boa noite", "moon"],
+  "☕": ["cafe", "coffee"],
 };
 
 function normalize(s: string) {
@@ -37,7 +133,16 @@ export function EmojiPicker({
   const [activeCat, setActiveCat] =
     useState<EmojiCategoryKey>("face_and_people");
 
-  // const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Foca a busca ao abrir e limpa ao fechar
+  useEffect(() => {
+    if (open && !disabled) {
+      inputRef.current?.focus();
+    } else {
+      setQuery("");
+    }
+  }, [open, disabled]);
 
   const q = normalize(query);
 
@@ -74,10 +179,10 @@ export function EmojiPicker({
   return (
     <div
       ref={pickerRef as any}
-      className="absolute bottom-full left-16 mb-2 w-[360px] max-h-[360px] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-lg"
+      className="absolute bottom-full left-16 mb-2 w-[360px] max-h-[420px] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-lg"
     >
       {/* Header: busca */}
-      {/* <div className="p-2 border-b border-[#E5E7EB]">
+      <div className="p-2 border-b border-[#E5E7EB]">
         <input
           ref={inputRef}
           value={query}
@@ -85,7 +190,7 @@ export function EmojiPicker({
           placeholder="Buscar emoji (ex: coração, risada, ok)…"
           className="w-full h-9 px-3 rounded-md border border-[#E5E7EB] outline-none focus:ring-2 focus:ring-black/10"
         />
-      </div> */}
+      </div>
 
       {/* Tabs de categoria */}
       <div className="flex items-center gap-1 px-2 py-2 border-b border-[#E5E7EB] overflow-x-auto">

@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import {
+  grantSetPassword,
+  sessionFromRecentEmailLink,
+} from "../lib/passwordLink";
 
 const parseHashParams = (hash: string) => {
   const clean = hash.startsWith("#") ? hash.slice(1) : hash;
@@ -16,14 +20,14 @@ export const AuthCallback: React.FC = () => {
   useEffect(() => {
     const run = async () => {
       try {
-        // 1) Se já tem sessão, segue
-        const { data } = await supabase.auth.getSession();
-        if (data.session) {
+        // O link do e-mail é processado ANTES de olhar a sessão atual: só um
+        // link válido libera a tela de definir senha.
+        const goToSetPassword = () => {
+          grantSetPassword();
           navigate("/auth/set-password", { replace: true });
-          return;
-        }
+        };
 
-        // 2) Se veio erro no HASH, mostre o motivo real (ex: otp_expired)
+        // 1) Se veio erro no HASH, mostre o motivo real (ex: otp_expired)
         const hashParams = parseHashParams(location.hash || "");
         const hashError = hashParams.get("error");
         const hashErrorCode = hashParams.get("error_code");
@@ -40,7 +44,7 @@ export const AuthCallback: React.FC = () => {
           return;
         }
 
-        // 3) Agora sim processa o link (NÃO limpe a URL antes disso)
+        // 2) Processa o link (NÃO limpe a URL antes disso)
         const code = params.get("code");
         if (code) {
           const { error: exchangeError } =
@@ -50,11 +54,11 @@ export const AuthCallback: React.FC = () => {
           // limpa hash/query pra evitar reprocesso em refresh/back
           window.history.replaceState({}, document.title, "/auth/callback");
 
-          navigate("/auth/set-password", { replace: true });
+          goToSetPassword();
           return;
         }
 
-        // 4) Fluxo implícito: tokens no HASH (#access_token=...)
+        // 3) Fluxo implícito: tokens no HASH (#access_token=...)
         const access_token = hashParams.get("access_token");
         const refresh_token = hashParams.get("refresh_token");
         if (access_token && refresh_token) {
@@ -66,11 +70,11 @@ export const AuthCallback: React.FC = () => {
 
           window.history.replaceState({}, document.title, "/auth/callback");
 
-          navigate("/auth/set-password", { replace: true });
+          goToSetPassword();
           return;
         }
 
-        // 5) fallback: token_hash + type
+        // 4) fallback: token_hash + type
         const token_hash =
           params.get("token_hash") || hashParams.get("token_hash");
         const type = (params.get("type") || hashParams.get("type")) as
@@ -90,11 +94,24 @@ export const AuthCallback: React.FC = () => {
 
           window.history.replaceState({}, document.title, "/auth/callback");
 
-          navigate("/auth/set-password", { replace: true });
+          goToSetPassword();
           return;
         }
 
-        setError("Link inválido ou expirado. Solicite um novo convite.");
+        // 5) O supabase-js pode ter consumido o link sozinho (detectSessionInUrl).
+        // Nesse caso a sessão nova carrega no token (amr) o método do link de
+        // e-mail; uma sessão comum já logada volta para o sistema.
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          if (sessionFromRecentEmailLink(data.session)) {
+            goToSetPassword();
+          } else {
+            navigate("/inbox", { replace: true });
+          }
+          return;
+        }
+
+        setError("Link inválido ou expirado. Solicite um novo link.");
       } catch (e: any) {
         setError(e?.message ?? "Falha ao validar convite.");
       }

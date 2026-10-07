@@ -419,3 +419,6 @@ verify_jwt = true
 
 [functions.convert-audio]
 verify_jwt = true
+
+[functions.delete-message]
+verify_jwt = true

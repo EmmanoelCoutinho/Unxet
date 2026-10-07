@@ -15,6 +15,7 @@
  *  9.  Job de transcrição de áudio (transcription_jobs)
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -117,6 +118,44 @@ serve(async (req)=>{
       profileName,
       timestampIso
     });
+    // ── 4b. Resposta da pesquisa de satisfação ────────────────────────────
+    // Nota de 1 a 5 para uma pesquisa pendente: registra na conversa encerrada,
+    // sem reabrir nem acionar o bot.
+    if (isTextMessage) {
+      const surveyAnswer = await matchSurveyAnswer(supabase, {
+        clinicId,
+        contactId: contact.id,
+        channelConnectionId,
+        text
+      });
+      if (surveyAnswer) {
+        const { error: surveyMsgErr } = await supabase.from("messages").insert({
+          conversation_id: surveyAnswer.conversationId,
+          meta_message_id: providerMessageId,
+          direction: DIRECTION_INBOUND,
+          type: messageType,
+          sender: waId,
+          text,
+          payload: rawPayload,
+          sent_at: timestampIso,
+          is_automated: false
+        });
+        if (surveyMsgErr) {
+          console.error("Erro inserindo resposta da pesquisa:", surveyMsgErr);
+        }
+        await supabase.from("conversations").update({
+          last_message_at: timestampIso,
+          last_inbound_at: timestampIso,
+          updated_at: new Date().toISOString()
+        }).eq("id", surveyAnswer.conversationId);
+        return new Response(JSON.stringify({
+          success: true,
+          surveyAnswered: true
+        }), {
+          status: 200
+        });
+      }
+    }
     // ── 5. whatsapp_number_id (Meta only) ─────────────────────────────────
     // Para a Evolution não existe whatsapp_numbers — usamos null.
     let whatsappNumberId = null;
@@ -132,7 +171,8 @@ serve(async (req)=>{
       channelConnectionId,
       whatsappNumberId,
       defaultDepartmentId,
-      timestampIso
+      timestampIso,
+      reopenOnInbound: automationSettings.reopen_on_inbound_enabled === true
     });
     const wasClosed = conversation.status === STATUS_CLOSED;
     // ── 7. Processamento de mídia ─────────────────────────────────────────
@@ -454,7 +494,7 @@ async function findOrCreateContact(params) {
   return contact;
 }
 async function findOrCreateConversation(params) {
-  const { supabase, clinicId, contactId, channelConnectionId, whatsappNumberId, defaultDepartmentId, timestampIso } = params;
+  const { supabase, clinicId, contactId, channelConnectionId, whatsappNumberId, defaultDepartmentId, timestampIso, reopenOnInbound } = params;
   // Busca conversa existente filtrando por channel_connection_id —
   // isso garante isolamento correto entre Meta e Evolution mesmo que
   // o mesmo número de telefone exista em ambos os providers.
@@ -471,6 +511,12 @@ async function findOrCreateConversation(params) {
     throw new Error("Conversation lookup error");
   }
   let conversation = foundConversations?.[0];
+  // Reabertura automática desligada: a conversa encerrada permanece encerrada
+  // e a nova mensagem abre um novo atendimento (antes ela ficava "escondida"
+  // dentro da conversa encerrada).
+  if (conversation?.status === STATUS_CLOSED && !reopenOnInbound) {
+    conversation = undefined;
+  }
   // -------------------------------------------------------------------
   // CREATE
   // -------------------------------------------------------------------

@@ -60,6 +60,8 @@ export type Message = {
   caption?: string;
   transcriptStatus?: TranscriptStatus;
   transcriptText?: string;
+  deletedAt?: string;
+  deletedForEveryone?: boolean;
   createdAt: string;
 
   localStatus?: MessageSendStatus;

@@ -53,6 +53,8 @@ export type AnalyticsResponse = {
   };
   leadsByChannel: Array<{ channel: string; leads: number }>;
   leadsByDepartment: Array<{ department: string; leads: number }>;
+  // Ranking de atendentes por conversas atribuídas no período
+  leadsByUserId: Array<{ userId: string; userName: string; leads: number }>;
   dailyLeads: Array<{ day: string; leads: number }>;
   slaByChannel: SlaByChannel[];
   funnelByChannel: Array<{ channel: string; converted: number; lost: number }>;
@@ -364,6 +366,30 @@ export const fetchInboxAnalytics = async (
     funnelByChannelMap.set(channel, current);
   }
 
+  // Ranking de atendentes (conversas atribuídas criadas no período)
+  const leadsByUserMap = new Map<string, number>();
+  for (const c of conversations) {
+    if (!c.assigned_user_id) continue;
+    leadsByUserMap.set(
+      c.assigned_user_id,
+      (leadsByUserMap.get(c.assigned_user_id) ?? 0) + 1,
+    );
+  }
+
+  const userNamesMap = new Map<string, string>();
+  const assignedUserIds = Array.from(leadsByUserMap.keys());
+  if (assignedUserIds.length) {
+    const { data: usersData, error: usersErr } = await supabase
+      .from("clinic_users")
+      .select("user_id,name")
+      .eq("clinic_id", filters.clinicId)
+      .in("user_id", assignedUserIds);
+    if (usersErr) throw toError(usersErr, "Falha ao buscar atendentes.");
+    for (const row of (usersData ?? []) as ClinicUserRow[]) {
+      userNamesMap.set(row.user_id, row.name ?? "Atendente");
+    }
+  }
+
   return {
     kpis: {
       leads: conversations.length,
@@ -386,6 +412,14 @@ export const fetchInboxAnalytics = async (
     leadsByDepartment: Array.from(leadsByDepartmentMap.entries())
       .map(([department, leads]) => ({ department, leads }))
       .sort((a, b) => b.leads - a.leads),
+    leadsByUserId: Array.from(leadsByUserMap.entries())
+      .map(([userId, leads]) => ({
+        userId,
+        userName: userNamesMap.get(userId) ?? "Atendente",
+        leads,
+      }))
+      .sort((a, b) => b.leads - a.leads)
+      .slice(0, 10),
     dailyLeads: Array.from(dailyLeadsMap.entries())
       .map(([day, leads]) => ({ day, leads }))
       .sort((a, b) => a.day.localeCompare(b.day)),
@@ -529,4 +563,109 @@ export const fetchBacklog = async (
     })
     .filter((x): x is BacklogItem => Boolean(x))
     .sort((a, b) => b.minutesWaiting - a.minutesWaiting);
+};
+
+/**
+ * Pesquisa de satisfação (CSAT 1 a 5)
+ */
+export type SatisfactionSummary = {
+  sent: number;
+  answered: number;
+  responseRatePct: number | null;
+  averageScore: number | null;
+  // percentual de notas 4 e 5
+  csatPct: number | null;
+  distribution: Array<{ score: number; count: number }>;
+  byAgent: Array<{
+    userId: string;
+    name: string;
+    answered: number;
+    averageScore: number;
+  }>;
+};
+
+type SatisfactionSurveyRow = {
+  status: string;
+  score: number | null;
+  agent_user_id: string | null;
+};
+
+export const fetchSatisfactionSummary = async (
+  filters: AnalyticsFilters,
+): Promise<SatisfactionSummary> => {
+  let query = supabase
+    .from("satisfaction_surveys")
+    .select("status,score,agent_user_id")
+    .eq("clinic_id", filters.clinicId)
+    .gte("sent_at", filters.start)
+    .lt("sent_at", filters.end)
+    .neq("status", "failed");
+
+  if (filters.channels?.length) query = query.in("channel", filters.channels);
+  if (filters.departmentId) query = query.eq("department_id", filters.departmentId);
+  if (filters.assignedUserId)
+    query = query.eq("agent_user_id", filters.assignedUserId);
+
+  const { data, error } = await query;
+  if (error) throw toError(error, "Falha ao buscar pesquisas de satisfação.");
+
+  const rows = (data ?? []) as SatisfactionSurveyRow[];
+  const answeredRows = rows.filter(
+    (row) => row.status === "answered" && typeof row.score === "number",
+  );
+  const scores = answeredRows.map((row) => row.score as number);
+
+  const distribution = [1, 2, 3, 4, 5].map((score) => ({
+    score,
+    count: scores.filter((value) => value === score).length,
+  }));
+
+  const agentScores = new Map<string, number[]>();
+  for (const row of answeredRows) {
+    if (!row.agent_user_id) continue;
+    const list = agentScores.get(row.agent_user_id) ?? [];
+    list.push(row.score as number);
+    agentScores.set(row.agent_user_id, list);
+  }
+
+  const agentIds = Array.from(agentScores.keys());
+  const namesMap = new Map<string, string>();
+  if (agentIds.length) {
+    const { data: usersData } = await supabase
+      .from("clinic_users")
+      .select("user_id,name")
+      .in("user_id", agentIds);
+    for (const row of (usersData ?? []) as ClinicUserRow[]) {
+      namesMap.set(row.user_id, row.name ?? "Atendente");
+    }
+  }
+
+  const average = (values: number[]) =>
+    values.length
+      ? round2(values.reduce((sum, value) => sum + value, 0) / values.length)
+      : null;
+
+  return {
+    sent: rows.length,
+    answered: answeredRows.length,
+    responseRatePct: rows.length
+      ? round2((answeredRows.length / rows.length) * 100)
+      : null,
+    averageScore: average(scores),
+    csatPct: scores.length
+      ? round2((scores.filter((score) => score >= 4).length / scores.length) * 100)
+      : null,
+    distribution,
+    byAgent: agentIds
+      .map((userId) => {
+        const list = agentScores.get(userId) ?? [];
+        return {
+          userId,
+          name: namesMap.get(userId) ?? "Atendente",
+          answered: list.length,
+          averageScore: average(list) ?? 0,
+        };
+      })
+      .sort((a, b) => b.averageScore - a.averageScore || b.answered - a.answered),
+  };
 };

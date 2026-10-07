@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendSatisfactionSurvey } from "../_shared/satisfactionSurvey.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -162,6 +163,13 @@ serve(async (req)=>{
         note: note ?? null
       }
     });
+    // 6) pesquisa de satisfação (se ativa) — em segundo plano para não atrasar a resposta
+    const surveyTask = sendSatisfactionSurvey(admin, conversationId);
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(surveyTask);
+    } else {
+      await surveyTask;
+    }
     return new Response(JSON.stringify({
       ok: true,
       conversation: updated

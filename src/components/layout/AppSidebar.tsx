@@ -12,15 +12,17 @@ import {
   UsersIcon,
 } from "lucide-react";
 import { FiBookOpen } from "react-icons/fi";
+import { FEATURES, type FeatureKey } from "../../constants/features";
 
 type SidebarItem = {
   label: string;
   icon: React.ElementType<{ className?: string }>;
   path: string;
   extraPaths?: string[];
+  feature?: FeatureKey;
 };
 
-const sidebarItems: SidebarItem[] = [
+const allSidebarItems: SidebarItem[] = [
   {
     label: "Atendimentos",
     icon: MessageCircleIcon,
@@ -41,13 +43,20 @@ const sidebarItems: SidebarItem[] = [
     label: "Marketing / Campanhas",
     icon: MegaphoneIcon,
     path: "/inbox/marketing-campaigns",
+    feature: "marketingCampaigns",
   },
   {
     label: "Mensagens em massa",
     icon: SendToBack,
     path: "/inbox/mass-messages",
+    feature: "massMessages",
   },
 ];
+
+// Itens de módulos desligados em FEATURES não aparecem na navegação
+const sidebarItems = allSidebarItems.filter(
+  (item) => !item.feature || FEATURES[item.feature],
+);
 
 export const AppSidebar: React.FC = () => {
   const navigate = useNavigate();
