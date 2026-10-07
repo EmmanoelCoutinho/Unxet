@@ -347,5 +347,75 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# -----------------------------------------------------------------------------
+# Edge functions: verify_jwt espelha a configuração de produção.
+# Funções sem entrada aqui são publicadas com verify_jwt = true pelo CLI, o que
+# quebraria webhooks (Meta/Evolution não enviam JWT do Supabase).
+# As funções com verify_jwt = false fazem a autenticação no próprio código.
+# -----------------------------------------------------------------------------
 [functions.meta-webhook]
 verify_jwt = false
+
+[functions.meta-in]
+verify_jwt = false
+
+[functions.evolution-in]
+verify_jwt = false
+
+[functions.shared-in-config]
+verify_jwt = false
+
+[functions.bot-engine]
+verify_jwt = false
+
+[functions.bot-sender-whatsapp]
+verify_jwt = false
+
+[functions.send-meta-message]
+verify_jwt = false
+
+[functions.send-evoluation-message]
+verify_jwt = false
+
+[functions.accept-conversation]
+verify_jwt = false
+
+[functions.transfer-conversation]
+verify_jwt = false
+
+[functions.close-conversation]
+verify_jwt = false
+
+[functions.whatsapp-connect]
+verify_jwt = false
+
+[functions.disconnect-evolution-connection]
+verify_jwt = false
+
+[functions.transcribe-audio]
+verify_jwt = false
+
+[functions.send-whatsapp-message]
+verify_jwt = true
+
+[functions.invite-attendant]
+verify_jwt = true
+
+[functions.meta-connect]
+verify_jwt = true
+
+[functions.create-send-nonce]
+verify_jwt = true
+
+[functions.bot-sender-meta]
+verify_jwt = true
+
+[functions.create-evolution-connection]
+verify_jwt = true
+
+[functions.evolution-webhook]
+verify_jwt = true
+
+[functions.convert-audio]
+verify_jwt = true
