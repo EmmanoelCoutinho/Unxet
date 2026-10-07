@@ -418,14 +418,10 @@ export function useConversations(options: UseConversationsOptions = {}) {
             (payload.old as any)?.conversation_id;
 
           if (!conversationId) return;
-
-          console.log("[RT] tags alteradas na conversa", conversationId);
           reloadTagForConversation(conversationId);
         },
       )
-      .subscribe((status) => {
-        console.log("[RT] conversation_tags channel status:", status);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
@@ -444,7 +440,6 @@ export function useConversations(options: UseConversationsOptions = {}) {
       if (!active) return;
 
       if (!accessibleDepartmentIds.length) {
-        console.log("[RT] conversations.update: no accessible departments");
         return;
       }
 
@@ -521,9 +516,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
             }
           },
         )
-        .subscribe((status) => {
-          console.log("[RT] conversations UPDATE channel status:", status);
-        });
+        .subscribe();
     };
 
     initConversationsUpdateChannel();
@@ -611,9 +604,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
           }
         },
       )
-      .subscribe((status) => {
-        console.log("[RT] conversations channel status:", status);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
@@ -660,10 +651,6 @@ export function useConversations(options: UseConversationsOptions = {}) {
     return conversations
       .filter((conv) => conv.status === "pending")
       .reduce((sum, conv) => sum + (conv.unreadCount || 0), 0);
-  }, [conversations]);
-
-  useEffect(() => {
-    console.log("[useConversations] conversation items:", conversations);
   }, [conversations]);
 
   return {

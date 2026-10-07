@@ -64,21 +64,9 @@ export function useMassMessages() {
         p_msgs: queueItems 
       });
 
-      if (queueError) {
-        console.warn("Falha no envio em lote via RPC, executando fallback individual...", queueError);
-        
-        for (const item of queueItems) {
-          const { error: singleError } = await supabase.rpc("enqueue_message", {
-            queue_name: "mass_messages",
-            msg: item
-          });
-          
-          if (singleError) {
-            console.error("Erro crítico no fallback individual:", singleError);
-            throw singleError;
-          }
-        }
-      }
+      // O RPC valida a clínica e os contatos no servidor; não há fallback
+      // individual para não reenviar parte da fila em caso de erro.
+      if (queueError) throw queueError;
 
       return { success: true, total: contacts.length };
     } catch (error: any) {

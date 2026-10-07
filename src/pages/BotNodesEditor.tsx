@@ -15,7 +15,6 @@ import { Toggle } from "../components/ui/Toggle";
 import { Badge } from "../components/ui/Badge";
 import { botsService } from "../services/bots";
 import {
-  BOT_NODE_TYPE_VALUES,
   BOT_OPTION_ACTION_TYPE_VALUES,
   BOT_ROOT_NODE_KEY,
   type BotNodeRow,
@@ -266,7 +265,7 @@ export const BotNodesEditor = ({
       node_key: `node_${nextSort}`,
       title: `Etapa ${nextSort}`,
       message: "",
-      node_type: "message",
+      node_type: "menu",
       sort_order: nextSort,
     });
     setSavingNodeId(null);
@@ -283,7 +282,6 @@ export const BotNodesEditor = ({
     if (!node.message.trim()) return toast.error("Mensagem é obrigatória.");
     if (!node.node_key.trim())
       return toast.error("A chave da etapa e obrigatoria.");
-    if (!node.node_type) return toast.error("O tipo da etapa e obrigatorio.");
 
     if (
       node.node_key === BOT_ROOT_NODE_KEY &&
@@ -299,7 +297,7 @@ export const BotNodesEditor = ({
       node_key: node.node_key.trim(),
       title: node.title.trim(),
       message: node.message.trim(),
-      node_type: node.node_type,
+      node_type: "menu",
       sort_order: node.sort_order,
     });
     setSavingNodeId(null);
@@ -716,31 +714,6 @@ export const BotNodesEditor = ({
               </div>
 
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div className="w-full">
-                  <label className="mb-1 block text-sm font-medium text-[#1E1E1E]">
-                    Tipo da etapa
-                  </label>
-                  <select
-                    value={selectedNode.node_type}
-                    disabled={!isAdmin}
-                    onChange={(e) =>
-                      updateNodeLocal(selectedNode.id, {
-                        node_type: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
-                  >
-                    {ensureValueInList(
-                      [...BOT_NODE_TYPE_VALUES],
-                      String(selectedNode.node_type ?? ""),
-                    ).map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
                 <Input
                   label="Ordem"
                   type="number"

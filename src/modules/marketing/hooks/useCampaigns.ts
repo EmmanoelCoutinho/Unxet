@@ -74,8 +74,6 @@ export const useCampaigns = (
           filter: `clinic_id=eq.${clinicId}`, // Otimização para escutar apenas esta clínica
         },
         (payload: RealtimePostgresChangesPayload<CampaignWithTemplate>) => {
-          console.log("[RT] Mudança detectada nas campanhas:", payload);
-
           if (payload.eventType === "INSERT" && payload.new) {
             const newCampaign = payload.new as CampaignWithTemplate;
             setCampaigns((current) => {
@@ -96,13 +94,10 @@ export const useCampaigns = (
           }
         }
       )
-      .subscribe((status) => {
-        console.log(`[RT] Status do canal de campanhas da clínica ${clinicId}: ${status}`);
-      });
+      .subscribe();
 
     // ⚠️ CLEANUP: Remove o canal WebSocket quando o componente desmontar ou mudar de clínica
     return () => {
-      console.log(`[RT] Limpando canal de campanhas da clínica: ${clinicId}`);
       supabase.removeChannel(channel);
     };
   }, [clinicId, enabled]);
