@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getClinicMembership } from "../_shared/security.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -119,6 +120,29 @@ serve(async (req)=>{
         error: "Conversation not found"
       }), {
         status: 404,
+        headers: corsHeaders
+      });
+    }
+    /*
+     * =========================================================
+     * AUTORIZAÇÃO (mesma regra do send-whatsapp-message)
+     * - precisa ser membro da clínica da conversa
+     * - conversa atribuída: só o responsável envia
+     * - sem responsável: só membros do departamento da conversa
+     * =========================================================
+     */ const membership = await getClinicMembership(adminSupabase, user.id, conversation.clinic_id);
+    let allowed = !!membership;
+    if (allowed && conversation.assigned_user_id) {
+      allowed = conversation.assigned_user_id === user.id;
+    } else if (allowed) {
+      const { data: deptMember } = await adminSupabase.from("department_members").select("department_id").eq("department_id", conversation.department_id).eq("clinic_user_id", user.id).maybeSingle();
+      allowed = !!deptMember;
+    }
+    if (!allowed) {
+      return new Response(JSON.stringify({
+        error: "Not allowed"
+      }), {
+        status: 403,
         headers: corsHeaders
       });
     }

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAuthenticatedUser, getClinicMembership } from "../_shared/security.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -29,6 +30,19 @@ serve(async (req)=>{
     // ─────────────────────────────────────────────────────────────
     // BODY
     // ─────────────────────────────────────────────────────────────
+    const authUser = await getAuthenticatedUser(req);
+    if (!authUser) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Unauthorized"
+      }), {
+        status: 401,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+    }
     const body = await req.json();
     const connectionId = String(body?.connectionId ?? "").trim();
     if (!connectionId) {
@@ -54,6 +68,20 @@ serve(async (req)=>{
         error: "Connection not found"
       }), {
         status: 404,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+    }
+    const membership = await getClinicMembership(supabase, authUser.id, connection.clinic_id);
+    // Somente administradores da clínica dona da conexão
+    if (!membership || membership.role !== "admin") {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Forbidden"
+      }), {
+        status: 403,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json"

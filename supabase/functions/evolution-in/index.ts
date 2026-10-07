@@ -13,6 +13,7 @@
  * Nenhuma lógica de negócio vive aqui.
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { timingSafeEqual } from "../_shared/security.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -20,6 +21,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const SHARED_IN_CONFIG_URL = Deno.env.get("SHARED_IN_CONFIG_URL") ?? `${SUPABASE_URL}/functions/v1/shared-in-config`;
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
+const EVOLUTION_WEBHOOK_SECRET = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") ?? "";
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -123,6 +125,20 @@ serve(async (req)=>{
       return new Response("Method not allowed", {
         status: 405
       });
+    }
+    // Segredo compartilhado com a Evolution: configure a URL do webhook como
+    // .../functions/v1/evolution-in?token=<EVOLUTION_WEBHOOK_SECRET>
+    // (ou envie o header x-webhook-secret). Sem o secret configurado, apenas avisa.
+    if (EVOLUTION_WEBHOOK_SECRET) {
+      const provided = new URL(req.url).searchParams.get("token") ?? req.headers.get("x-webhook-secret") ?? "";
+      if (!timingSafeEqual(provided, EVOLUTION_WEBHOOK_SECRET)) {
+        console.warn("[SECURITY] evolution-in: token do webhook inválido, requisição rejeitada");
+        return new Response("Unauthorized", {
+          status: 401
+        });
+      }
+    } else {
+      console.warn("[SECURITY] evolution-in: EVOLUTION_WEBHOOK_SECRET não configurado — webhook aceita qualquer origem");
     }
     const body = await req.json();
     console.log("[EVOLUTION_WEBHOOK_FULL]", JSON.stringify(body, null, 2));

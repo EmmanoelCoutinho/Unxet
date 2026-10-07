@@ -3,7 +3,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const VERIFY_TOKEN = Deno.env.get("META_VERIFY_TOKEN") ?? "";
 const META_APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
 const ALLOW_UNSIGNED_TESTS = (Deno.env.get("META_ALLOW_UNSIGNED_TESTS") ?? "false") === "true";
-const DEFAULT_CLINIC_ID = Deno.env.get("DEFAULT_CLINIC_ID") ?? null;
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
 const STATUS_OPEN = "open";
 const STATUS_PENDING = "pending";
@@ -516,14 +515,12 @@ async function resolveClinicId(opts) {
   } else if (legacy?.clinic_id) {
     return legacy.clinic_id;
   }
-  if (DEFAULT_CLINIC_ID) {
-    logStep(rid, "resolveClinicId.default", {
-      channel,
-      metaInboxId,
-      clinicId: DEFAULT_CLINIC_ID
-    });
-    return DEFAULT_CLINIC_ID;
-  }
+  // Sem fallback para uma clínica padrão: mensagens de páginas/contas não
+  // vinculadas seriam entregues à clínica errada.
+  logStep(rid, "resolveClinicId.not_found", {
+    channel,
+    metaInboxId
+  });
   return null;
 }
 async function resolveChannelConnectionId(opts) {
@@ -692,7 +689,7 @@ serve(async (req)=>{
       const mode = url.searchParams.get("hub.mode");
       const token = url.searchParams.get("hub.verify_token");
       const challenge = url.searchParams.get("hub.challenge");
-      if (mode === "subscribe" && token === VERIFY_TOKEN && challenge) {
+      if (mode === "subscribe" && VERIFY_TOKEN && token === VERIFY_TOKEN && challenge) {
         return new Response(challenge, {
           status: 200
         });
@@ -721,6 +718,13 @@ serve(async (req)=>{
     const coerced = coerceSampleToWebhookBody(parsed);
     const body = coerced ?? parsed;
     const isSample = !!body?.__is_sample;
+    // Sem app secret não há como validar a origem: recusa (fail closed)
+    if (!META_APP_SECRET && !ALLOW_UNSIGNED_TESTS) {
+      logStep(rid, "env.missing_app_secret", {});
+      return new Response("Misconfigured env", {
+        status: 500
+      });
+    }
     if (META_APP_SECRET) {
       const signature256 = req.headers.get("x-hub-signature-256");
       const signature1 = req.headers.get("x-hub-signature");
@@ -730,7 +734,10 @@ serve(async (req)=>{
         rawBody: raw,
         appSecret: META_APP_SECRET
       });
-      const bypass = (!signature256 && !signature1 && (ALLOW_UNSIGNED_TESTS || isSample)) === true;
+      // Payloads "sample" são definidos por quem envia a requisição, então não
+      // podem liberar a assinatura. Bypass só com META_ALLOW_UNSIGNED_TESTS=true
+      // (nunca em produção).
+      const bypass = (!signature256 && !signature1 && ALLOW_UNSIGNED_TESTS) === true;
       logStep(rid, "signature.check", {
         hasSignature256: !!signature256,
         hasSignature1: !!signature1,

@@ -11,10 +11,14 @@
  * Nenhuma lógica de negócio vive aqui.
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyMetaSignature } from "../_shared/security.ts";
 // ---------------------------------------------------------------------------
 // ENV
 // ---------------------------------------------------------------------------
-const VERIFY_TOKEN = Deno.env.get("META_VERIFY_TOKEN") ?? "meta_verify_token";
+const VERIFY_TOKEN = Deno.env.get("META_VERIFY_TOKEN") ?? "";
+// App secret do app Meta de WhatsApp (pode ser diferente do app de Instagram/Messenger)
+const META_WABA_APP_SECRET = Deno.env.get("META_WABA_APP_SECRET") ?? "";
+const META_APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
 const META_WHATSAPP_TOKEN = Deno.env.get("META_WHATSAPP_TOKEN") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -74,7 +78,7 @@ serve(async (req)=>{
       const mode = url.searchParams.get("hub.mode");
       const token = url.searchParams.get("hub.verify_token");
       const challenge = url.searchParams.get("hub.challenge");
-      if (mode === "subscribe" && token === VERIFY_TOKEN && challenge) {
+      if (mode === "subscribe" && VERIFY_TOKEN && token === VERIFY_TOKEN && challenge) {
         return new Response(challenge, {
           status: 200
         });
@@ -91,8 +95,27 @@ serve(async (req)=>{
     // -----------------------------------------------------------------------
     // SUPABASE
     // -----------------------------------------------------------------------
+    const rawBody = new Uint8Array(await req.arrayBuffer());
+    // -----------------------------------------------------------------------
+    // ASSINATURA (X-Hub-Signature-256)
+    // -----------------------------------------------------------------------
+    const signatureOk = await verifyMetaSignature(rawBody, req.headers.get("x-hub-signature-256"), [
+      META_WABA_APP_SECRET,
+      META_APP_SECRET
+    ]);
+    if (!signatureOk) {
+      // Com META_WABA_APP_SECRET configurado a validação é obrigatória.
+      // Sem ele, apenas registra (rollout seguro caso o app do WhatsApp use outro secret).
+      if (META_WABA_APP_SECRET) {
+        console.warn("[SECURITY] whatsapp-in: assinatura inválida, requisição rejeitada");
+        return new Response("Invalid signature", {
+          status: 401
+        });
+      }
+      console.warn("[SECURITY] whatsapp-in: assinatura NÃO validada — configure META_WABA_APP_SECRET para bloquear webhooks forjados");
+    }
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const body = await req.json();
+    const body = JSON.parse(new TextDecoder().decode(rawBody));
     // -----------------------------------------------------------------------
     // PAYLOAD
     // -----------------------------------------------------------------------
@@ -240,7 +263,11 @@ serve(async (req)=>{
       } : {},
       rawPayload: body
     };
-    console.log("[WHATSAPP_SHARED_PAYLOAD]", JSON.stringify(sharedPayload));
+    // Não registra o mediaFetchToken (access token da Meta) nos logs
+    console.log("[WHATSAPP_SHARED_PAYLOAD]", JSON.stringify({
+      ...sharedPayload,
+      mediaFetchToken: sharedPayload.mediaFetchToken ? "[redacted]" : undefined
+    }));
     // -----------------------------------------------------------------------
     // SEND TO SHARED
     // -----------------------------------------------------------------------
