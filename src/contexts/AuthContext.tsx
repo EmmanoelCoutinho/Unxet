@@ -11,6 +11,7 @@ import {
 } from "react";
 import { User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
+import { getAuthCallbackUrl } from "../lib/appUrl";
 
 export type ClinicUser = {
   id: string;
@@ -214,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       // O Supabase enviará o token para o seu fluxo de callback já existente (/auth/callback)
       // que depois redirecionará o usuário logado para redefinir a senha
-      redirectTo: `${window.location.origin}/auth/callback`,
+      redirectTo: getAuthCallbackUrl(),
     });
     return { error };
   };

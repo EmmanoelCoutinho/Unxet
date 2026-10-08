@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { canSetPassword, clearSetPasswordGrant } from "../lib/passwordLink";
+import { translateAuthError } from "../lib/authErrors";
 
 export const SetPassword: React.FC = () => {
   const navigate = useNavigate();
@@ -55,7 +56,7 @@ export const SetPassword: React.FC = () => {
       clearSetPasswordGrant();
       navigate("/inbox", { replace: true });
     } catch (e: any) {
-      setError(e?.message ?? "Erro ao definir senha.");
+      setError(translateAuthError(e, "Erro ao definir senha. Tente novamente."));
     } finally {
       setLoading(false);
     }
