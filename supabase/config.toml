@@ -422,3 +422,6 @@ verify_jwt = true
 
 [functions.delete-message]
 verify_jwt = true
+
+[functions.retry-audio-transcript]
+verify_jwt = true

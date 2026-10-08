@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { queueTranscription, runInBackground, TRANSCRIPTION_BUCKET } from "../_shared/transcription.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -584,34 +585,15 @@ serve(async (req)=>{
       });
     }
     if (outboundType === "audio") {
-      const storagePath = extractStoragePathFromPublicUrl({
-        supabaseUrl: SUPABASE_URL,
-        bucket: "whatsapp-media",
-        url: mediaUrl
+      const queued = await queueTranscription(supabaseAdmin, {
+        messageId: inserted.id,
+        storagePath: extractStoragePathFromPublicUrl({
+          supabaseUrl: SUPABASE_URL,
+          bucket: TRANSCRIPTION_BUCKET,
+          url: mediaUrl
+        })
       });
-      if (storagePath) {
-        const { data: job, error: jobErr } = await supabaseAdmin.from("transcription_jobs").insert({
-          message_id: inserted.id,
-          bucket: "whatsapp-media",
-          storage_path: storagePath,
-          status: "PENDING"
-        }).select("id").maybeSingle();
-        if (!jobErr && job?.id) {
-          fetch(`${SUPABASE_URL}/functions/v1/transcribe-worker`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              job_id: job.id,
-              language: "pt"
-            })
-          }).catch((err)=>{
-            console.error("Erro disparando transcribe-worker:", err);
-          });
-        }
-      }
+      runInBackground(queued?.done);
     }
     const conversationUpdates = {
       last_message_at: nowIso,

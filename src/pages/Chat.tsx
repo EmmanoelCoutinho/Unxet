@@ -1115,7 +1115,10 @@ export const Chat: React.FC = () => {
 
       if (error) {
         console.error("Erro ao reprocessar transcricao:", error);
-        toast.error("Não foi possivel reprocessar a transcricao.");
+        // Mostra o motivo enviado pela função (ex.: indisponível para o canal)
+        const response = (error as { context?: Response }).context;
+        const payload = await response?.json?.().catch(() => null);
+        toast.error(payload?.error ?? "Não foi possivel reprocessar a transcricao.");
         return;
       }
 

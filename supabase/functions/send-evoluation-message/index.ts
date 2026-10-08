@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { queueTranscription, runInBackground, storagePathFromPublicUrl } from "../_shared/transcription.ts";
 import { getClinicMembership } from "../_shared/security.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -362,7 +363,7 @@ serve(async (req)=>{
      * =========================================================
      */ const providerMessageId = evolutionResponse?.key?.id ?? crypto.randomUUID();
     const now = new Date().toISOString();
-    const { error: messageError } = await adminSupabase.from("messages").insert({
+    const { data: savedMessage, error: messageError } = await adminSupabase.from("messages").insert({
       conversation_id: conversation.id,
       direction: "outbound",
       type: outboundType,
@@ -377,9 +378,17 @@ serve(async (req)=>{
       payload: evolutionResponse,
       sent_at: now,
       created_at: now
-    });
+    }).select("id").maybeSingle();
     if (messageError) {
       console.error("[SAVE_MESSAGE_ERROR]", messageError);
+    }
+    // Transcrição do áudio enviado (antes não era criada: ficava "carregando")
+    if (outboundType === "audio" && savedMessage?.id) {
+      const queued = await queueTranscription(adminSupabase, {
+        messageId: savedMessage.id,
+        storagePath: storagePathFromPublicUrl(mediaUrl)
+      });
+      runInBackground(queued?.done);
     }
     /*
      * =========================================================
