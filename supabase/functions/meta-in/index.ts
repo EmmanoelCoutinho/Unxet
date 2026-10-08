@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
+import { queueInboundPush } from "../_shared/push.ts";
 const VERIFY_TOKEN = Deno.env.get("META_VERIFY_TOKEN") ?? "";
 const META_APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
 const ALLOW_UNSIGNED_TESTS = (Deno.env.get("META_ALLOW_UNSIGNED_TESTS") ?? "false") === "true";
@@ -1247,7 +1248,7 @@ serve(async (req)=>{
           continue;
         }
         if (direction === DIRECTION_INBOUND) {
-          fetch(`${supabaseUrl}/functions/v1/bot-engine`, {
+          const botCall = fetch(`${supabaseUrl}/functions/v1/bot-engine`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1282,6 +1283,11 @@ serve(async (req)=>{
               channelConnectionId,
               message: err?.message ?? String(err)
             }, null, 2));
+          });
+          queueInboundPush(supabase, {
+            conversationId: conversation.id,
+            messageType: dbType,
+            after: botCall
           });
         }
         if (shouldReopen) {

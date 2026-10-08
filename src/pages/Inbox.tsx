@@ -9,6 +9,8 @@ import { ConversationItem } from "../components/inbox/ConversationItem";
 import { ChannelFilter } from "../components/inbox/ChannelFilter";
 import { TagFilter } from "../components/inbox/TagFilter";
 import { useConversations } from "../hooks/useConversations";
+import { setAppBadge } from "../lib/pushNotifications";
+import { PushNotificationsPrompt } from "../components/inbox/PushNotificationsPrompt";
 import type { Channel } from "../types";
 
 type InboxTab = "open" | "pending";
@@ -32,6 +34,7 @@ export const Inbox: React.FC = () => {
     const baseTitle = "Unxet";
     document.title =
       totalUnreadCount > 0 ? `(${totalUnreadCount}) ${baseTitle}` : baseTitle;
+    setAppBadge(totalUnreadCount);
 
     return () => {
       document.title = baseTitle;
@@ -109,6 +112,8 @@ export const Inbox: React.FC = () => {
               <Badge variant="warning">{totalUnreadCount} não lidas</Badge>
             )}
           </div>
+
+          <PushNotificationsPrompt />
 
           <div className="mb-3 flex items-center gap-2">
             <div className="min-w-0 flex-1">
