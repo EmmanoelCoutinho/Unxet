@@ -226,8 +226,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             : `rounded-lg ${bubblePadding} bg-[#0A84FF] text-white`
         }`;
 
-  const showStatusRow =
-    !isClient && (localStatus === "sending" || localStatus === "failed");
+  // Mensagens enviadas aparecem como já entregues; só mostramos algo se der erro.
+  const showStatusRow = !isClient && localStatus === "failed";
   const canRetryFailedMessage =
     localStatus === "failed" && typeof onRetry === "function";
 
@@ -240,14 +240,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const statusNode = useMemo(() => {
     if (!showStatusRow) return null;
-
-    if (localStatus === "sending") {
-      return (
-        <div className="flex items-center justify-end gap-2 mt-1">
-          <span className="text-xs text-gray-400">Enviando...</span>
-        </div>
-      );
-    }
 
     if (localStatus === "failed") {
       return (
