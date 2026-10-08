@@ -15,6 +15,8 @@ import {
   useMessages,
   mapDbMessage,
   DELETED_MESSAGE_TEXT,
+  isLocalOptimisticId,
+  sortMessages,
 } from "../hooks/useMessages";
 import { useConversationEvents } from "../hooks/useConversationEvents";
 import { useQuickMessages } from "../hooks/useQuickMessages";
@@ -222,7 +224,10 @@ export const Chat: React.FC = () => {
     const messageItems = messages.map((message) => ({
       kind: "message" as const,
       message,
-      sortAt: new Date(message.createdAt).getTime(),
+      // Mensagens ainda não confirmadas ficam no fim, na ordem de envio
+      sortAt: isLocalOptimisticId(message.id)
+        ? Number.MAX_SAFE_INTEGER
+        : new Date(message.createdAt).getTime(),
     }));
     const eventItems = events.map((event) => ({
       kind: "event" as const,
@@ -968,28 +973,26 @@ export const Chat: React.FC = () => {
 
       const persisted: Message = mapDbMessage(inserted);
 
-      const optimistic = messages.find((m) => m.id === tempId) as
-        | (Message & LocalMessageMeta)
-        | undefined;
-
-      const merged: Message = {
-        ...persisted,
-        filename: persisted.filename ?? optimistic?.filename,
-        fileSize: persisted.fileSize ?? optimistic?.fileSize,
-        mediaUrl: persisted.mediaUrl ?? optimistic?.mediaUrl,
-        mediaMimeType: persisted.mediaMimeType ?? optimistic?.mediaMimeType,
-        text: persisted.text,
-      };
-
       setMessages((prev) => {
+        const optimistic = prev.find((m) => m.id === tempId);
+
+        const merged: Message = {
+          ...persisted,
+          filename: persisted.filename ?? optimistic?.filename,
+          fileSize: persisted.fileSize ?? optimistic?.fileSize,
+          mediaUrl: persisted.mediaUrl ?? optimistic?.mediaUrl,
+          mediaMimeType: persisted.mediaMimeType ?? optimistic?.mediaMimeType,
+          text: persisted.text,
+        };
+
         const withoutTemp = prev.filter((m) => m.id !== tempId);
         const idx = withoutTemp.findIndex((m) => m.id === merged.id);
         if (idx >= 0) {
           const next = [...withoutTemp];
           next[idx] = { ...next[idx], ...merged };
-          return next;
+          return sortMessages(next);
         }
-        return [...withoutTemp, merged];
+        return sortMessages([...withoutTemp, merged]);
       });
 
       scrollToBottom("smooth");
@@ -1005,6 +1008,28 @@ export const Chat: React.FC = () => {
       scrollToBottom,
       conversation,
     ],
+  );
+
+  // Fila de envio por conversa: cada mensagem só sai depois que a anterior
+  // terminou. Sem isso, "oi" e "tudo bem?" iam em paralelo e podiam chegar
+  // ao provedor/banco na ordem trocada.
+  const sendQueuesRef = useRef(new Map<string, Promise<void>>());
+
+  const enqueueSend = useCallback(
+    (conversationId: string, job: () => Promise<void>) => {
+      const queues = sendQueuesRef.current;
+      const run = (queues.get(conversationId) ?? Promise.resolve())
+        .then(job)
+        .catch((e) => {
+          console.error("Erro na fila de envio:", e);
+        });
+      queues.set(conversationId, run);
+      run.finally(() => {
+        if (queues.get(conversationId) === run) queues.delete(conversationId);
+      });
+      return run;
+    },
+    [],
   );
 
   const handleSendMessage = async (input: SendableInput) => {
@@ -1023,7 +1048,7 @@ export const Chat: React.FC = () => {
 
     if (!bodyText && !mediaUrl) return;
 
-    const tempId = `local-${Date.now()}`;
+    const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const optimistic: Message & LocalMessageMeta = {
       id: tempId,
@@ -1053,21 +1078,25 @@ export const Chat: React.FC = () => {
     setMessages((prev) => [...prev, optimistic]);
     scrollToBottom("smooth");
 
-    await sendNow({ tempId, input });
+    await enqueueSend(id, () => sendNow({ tempId, input }));
   };
 
   const handleRetryLocalMessage = useCallback(
     async (msg: Message) => {
+      if (!id) return;
       const meta = msg as any as LocalMessageMeta;
       if (!meta.localPayload) return;
+      const localPayload = meta.localPayload;
 
-      await sendNow({
-        tempId: msg.id,
-        input: meta.localPayload,
-        isRetry: true,
-      });
+      await enqueueSend(id, () =>
+        sendNow({
+          tempId: msg.id,
+          input: localPayload,
+          isRetry: true,
+        }),
+      );
     },
-    [sendNow],
+    [id, enqueueSend, sendNow],
   );
 
   const handleRetryAudioTranscript = useCallback(

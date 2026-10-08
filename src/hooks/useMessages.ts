@@ -168,67 +168,89 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
 
 const messagesCache = new Map<string, UiMessage[]>();
 
-function isLocalOptimisticId(id: any) {
+export function isLocalOptimisticId(id: any) {
   return typeof id === "string" && id.startsWith("local-");
+}
+
+const toTime = (iso: string) => {
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) ? t : 0;
+};
+
+// Mensagens locais (ainda não confirmadas) ficam sempre no fim, na ordem em que
+// foram enviadas: o createdAt delas vem do relógio do navegador e não é
+// comparável com o sent_at gravado pelo servidor.
+export function compareMessages(a: UiMessage, b: UiMessage) {
+  const aLocal = isLocalOptimisticId(a.id);
+  const bLocal = isLocalOptimisticId(b.id);
+  if (aLocal !== bLocal) return aLocal ? 1 : -1;
+  if (aLocal && bLocal) return 0; // sort estável preserva a ordem de envio
+  return toTime(a.createdAt) - toTime(b.createdAt);
+}
+
+export const sortMessages = (list: UiMessage[]) =>
+  [...list].sort(compareMessages);
+
+const normalizeText = (text?: string | null) => (text ?? "").trim();
+
+// Uma mensagem persistida só corresponde a uma otimista se for do mesmo tipo e
+// tiver o mesmo conteúdo. Casar só pelo tipo fazia, com "oi" e "tudo bem?" na
+// fila, o "oi" confirmado sobrescrever o card do "tudo bem?".
+function isSameOutgoingMessage(local: UiMessage, persisted: UiMessage) {
+  if ((local.type ?? "text") !== (persisted.type ?? "text")) return false;
+  if (normalizeText(local.text) === normalizeText(persisted.text)) return true;
+  return (
+    !!local.mediaUrl &&
+    !!persisted.mediaUrl &&
+    local.mediaUrl === persisted.mediaUrl
+  );
 }
 
 function mergeDbWithLocalOptimistics(prev: UiMessage[], db: UiMessage[]) {
   const locals = prev.filter((m) => isLocalOptimisticId(m.id));
-  if (!locals.length) {
-    return [...db].sort(
-      (a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    );
-  }
+  if (!locals.length) return sortMessages(db);
 
   const merged: UiMessage[] = [...db];
+  // Cada mensagem do banco absorve no máximo uma otimista (ex.: dois "oi" seguidos)
+  const claimedDbIds = new Set<string>();
 
   for (const lm of locals) {
-    const lmAt = new Date(lm.createdAt).getTime();
-    const exists = merged.some((m) => {
+    const lmAt = toTime(lm.createdAt);
+    const match = db.find((m) => {
       if (m.author !== "atendente") return false;
-
-      const mAt = new Date(m.createdAt).getTime();
-
-      const closeInTime =
-        Number.isFinite(lmAt) &&
-        Number.isFinite(mAt) &&
-        Math.abs(mAt - lmAt) <= 60_000;
-
-      const sameType = (m.type ?? "text") === (lm.type ?? "text");
-      const sameText = (m.text ?? "") === (lm.text ?? "");
-
-      return closeInTime && sameType && sameText;
+      if (claimedDbIds.has(m.id)) return false;
+      const closeInTime = Math.abs(toTime(m.createdAt) - lmAt) <= 60_000;
+      return closeInTime && isSameOutgoingMessage(lm, m);
     });
 
-    if (!exists) merged.push(lm);
+    if (match) claimedDbIds.add(match.id);
+    else merged.push(lm);
   }
 
-  merged.sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-  );
-
-  return merged;
+  return sortMessages(merged);
 }
 
-function replaceLastLocalOptimisticWithPersisted(
+function replaceLocalOptimisticWithPersisted(
   current: UiMessage[],
   persisted: UiMessage,
 ) {
   if (persisted.author !== "atendente") return null;
 
-  for (let i = current.length - 1; i >= 0; i--) {
-    const m = current[i];
-    if (!isLocalOptimisticId(m.id)) continue;
+  const locals = current.filter((m) => isLocalOptimisticId(m.id));
+  // A fila envia em ordem, então a mais antiga que casa é a correta.
+  let target = locals.find((m) => isSameOutgoingMessage(m, persisted));
 
-    const sameType = (m.type ?? "text") === (persisted.type ?? "text");
-    if (!sameType) continue;
-
-    const next = current.map((x, idx) => (idx === i ? persisted : x));
-    return next;
+  // Mídia pode voltar com URL/legenda diferentes do otimista; nesse caso aceita
+  // a mais antiga do mesmo tipo. Texto nunca usa esse fallback.
+  if (!target && (persisted.type ?? "text") !== "text") {
+    target = locals.find(
+      (m) => (m.type ?? "text") === (persisted.type ?? "text"),
+    );
   }
 
-  return null;
+  if (!target) return null;
+
+  return sortMessages(current.map((m) => (m === target ? persisted : m)));
 }
 
 export function useMessages(conversationId: string | null) {
@@ -400,7 +422,7 @@ export function useMessages(conversationId: string | null) {
               return next;
             }
 
-            const replaced = replaceLastLocalOptimisticWithPersisted(
+            const replaced = replaceLocalOptimisticWithPersisted(
               current,
               newMsg,
             );
@@ -409,11 +431,7 @@ export function useMessages(conversationId: string | null) {
               return replaced;
             }
 
-            const next = [...current, newMsg].sort(
-              (a, b) =>
-                new Date(a.createdAt).getTime() -
-                new Date(b.createdAt).getTime(),
-            );
+            const next = sortMessages([...current, newMsg]);
 
             messagesCache.set(conversationId, next);
             return next;
