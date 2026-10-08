@@ -425,3 +425,6 @@ verify_jwt = true
 
 [functions.retry-audio-transcript]
 verify_jwt = true
+
+[functions.media-urls]
+verify_jwt = true

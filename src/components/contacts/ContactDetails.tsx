@@ -21,6 +21,7 @@ import {
   getInitials,
   statusLabels,
 } from "./contactLabels";
+import { SecureImage } from "../ui/SecureImage";
 
 type ContactDetailsProps = {
   contact: Contact | null;
@@ -80,10 +81,11 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <div className="flex h-14 w-14 shrink-0 sm:h-16 sm:w-16 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-lg font-semibold text-gray-700">
               {contact.avatar_url ? (
-                <img
+                <SecureImage
                   src={contact.avatar_url}
                   alt={contact.name}
                   className="h-full w-full object-cover"
+                  fallback={getInitials(contact.name)}
                 />
               ) : (
                 getInitials(contact.name) || <UserRoundIcon className="h-6 w-6" />

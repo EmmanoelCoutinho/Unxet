@@ -12,6 +12,7 @@ import {
 import { toast } from "react-toastify";
 import { Button } from "../ui/Button";
 import { supabase } from "../../lib/supabaseClient";
+import { useClinic } from "../../contexts/ClinicContext";
 import { EmojiPicker } from "./EmojiPicker";
 import { QuickMessagesPicker } from "./QuickMessagesPicker";
 import type { QuickMessage } from "../../services/quickMessages";
@@ -84,6 +85,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const attachmentsRef = useRef<HTMLDivElement | null>(null);
   const quickMessagesRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const { clinicId } = useClinic();
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const docInputRef = useRef<HTMLInputElement | null>(null);
@@ -467,7 +469,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           ? "outbound-audios"
           : "outbound-documents";
 
-    const filePath = `${folder}/${fileName}`;
+    // O Storage só aceita upload na pasta da clínica do usuário
+    if (!clinicId) {
+      throw new Error("Clínica não identificada para o upload.");
+    }
+    const filePath = `${clinicId}/${folder}/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from("whatsapp-media")

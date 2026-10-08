@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { toProviderMediaUrl } from "../_shared/media.ts";
 import { queueTranscription, runInBackground, TRANSCRIPTION_BUCKET } from "../_shared/transcription.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -486,6 +487,8 @@ serve(async (req)=>{
         });
       }
     }
+    // Bucket privado: a Meta recebe um link assinado e temporário do arquivo
+    const providerMediaUrl = mediaUrl ? await toProviderMediaUrl(supabaseAdmin, mediaUrl) : null;
     const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
     const metaPayload = {
       messaging_product: "whatsapp",
@@ -494,7 +497,7 @@ serve(async (req)=>{
     if (outboundType === "image" && mediaUrl) {
       metaPayload.type = "image";
       metaPayload.image = {
-        link: mediaUrl,
+        link: providerMediaUrl,
         ...bodyText ? {
           caption: bodyText
         } : {}
@@ -502,13 +505,13 @@ serve(async (req)=>{
     } else if (outboundType === "audio" && mediaUrl) {
       metaPayload.type = "audio";
       metaPayload.audio = {
-        link: mediaUrl,
+        link: providerMediaUrl,
         voice: true
       };
     } else if (outboundType === "document" && mediaUrl) {
       metaPayload.type = "document";
       metaPayload.document = {
-        link: mediaUrl,
+        link: providerMediaUrl,
         filename: filename || "documento.pdf",
         ...bodyText ? {
           caption: bodyText

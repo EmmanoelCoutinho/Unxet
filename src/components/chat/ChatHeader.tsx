@@ -8,6 +8,7 @@ import { CustomTooltip } from "../ui/CustomTooltip";
 import { ArrowLeftIcon, TagIcon, MoreVerticalIcon } from "lucide-react";
 import { CustomDropdown } from "../ui/CustomDropdown";
 import { useIsMobile } from "../../hooks/useMediaQuery";
+import { SecureImage } from "../ui/SecureImage";
 
 interface ChatHeaderProps {
   conversation: Conversation;
@@ -151,10 +152,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0A84FF] font-medium text-white">
             {avatar ? (
-              <img
+              <SecureImage
                 src={avatar}
                 alt={`Foto de ${conversation.contactName}`}
                 className="h-full w-full object-cover"
+                fallback={initials}
               />
             ) : (
               initials
