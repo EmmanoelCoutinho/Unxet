@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ChevronDown, DownloadIcon, FileIcon, Trash2 } from "lucide-react";
+import {
+  Check,
+  CheckCheck,
+  ChevronDown,
+  DownloadIcon,
+  FileIcon,
+  Trash2,
+} from "lucide-react";
 import type { Message as UiMessage } from "../../types";
 import { AudioTranscriptStatus } from "./AudioTranscriptStatus";
 import { getSupabaseTransformedImageUrl } from "../../lib/imageUtils";
@@ -226,7 +233,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             : `rounded-lg ${bubblePadding} bg-[#0A84FF] text-white`
         }`;
 
-  // Mensagens enviadas aparecem como já entregues; só mostramos algo se der erro.
+  // A linha de status só aparece em caso de erro; o progresso fica nos ticks.
   const showStatusRow = !isClient && localStatus === "failed";
   const canRetryFailedMessage =
     localStatus === "failed" && typeof onRetry === "function";
@@ -276,6 +283,35 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       </div>
     );
   }, [showStatusRow, localStatus, localError, canRetryFailedMessage]);
+
+  // Ticks como no WhatsApp: ✓ enviada, ✓✓ entregue, ✓✓ verde lida pelo cliente.
+  const deliveryIcon = (() => {
+    if (
+      isClient ||
+      message.deletedAt ||
+      localStatus === "failed" ||
+      localStatus === "sending"
+    ) {
+      return null;
+    }
+
+    if (message.deliveryStatus === "read") {
+      return (
+        <CheckCheck
+          className="h-4 w-4 text-emerald-500"
+          aria-label="Visualizada"
+        />
+      );
+    }
+
+    if (message.deliveryStatus === "delivered") {
+      return (
+        <CheckCheck className="h-4 w-4 text-gray-400" aria-label="Recebida" />
+      );
+    }
+
+    return <Check className="h-4 w-4 text-gray-400" aria-label="Enviada" />;
+  })();
 
   const deleteLabel =
     deleteMode === "everyone" ? "Apagar para todos" : "Remover do Unxet";
@@ -506,11 +542,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           {errorHintNode}
 
           <span
-            className={`text-xs text-gray-500 mt-1 ${
-              isClient ? "text-left" : "text-right"
+            className={`mt-1 flex items-center gap-1 text-xs text-gray-500 ${
+              isClient ? "justify-start" : "justify-end"
             }`}
           >
             {formatTime(message.createdAt)}
+            {deliveryIcon}
           </span>
         </div>
       </div>

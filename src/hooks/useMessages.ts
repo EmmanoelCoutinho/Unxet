@@ -23,6 +23,8 @@ type DbMessage = {
   transcript_text?: string | null;
   deleted_at?: string | null;
   deleted_for_everyone?: boolean | null;
+  delivered_at?: string | null;
+  read_at?: string | null;
 };
 
 const safeParsePayload = (raw: any) => {
@@ -162,6 +164,14 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
     payload,
     deletedAt: row.deleted_at ?? undefined,
     deletedForEveryone: row.deleted_for_everyone ?? undefined,
+    deliveryStatus:
+      row.direction === "outbound"
+        ? row.read_at
+          ? "read"
+          : row.delivered_at
+            ? "delivered"
+            : "sent"
+        : undefined,
     createdAt: row.sent_at ?? row.created_at ?? new Date().toISOString(),
   };
 };
@@ -339,7 +349,9 @@ export function useMessages(conversationId: string | null) {
             transcript_status,
             transcript_text,
             deleted_at,
-            deleted_for_everyone
+            deleted_for_everyone,
+            delivered_at,
+            read_at
           `,
         )
         .eq("conversation_id", conversationId)
