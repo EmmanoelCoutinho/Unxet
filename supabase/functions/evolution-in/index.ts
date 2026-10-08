@@ -9,11 +9,13 @@
  *  5. Capturar profilePicUrl de forma assíncrona (fire-and-forget)
  *  6. Encaminhar o payload normalizado para shared-in-config
  *  7. Resolver LID para número real via Evolution API
+ *  8. Gravar entrega/leitura das mensagens enviadas ("messages.update")
  *
  * Nenhuma lógica de negócio vive aqui.
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
+import { applyMessageStatus } from "../_shared/messageStatus.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -117,6 +119,52 @@ const PROFILE_PIC_BUCKET = "whatsapp-media";
   return "";
 }
 // ---------------------------------------------------------------------------
+// Status das mensagens (messages.update)
+// ---------------------------------------------------------------------------
+// Evolution v2: data = { keyId, fromMe, status: "DELIVERY_ACK" | "READ" | ... }
+// Evolution v1: data = [{ key: { id, fromMe }, update: { status: 3 } }]
+// Códigos numéricos: 0 ERROR, 1 PENDING, 2 SERVER_ACK, 3 DELIVERY_ACK, 4 READ, 5 PLAYED
+function mapEvolutionStatus(raw) {
+  const value = typeof raw === "number" ? raw : String(raw ?? "").toUpperCase();
+  if (value === 3 || value === "DELIVERY_ACK") return "delivered";
+  if (value === 4 || value === 5 || value === "READ" || value === "PLAYED") return "read";
+  return null;
+}
+async function handleMessagesUpdate(body) {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const items = Array.isArray(body?.data) ? body.data : [
+    body?.data
+  ];
+  const atIso = body?.date_time ? new Date(body.date_time).toISOString() : new Date().toISOString();
+  const results = [];
+  for (const item of items){
+    if (!item) continue;
+    const fromMe = item?.fromMe ?? item?.key?.fromMe;
+    // Só nos interessam as mensagens que nós enviamos ao cliente
+    if (fromMe !== true) continue;
+    const providerMessageId = String(item?.keyId ?? item?.key?.id ?? "").trim();
+    const status = mapEvolutionStatus(item?.status ?? item?.update?.status);
+    if (!providerMessageId || !status) continue;
+    try {
+      const result = await applyMessageStatus(supabase, providerMessageId, status, atIso);
+      results.push({
+        providerMessageId,
+        status,
+        result
+      });
+    } catch (err) {
+      console.error("[MESSAGE_STATUS_ERROR]", providerMessageId, err);
+    }
+  }
+  console.log("[MESSAGE_STATUS]", JSON.stringify(results));
+  return new Response(JSON.stringify({
+    success: true,
+    results
+  }), {
+    status: 200
+  });
+}
+// ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 serve(async (req)=>{
@@ -142,6 +190,10 @@ serve(async (req)=>{
     }
     const body = await req.json();
     console.log("[EVOLUTION_WEBHOOK_FULL]", JSON.stringify(body, null, 2));
+    // ── Status de entrega/leitura das mensagens enviadas (ticks) ──────────
+    if (body?.event === "messages.update" || body?.event === "MESSAGES_UPDATE") {
+      return await handleMessagesUpdate(body);
+    }
     // ── Eventos permitidos ────────────────────────────────────────────────
     const allowedEvents = [
       "messages.upsert",

@@ -12,6 +12,7 @@
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyMetaSignature } from "../_shared/security.ts";
+import { applyMessageStatus } from "../_shared/messageStatus.ts";
 // ---------------------------------------------------------------------------
 // ENV
 // ---------------------------------------------------------------------------
@@ -119,6 +120,25 @@ serve(async (req)=>{
     // -----------------------------------------------------------------------
     // PAYLOAD
     // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // STATUS DAS MENSAGENS ENVIADAS (ticks: delivered / read)
+    // -----------------------------------------------------------------------
+    const statuses = (body.entry ?? []).flatMap((e)=>(e?.changes ?? []).flatMap((c)=>Array.isArray(c?.value?.statuses) ? c.value.statuses : []));
+    if (statuses.length > 0) {
+      for (const s of statuses){
+        const status = s?.status === "delivered" || s?.status === "read" ? s.status : null;
+        const providerMessageId = String(s?.id ?? "").trim();
+        if (!status || !providerMessageId) continue;
+        const ts = Number(s?.timestamp);
+        const atIso = Number.isFinite(ts) && ts > 0 ? new Date(ts * 1000).toISOString() : new Date().toISOString();
+        try {
+          const result = await applyMessageStatus(supabase, providerMessageId, status, atIso);
+          console.log("[MESSAGE_STATUS]", providerMessageId, status, result);
+        } catch (err) {
+          console.error("[MESSAGE_STATUS_ERROR]", providerMessageId, err);
+        }
+      }
+    }
     const entry = body.entry?.[0];
     const change = entry?.changes?.[0];
     const value = change?.value;

@@ -20,6 +20,8 @@ export type MessageDirection = "inbound" | "outbound";
 
 export type MessageSendStatus = "sending" | "failed" | "sent";
 export type TranscriptStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED";
+// Ticks do WhatsApp para mensagens enviadas: ✓ enviada, ✓✓ entregue, ✓✓ verde lida
+export type MessageDeliveryStatus = "sent" | "delivered" | "read";
 
 export type Conversation = {
   id: string;
@@ -62,6 +64,7 @@ export type Message = {
   transcriptText?: string;
   deletedAt?: string;
   deletedForEveryone?: boolean;
+  deliveryStatus?: MessageDeliveryStatus;
   createdAt: string;
 
   localStatus?: MessageSendStatus;
