@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import type { Message as UiMessage } from "../../types";
 import { AudioTranscriptStatus } from "./AudioTranscriptStatus";
-import { getSupabaseTransformedImageUrl } from "../../lib/imageUtils";
+import { useMediaUrl } from "../../lib/mediaUrls";
 
 interface MessageBubbleProps {
   message: UiMessage;
@@ -132,7 +132,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const localStatus = local.localStatus;
   const localError = local.localError;
 
-  const mediaUrl =
+  const rawMediaUrl =
     message.mediaUrl ??
     (payload?.image?.url ||
       payload?.audio?.url ||
@@ -140,6 +140,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       payload?.video?.url ||
       payload?.document?.url ||
       undefined);
+  // Bucket privado: troca a URL gravada por um link assinado e temporário
+  const mediaUrl = useMediaUrl(rawMediaUrl);
+  const mediaLoading = Boolean(rawMediaUrl) && !mediaUrl;
 
   const mediaType =
     message.type ??
@@ -198,24 +201,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     : documentLabel;
   const documentAccentClass = getDocumentAccentClass(documentLabel);
 
-  const hasMedia = Boolean(mediaUrl);
-  const imageThumbnailUrl =
-    mediaType === "image" && mediaUrl
-      ? getSupabaseTransformedImageUrl(mediaUrl, {
-          width: 384,
-          height: 384,
-          quality: 78,
-          resize: "cover",
-        })
-      : mediaUrl;
-  const imagePreviewUrl =
-    mediaType === "image" && mediaUrl
-      ? getSupabaseTransformedImageUrl(mediaUrl, {
-          width: 1600,
-          quality: 88,
-          resize: "contain",
-        })
-      : mediaUrl;
+  const hasMedia = Boolean(rawMediaUrl);
 
   const onlyAudio = mediaType === "audio";
   const onlyDocument =
@@ -387,19 +373,20 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             }
           >
             <div className={bubbleClass}>
+              {mediaLoading && (
+                <div
+                  className="h-12 w-48 max-w-full animate-pulse rounded-lg bg-black/10"
+                  aria-label="Carregando mídia"
+                />
+              )}
               {mediaUrl && (
                 <>
                   {mediaType === "image" && (
                     <img
-                      src={imageThumbnailUrl}
+                      src={mediaUrl}
                       alt="Imagem"
                       className="h-48 w-48 max-w-full cursor-zoom-in rounded-lg object-cover"
-                      onError={(event) => {
-                        if (event.currentTarget.src !== mediaUrl) {
-                          event.currentTarget.src = mediaUrl;
-                        }
-                      }}
-                      onClick={() => setPreviewSrc(imagePreviewUrl ?? mediaUrl)}
+                      onClick={() => setPreviewSrc(mediaUrl)}
                     />
                   )}
 

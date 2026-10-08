@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Conversation } from "../../types";
 import { CustomTooltip } from "../ui/CustomTooltip";
+import { SecureImage } from "../ui/SecureImage";
 interface ConversationItemProps {
   conversation: Conversation;
   onClick: () => void;
@@ -104,10 +105,11 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       <div className="flex gap-3">
         <div className="w-12 h-12 rounded-full bg-[#0A84FF] text-white flex items-center justify-center font-medium flex-shrink-0 overflow-hidden">
           {conversation.contactAvatar ? (
-            <img
+            <SecureImage
               src={conversation.contactAvatar}
               alt={`Foto de ${conversation.contactName}`}
               className="w-full h-full object-cover"
+              fallback={initials}
             />
           ) : (
             initials

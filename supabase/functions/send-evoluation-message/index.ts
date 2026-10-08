@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { toProviderMediaUrl } from "../_shared/media.ts";
 import { queueTranscription, runInBackground, storagePathFromPublicUrl } from "../_shared/transcription.ts";
 import { getClinicMembership } from "../_shared/security.ts";
 const corsHeaders = {
@@ -241,6 +242,8 @@ serve(async (req)=>{
     // Rota dedicada: /message/sendWhatsAppAudio
     // Aceita URL pública diretamente — Baileys converte internamente.
     // Não é necessário converter para ogg como na Meta API.
+    // Bucket privado: a Evolution recebe um link assinado e temporário do arquivo
+    const providerMediaUrl = mediaUrl ? await toProviderMediaUrl(adminSupabase, mediaUrl) : null;
     if (isAudio && mediaUrl) {
       console.log("[EVOLUTION_SEND_AUDIO]", JSON.stringify({
         number,
@@ -254,7 +257,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
-          audio: mediaUrl,
+          audio: providerMediaUrl,
           encoding: true
         })
       });
@@ -283,7 +286,7 @@ serve(async (req)=>{
         body: JSON.stringify({
           number,
           mediatype: "image",
-          media: mediaUrl,
+          media: providerMediaUrl,
           caption: text ?? ""
         })
       });
@@ -313,7 +316,7 @@ serve(async (req)=>{
         body: JSON.stringify({
           number,
           mediatype: "document",
-          media: mediaUrl,
+          media: providerMediaUrl,
           caption: text ?? "",
           fileName: fileName ?? `file-${Date.now()}`
         })

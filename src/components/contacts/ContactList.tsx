@@ -21,6 +21,7 @@ import {
   getInitials,
   statusLabels,
 } from "./contactLabels";
+import { SecureImage } from "../ui/SecureImage";
 
 type ContactListProps = {
   contacts: Contact[];
@@ -120,10 +121,11 @@ export const ContactList: React.FC<ContactListProps> = ({
                   <div className="flex items-start gap-3">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-sm font-semibold text-gray-700">
                       {contact.avatar_url ? (
-                        <img
+                        <SecureImage
                           src={contact.avatar_url}
                           alt={contact.name}
                           className="h-full w-full object-cover"
+                          fallback={getInitials(contact.name)}
                         />
                       ) : (
                         getInitials(contact.name) || (
