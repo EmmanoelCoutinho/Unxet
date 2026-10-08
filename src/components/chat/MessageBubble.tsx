@@ -467,12 +467,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 onOpenChange={setIsMenuOpen}
                 modal={false}
               >
+                {/* No celular o toque simples "gruda" o :hover; a seta só aparece com o menu aberto (toque longo). */}
                 <DropdownMenu.Trigger asChild>
                   <button
                     type="button"
                     title="Opções da mensagem"
                     aria-label="Opções da mensagem"
-                    className={`absolute flex items-center opacity-0 transition-opacity duration-150 focus:opacity-100 group-hover/bubble:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:pointer-events-none ${
+                    className={`absolute flex items-center opacity-0 transition-opacity duration-150 focus-visible:opacity-100 [@media(hover:hover)]:group-hover/bubble:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:pointer-events-none ${
                       onlyAudio || onlyDocument
                         ? "right-1 top-1 h-6 w-6 justify-center rounded-full bg-white/90 text-gray-600 shadow-sm"
                         : "right-0 top-0 h-7 w-10 justify-end rounded-tr-lg bg-gradient-to-l from-[#0A84FF] from-60% to-transparent pr-1.5 text-white"
