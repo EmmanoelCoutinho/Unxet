@@ -135,7 +135,10 @@ async function handleMessagesUpdate(body) {
   const items = Array.isArray(body?.data) ? body.data : [
     body?.data
   ];
-  const atIso = body?.date_time ? new Date(body.date_time).toISOString() : new Date().toISOString();
+  // Não usamos body.date_time: vem no fuso do servidor da Evolution sem offset
+  // (ex.: horário de Brasília lido como UTC = 3h de diferença). O webhook chega
+  // na hora, então o relógio daqui é a melhor referência.
+  const atIso = new Date().toISOString();
   const results = [];
   for (const item of items){
     if (!item) continue;
