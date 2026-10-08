@@ -1,8 +1,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { timingSafeEqual } from "../_shared/security.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const DEEPGRAM_API_KEY = Deno.env.get("DEEPGRAM_API_KEY");
+const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
+// Função interna (publicada sem verify_jwt): só aceita chamadas de outras
+// edge functions, com a service role ou o segredo interno. Sem isso qualquer
+// pessoa podia disparar transcrições pagas na Deepgram.
+const isInternalCall = (req)=>{
+  const auth = req.headers.get("authorization") ?? "";
+  const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+  const internal = req.headers.get("x-internal-secret") ?? "";
+  return !!SUPABASE_SERVICE_ROLE_KEY && timingSafeEqual(bearer, SUPABASE_SERVICE_ROLE_KEY) || !!INTERNAL_BOT_SECRET && timingSafeEqual(internal, INTERNAL_BOT_SECRET);
+};
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -36,6 +47,16 @@ serve(async (req)=>{
   if (req.method !== "POST") return new Response("Method not allowed", {
     status: 405,
     headers: corsHeaders
+  });
+  if (!isInternalCall(req)) return new Response(JSON.stringify({
+    ok: false,
+    error: "unauthorized"
+  }), {
+    status: 401,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json"
+    }
   });
   const supabase = supabaseAdmin();
   try {

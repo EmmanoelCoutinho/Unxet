@@ -15,6 +15,7 @@
  *  9.  Job de transcrição de áudio (transcription_jobs)
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { queueTranscription, runInBackground } from "../_shared/transcription.ts";
 import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 import { queueInboundPush } from "../_shared/push.ts";
 // ---------------------------------------------------------------------------
@@ -383,30 +384,14 @@ serve(async (req)=>{
       }
     }
     // ── 12. Job de transcrição de áudio ───────────────────────────────────
-    if (isAudioMessage && audioStoragePath) {
-      const { data: job, error: jobErr } = await supabase.from("transcription_jobs").insert({
-        message_id: insertedMsg.id,
-        bucket: WHATSAPP_MEDIA_BUCKET,
-        storage_path: audioStoragePath,
-        status: "PENDING"
-      }).select("id").maybeSingle();
-      if (!jobErr && job?.id) {
-        fetch(`${SUPABASE_URL}/functions/v1/transcribe-worker`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            job_id: job.id,
-            language: "pt"
-          })
-        }).catch((err)=>{
-          console.error("Erro disparando transcribe-worker:", err);
-        });
-      } else if (jobErr) {
-        console.error("Erro ao criar transcription_job:", jobErr);
-      }
+    // Sem arquivo no Storage a mensagem fica FAILED (botão de reprocessar),
+    // em vez de "carregando" para sempre.
+    if (isAudioMessage) {
+      const queued = await queueTranscription(supabase, {
+        messageId: insertedMsg.id,
+        storagePath: audioStoragePath
+      });
+      runInBackground(queued?.done);
     }
     return new Response("OK", {
       status: 200
