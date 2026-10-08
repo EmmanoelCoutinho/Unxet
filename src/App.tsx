@@ -12,6 +12,7 @@ import { ForgotPassword } from "./pages/ForgotPassword";
 import { Inbox } from "./pages/Inbox";
 import { Chat } from "./pages/Chat";
 import { Header } from "./components/layout/Header";
+import { PushNotificationsBridge } from "./components/PushNotificationsBridge";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { InboxAnalyticsDashboard } from "./pages/InboxAnalyticsDashboard";
 import { Tags } from "./pages/Tags";
@@ -86,6 +87,7 @@ function RoutedApp() {
 
   return (
     <>
+      <PushNotificationsBridge />
       {showHeader && <Header />}
       <main
         className={

@@ -16,6 +16,7 @@
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
+import { queueInboundPush } from "../_shared/push.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -358,6 +359,11 @@ serve(async (req)=>{
     } catch (err) {
       console.error("Erro chamando bot-engine:", err);
     }
+    queueInboundPush(supabase, {
+      conversationId: conversation.id,
+      messageType,
+      text
+    });
     // ── 11. Evento de reabertura ──────────────────────────────────────────
     if (shouldReopen) {
       const { error: evErr } = await supabase.from("conversation_events").insert({

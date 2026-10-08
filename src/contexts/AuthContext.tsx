@@ -11,6 +11,7 @@ import {
 } from "react";
 import { User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
+import { disablePush } from "../lib/pushNotifications";
 import { getAuthCallbackUrl } from "../lib/appUrl";
 
 export type ClinicUser = {
@@ -222,6 +223,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     setLoading(true);
+    // Para de notificar este aparelho antes de perder a sessão (a RPC exige login)
+    await disablePush().catch((error) => {
+      console.error("Erro ao desativar notificações no logout:", error);
+    });
     await supabase.auth.signOut();
     setAuthUser(null);
     setProfile(null);

@@ -72,3 +72,52 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// Notificações push (enviadas por supabase/functions/_shared/push.ts)
+// ---------------------------------------------------------------------------
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      // Com o app aberto na tela, a notificação aparece sem som/vibração.
+      const appVisible = windows.some((client) => client.visibilityState === "visible");
+
+      return self.registration.showNotification(data.title || "Unxet", {
+        body: data.body || "Nova mensagem",
+        icon: "/icons/icon-192.png",
+        badge: "/icons/badge-96.png",
+        // Uma notificação por conversa, como no WhatsApp: a nova substitui a anterior.
+        tag: data.conversationId ? `conversation:${data.conversationId}` : undefined,
+        renotify: !!data.conversationId,
+        silent: appVisible,
+        data: { url: data.url || "/inbox" },
+      });
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/inbox";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windows) => {
+      const client = windows.find((w) => new URL(w.url).origin === self.location.origin);
+      if (client) {
+        await client.focus();
+        // O app navega pelo router, sem recarregar a página.
+        client.postMessage({ type: "open-url", url });
+        return;
+      }
+      await self.clients.openWindow(url);
+    })
+  );
+});

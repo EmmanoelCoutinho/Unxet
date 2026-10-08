@@ -4,6 +4,66 @@ import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../contexts/AuthContext";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
+import { usePushNotifications } from "../../hooks/usePushNotifications";
+import type { PushStatus } from "../../lib/pushNotifications";
+
+const PUSH_STATUS_TEXT: Record<PushStatus, string> = {
+  enabled:
+    "Ativadas neste aparelho. Você será avisado quando um cliente mandar mensagem, mesmo com o app fechado.",
+  disabled:
+    "Receba um aviso quando um cliente mandar mensagem, mesmo com o app fechado.",
+  denied:
+    "As notificações estão bloqueadas para o Unxet. Libere nas configurações do navegador (ou do app no celular) e tente novamente.",
+  "needs-install":
+    "No iPhone, primeiro adicione o Unxet à tela de início: no Safari, toque em Compartilhar e depois em “Adicionar à Tela de Início”. Abra o app por lá e ative as notificações aqui.",
+  unsupported: "Este navegador não suporta notificações.",
+};
+
+const PushNotificationsSection: React.FC = () => {
+  const { status, busy, enable, disable } = usePushNotifications();
+
+  const handleEnable = async () => {
+    try {
+      const next = await enable();
+      if (next === "enabled") toast.success("Notificações ativadas.");
+    } catch (error) {
+      console.error("Erro ao ativar notificações:", error);
+      toast.error("Não foi possível ativar as notificações.");
+    }
+  };
+
+  const handleDisable = async () => {
+    try {
+      await disable();
+      toast.success("Notificações desativadas neste aparelho.");
+    } catch (error) {
+      console.error("Erro ao desativar notificações:", error);
+      toast.error("Não foi possível desativar as notificações.");
+    }
+  };
+
+  return (
+    <section className="space-y-3 border-t border-gray-200 pt-5">
+      <h4 className="text-sm font-semibold text-gray-900">Notificações</h4>
+      <p className="text-sm text-gray-500">
+        {status ? PUSH_STATUS_TEXT[status] : "Verificando…"}
+      </p>
+      {(status === "enabled" || status === "disabled") && (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            variant={status === "enabled" ? "secondary" : "primary"}
+            onClick={status === "enabled" ? handleDisable : handleEnable}
+            isLoading={busy}
+          >
+            {status === "enabled" ? "Desativar" : "Ativar notificações"}
+          </Button>
+        </div>
+      )}
+    </section>
+  );
+};
 
 export const ProfileModal: React.FC<{
   open: boolean;
@@ -98,6 +158,8 @@ export const ProfileModal: React.FC<{
               </Button>
             </div>
           </section>
+
+          <PushNotificationsSection />
 
           <section className="space-y-3 border-t border-gray-200 pt-5">
             <h4 className="text-sm font-semibold text-gray-900">

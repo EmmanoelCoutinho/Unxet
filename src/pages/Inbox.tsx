@@ -9,6 +9,7 @@ import { ConversationItem } from "../components/inbox/ConversationItem";
 import { ChannelFilter } from "../components/inbox/ChannelFilter";
 import { TagFilter } from "../components/inbox/TagFilter";
 import { useConversations } from "../hooks/useConversations";
+import { setAppBadge } from "../lib/pushNotifications";
 import type { Channel } from "../types";
 
 type InboxTab = "open" | "pending";
@@ -32,6 +33,7 @@ export const Inbox: React.FC = () => {
     const baseTitle = "Unxet";
     document.title =
       totalUnreadCount > 0 ? `(${totalUnreadCount}) ${baseTitle}` : baseTitle;
+    setAppBadge(totalUnreadCount);
 
     return () => {
       document.title = baseTitle;
