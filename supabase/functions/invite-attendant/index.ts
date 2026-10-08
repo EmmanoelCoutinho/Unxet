@@ -58,7 +58,9 @@ Deno.serve(async (req)=>{
   const name = (body.name ?? null)?.toString().trim() || null;
   const role = body.role ?? "agent";
   const departmentId = body.department_id ?? null;
-  const redirectTo = (body.redirect_to ?? DEFAULT_REDIRECT_TO) || undefined;
+  // INVITE_REDIRECT_TO (secret da function) tem prioridade: garante que o link do
+  // convite aponte para o app em produção mesmo que o convite seja feito de localhost.
+  const redirectTo = (DEFAULT_REDIRECT_TO ?? body.redirect_to) || undefined;
   log("request_received", {
     clinicId,
     email,

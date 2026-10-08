@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button';
 import logo from '../assets/logo-unxet.png';
 import { toast } from 'react-toastify';
 import { useAuth } from '../contexts/AuthContext'; // Importado o hook de auth
+import { translateAuthError } from '../lib/authErrors';
 
 export const ForgotPassword: React.FC = () => {
   const { sendPasswordResetEmail } = useAuth(); // Extraído o método do contexto
@@ -33,7 +34,7 @@ export const ForgotPassword: React.FC = () => {
       toast.success('E-mail de redefinição enviado! Verifique sua caixa de entrada.');
       setEmail(''); 
     } catch (err: any) {
-      toast.error(err?.message || 'Erro ao tentar enviar o e-mail de redefinição.');
+      toast.error(translateAuthError(err, 'Erro ao tentar enviar o e-mail de redefinição.'));
     } finally {
       setLoading(false);
     }

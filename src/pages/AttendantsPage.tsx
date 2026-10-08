@@ -9,6 +9,7 @@ import {
 import { Input } from "../components/ui/Input";
 import { Badge } from "../components/ui/Badge";
 import { supabase } from "../lib/supabaseClient";
+import { getAuthCallbackUrl } from "../lib/appUrl";
 import { useClinic } from "../contexts/ClinicContext";
 import { toast } from "react-toastify";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
@@ -684,7 +685,7 @@ export const AttendantsPage: React.FC = () => {
             name: inviteName.trim() || null,
             role: inviteRole,
             department_id: inviteDepartmentId ?? null,
-            redirect_to: `${window.location.origin}/auth/callback`,
+            redirect_to: getAuthCallbackUrl(),
           },
         },
       );

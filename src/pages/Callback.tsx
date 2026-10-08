@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import { translateAuthError } from "../lib/authErrors";
 import {
   grantSetPassword,
   sessionFromRecentEmailLink,
@@ -35,11 +36,13 @@ export const AuthCallback: React.FC = () => {
 
         if (hashError) {
           setError(
-            hashErrorCode === "otp_expired"
-              ? "Este link expirou (ou já foi usado). Solicite um novo convite."
-              : decodeURIComponent(
-                  hashErrorDesc || "Falha ao validar convite.",
-                ),
+            translateAuthError(
+              {
+                code: hashErrorCode ?? undefined,
+                message: decodeURIComponent(hashErrorDesc || ""),
+              },
+              "Falha ao validar o link. Solicite um novo link.",
+            ),
           );
           return;
         }
@@ -113,7 +116,9 @@ export const AuthCallback: React.FC = () => {
 
         setError("Link inválido ou expirado. Solicite um novo link.");
       } catch (e: any) {
-        setError(e?.message ?? "Falha ao validar convite.");
+        setError(
+          translateAuthError(e, "Falha ao validar o link. Solicite um novo link."),
+        );
       }
     };
 

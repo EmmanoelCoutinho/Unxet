@@ -8,20 +8,10 @@ import { Button } from '../components/ui/Button';
 import { useAuth } from '../contexts/AuthContext';
 import logo from '../assets/logo-unxet.png';
 import { toast } from 'react-toastify';
+import { translateAuthError } from '../lib/authErrors';
 
-const translateLoginError = (error: { code?: string; message?: string }) => {
-  const message = error.message?.trim() ?? '';
-  const lowerMessage = message.toLowerCase();
-
-  if (
-    error.code === 'invalid_credentials' ||
-    lowerMessage === 'invalid login credentials'
-  ) {
-    return 'E-mail ou senha inválidos.';
-  }
-
-  return message || 'Não foi possível entrar. Tente novamente.';
-};
+const translateLoginError = (error: { code?: string; message?: string }) =>
+  translateAuthError(error, 'Não foi possível entrar. Tente novamente.');
 
 export const Login: React.FC = () => {
   const { signInWithEmail, loading, authUser } = useAuth();
