@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import {
   ArrowDownIcon,
@@ -141,6 +141,7 @@ export const BotNodesEditor = ({
   const [loading, setLoading] = useState(true);
   const [nodes, setNodes] = useState<BotNodeRow[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [tags, setTags] = useState<TagRow[]>([]);
 
@@ -534,7 +535,7 @@ export const BotNodesEditor = ({
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[320px,1fr]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px,1fr]">
       <Card className="p-4">
         <div className="flex items-center justify-between gap-2">
           <div>
@@ -599,7 +600,18 @@ export const BotNodesEditor = ({
                 >
                   <button
                     type="button"
-                    onClick={() => setSelectedNodeId(n.id)}
+                    onClick={() => {
+                      setSelectedNodeId(n.id);
+                      // Abaixo de lg o editor fica embaixo da lista
+                      if (window.matchMedia?.("(max-width: 1023px)").matches) {
+                        requestAnimationFrame(() =>
+                          editorRef.current?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                          }),
+                        );
+                      }
+                    }}
                     className="w-full text-left"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -644,10 +656,10 @@ export const BotNodesEditor = ({
         </div>
       </Card>
 
-      <div className="space-y-4">
+      <div ref={editorRef} className="min-w-0 scroll-mt-4 space-y-4">
         {selectedNode ? (
           <>
-            <Card className="p-6">
+            <Card className="p-4 sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">
@@ -742,7 +754,7 @@ export const BotNodesEditor = ({
               </div>
             </Card>
 
-            <Card className="p-6">
+            <Card className="p-4 sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">
@@ -1003,7 +1015,7 @@ export const BotNodesEditor = ({
             </Card>
           </>
         ) : (
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <div className="text-sm text-slate-600">
               Selecione uma etapa para editar.
             </div>

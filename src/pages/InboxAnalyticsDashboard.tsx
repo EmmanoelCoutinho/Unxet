@@ -189,11 +189,11 @@ const KpiCard = ({
   value: React.ReactNode;
   hint?: string;
 }) => (
-  <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+  <article className="flex flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
     <div className="flex items-start justify-between gap-2">
-      <p className="text-sm text-slate-500">{label}</p>
+      <p className="text-xs text-slate-500 sm:text-sm">{label}</p>
     </div>
-    <p className="mt-3 text-center text-3xl font-semibold text-slate-900">
+    <p className="mt-auto pt-3 text-center text-2xl font-semibold text-slate-900 sm:text-3xl">
       {value}
     </p>
   </article>
@@ -364,15 +364,15 @@ export const InboxAnalyticsDashboard: React.FC = () => {
   const backlogTotal = backlog.length;
 
   return (
-    <div className="h-full overflow-y-auto bg-slate-50 p-6">
+    <div className="h-full overflow-y-auto bg-slate-50 p-3 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         {/* FILTROS */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <PreTitleIcon icon={MessageCircleIcon} />
-              <div>
-                <h1 className="text-2xl font-semibold text-slate-900">
+              <div className="min-w-0">
+                <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">
                   Análise & Atendimento
                 </h1>
                 <p className="text-sm text-slate-500">
@@ -380,7 +380,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="hidden gap-2 sm:flex">
               <button
                 type="button"
                 onClick={applyFilters}
@@ -391,21 +391,23 @@ export const InboxAnalyticsDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <input
               type="date"
               value={draftStart}
               onChange={(event) => setDraftStart(event.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              aria-label="Data inicial"
+              className="w-full min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
             <input
               type="date"
               value={draftEnd}
               onChange={(event) => setDraftEnd(event.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              aria-label="Data final"
+              className="w-full min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
 
-            <div className="rounded-md border border-slate-300 p-2">
+            <div className="col-span-2 rounded-md border border-slate-300 p-2 lg:col-span-1">
               <p className="mb-2 text-xs text-slate-500">Canal</p>
               <div className="flex flex-wrap gap-2">
                 {CHANNEL_OPTIONS.map((channel) => (
@@ -422,7 +424,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
             <select
               value={draftDepartmentId}
               onChange={(event) => setDraftDepartmentId(event.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="col-span-2 min-w-0 sm:col-span-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">Todos departamentos</option>
               {departments.map((department) => (
@@ -436,7 +438,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
             <select
               value={draftAssignedUserId}
               onChange={(event) => setDraftAssignedUserId(event.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="col-span-2 min-w-0 sm:col-span-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">Todos atendentes</option>
               {users.map((user) => {
@@ -448,6 +450,14 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                 );
               })}
             </select>
+
+            <button
+              type="button"
+              onClick={applyFilters}
+              className="col-span-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 sm:hidden"
+            >
+              Aplicar filtros
+            </button>
           </div>
         </section>
 
@@ -472,7 +482,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
             title="Resumo executivo"
             subtitle="Principais indicadores do período para acompanhar volume, atendimento e backlog."
           />
-          <section className="grid gap-4 md:grid-cols-4">
+          <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
             {loading || !analytics ? (
               Array.from({ length: 4 }).map((_, index) => <KpiSkeleton key={index} />)
             ) : (
@@ -485,7 +495,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
             )}
           </section>
 
-          <section className="grid gap-4 md:grid-cols-4">
+          <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
             {loading || !analytics ? (
               Array.from({ length: 4 }).map((_, index) => <KpiSkeleton key={index} />)
             ) : (
@@ -513,7 +523,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
         </section>
 
         {!loading && !error && !hasData ? (
-          <section className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-600">
+          <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-8 text-center text-slate-600">
             <p className="font-medium">Nenhum dado para o período selecionado.</p>
             <p className="text-sm">Tente ampliar o período.</p>
           </section>
@@ -526,7 +536,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
               title="Decisão"
               subtitle="Entenda volume e distribuição por canal/departamento e a tendência do período."
             />
-            <section className="grid gap-4 lg:grid-cols-2">
+            <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <SectionHeader title="Leads por canal" />
                 <div className="space-y-3">
@@ -635,7 +645,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                         ))}
                       </div>
 
-                      <div className="grid gap-6 lg:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                         <div>
                           <p className="mb-3 text-sm font-medium text-slate-700">
                             Distribuição das notas
@@ -692,7 +702,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                 <div className="mt-3 overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
+                      <tr className="whitespace-nowrap border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                         <th className="px-2 py-2">Canal</th>
                         <th className="px-2 py-2">Tempo típico</th>
                         <th className="px-2 py-2">Tempo alto</th>
@@ -743,7 +753,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
+                  <tr className="whitespace-nowrap border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                     <th className="px-2 py-2">Contato</th>
                     <th className="px-2 py-2">Canal</th>
                     <th className="px-2 py-2">Departamento</th>
@@ -765,7 +775,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                   ) : backlogPage.length === 0 ? (
                     <tr>
                       <td
-                        className="px-2 py-8 text-center text-slate-500"
+                        className="px-2 py-6 sm:py-8 text-center text-slate-500"
                         colSpan={6}
                       >
                         Sem backlog para os filtros atuais.

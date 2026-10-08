@@ -26,7 +26,7 @@ export const QuickMessagesPicker: React.FC<QuickMessagesPickerProps> = ({
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div
         ref={contentRef}
-        className="absolute left-1/2 top-1/2 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white shadow-xl"
+        className="absolute left-1/2 top-1/2 flex max-h-[90dvh] w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border border-slate-200 bg-white shadow-xl"
       >
         <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
           <div>
@@ -46,7 +46,7 @@ export const QuickMessagesPicker: React.FC<QuickMessagesPickerProps> = ({
           </button>
         </div>
 
-        <div className="max-h-[360px] overflow-y-auto px-3 py-3">
+        <div className="min-h-0 max-h-[360px] flex-1 overflow-y-auto px-3 py-3">
           {loading ? (
             <div className="space-y-3 p-2">
               {[1, 2, 3].map((item) => (

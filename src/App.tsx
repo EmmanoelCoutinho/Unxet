@@ -39,7 +39,7 @@ type RequireAuthProps = {
 };
 
 const AuthLoadingScreen = () => (
-  <div className="min-h-screen w-full flex items-center justify-center bg-white">
+  <div className="min-h-dvh w-full flex items-center justify-center bg-white">
     <div className="flex flex-col items-center gap-3 text-gray-600">
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
       <span className="text-sm">Carregando sessão...</span>
@@ -90,7 +90,7 @@ function RoutedApp() {
       <main
         className={
           showHeader
-            ? "pt-16 h-screen box-border overflow-hidden"
+            ? "pt-16 h-dvh box-border overflow-hidden"
             : "min-h-screen"
         }
       >
@@ -109,6 +109,8 @@ function RoutedApp() {
             }
           >
             <Route index element={<InboxAnalyticsDashboard />} />
+            {/* No celular o índice mostra a lista de conversas; o painel fica aqui */}
+            <Route path="dashboard" element={<InboxAnalyticsDashboard />} />
             <Route path="chat/:id" element={<Chat />} />
             <Route path="tags" element={<Tags />} />
             <Route path="departments" element={<DepartmentsPage />} />

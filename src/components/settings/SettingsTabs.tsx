@@ -25,7 +25,7 @@ export const SettingsTabs: React.FC = () => {
   const location = useLocation();
 
   return (
-    <div className="mt-4 flex flex-wrap">
+    <div className="-mx-4 mt-4 flex min-w-0 overflow-x-auto px-4 sm:mx-0 sm:px-0">
       {SETTINGS_TABS.map((tab) => {
         const active = tab.isActive(location.pathname);
 
@@ -35,7 +35,7 @@ export const SettingsTabs: React.FC = () => {
             type="button"
             onClick={() => navigate(tab.path)}
             className={[
-              "px-4 py-2 text-sm font-medium transition ",
+              "shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium transition",
               active
                 ? "border-b-2 border-blue-600 text-blue-600"
                 : "bg-white text-slate-700 hover:bg-slate-50 border-b-2 border-gray-200",

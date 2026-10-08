@@ -1182,7 +1182,7 @@ export const Chat: React.FC = () => {
   return (
     <div className="flex flex-col h-full min-h-0 w-full bg-white relative">
       {loadingConversation ? (
-        <div className="flex items-center gap-3 shrink-0 border-b border-gray-200 px-4 py-3 bg-white">
+        <div className="flex items-center gap-3 shrink-0 border-b border-gray-200 px-2 py-3 bg-white sm:px-4">
           <button
             type="button"
             onClick={() => navigate("/inbox")}
@@ -1216,7 +1216,7 @@ export const Chat: React.FC = () => {
       <div
         ref={messagesContainerRef}
         onScroll={handleScrollCheck}
-        className="h-full max-h-[70vh] overflow-y-auto p-4 space-y-4"
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-3 space-y-4 sm:p-4"
       >
         {eventsError && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -1260,7 +1260,7 @@ export const Chat: React.FC = () => {
         <button
           type="button"
           onClick={() => scrollToBottom("smooth")}
-          className="absolute left-1/2 -translate-x-1/2 bottom-44 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[#0A84FF] text-white shadow-lg transition-colors hover:bg-[#0066d6]"
+          className="absolute left-1/2 -translate-x-1/2 bottom-28 z-20 sm:bottom-32 flex h-12 w-12 items-center justify-center rounded-full bg-[#0A84FF] text-white shadow-lg transition-colors hover:bg-[#0066d6]"
           aria-label="Ir para ultima mensagem"
         >
           <ArrowDownIcon className="w-5 h-5" />
@@ -1268,7 +1268,7 @@ export const Chat: React.FC = () => {
       )}
 
       {(recordingUiState.isRecording || recordingUiState.isSendingAudio) && (
-        <div className="pointer-events-none absolute bottom-40 left-1/2 z-40 w-[calc(100%-2rem)] max-w-md -translate-x-1/2">
+        <div className="pointer-events-none absolute bottom-28 left-1/2 z-20 sm:bottom-32 w-[calc(100%-2rem)] max-w-md -translate-x-1/2">
           <div className="rounded-xl border border-red-100 bg-white/95 px-4 py-3 text-sm text-[#1F2937] shadow-lg backdrop-blur">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
@@ -1299,8 +1299,8 @@ export const Chat: React.FC = () => {
             onClick={() => setIsManageTagsOpen(false)}
           />
 
-          <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white shadow-xl border border-gray-200">
-            <div className="p-5 border-b border-gray-200">
+          <div className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl border border-gray-200 bg-white shadow-xl sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[92vw] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl">
+            <div className="shrink-0 p-5 border-b border-gray-200">
               <h3 className="text-base font-semibold text-gray-900">
                 Gerenciar Etiquetas
               </h3>
@@ -1309,7 +1309,7 @@ export const Chat: React.FC = () => {
               </p>
             </div>
 
-            <div className="p-5">
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
               {tagsLoading ? (
                 <div className="text-sm text-gray-500">
                   Carregando etiquetas...
@@ -1355,7 +1355,7 @@ export const Chat: React.FC = () => {
               )}
             </div>
 
-            <div className="p-5 border-t border-gray-200 flex justify-end">
+            <div className="shrink-0 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] border-t border-gray-200 flex justify-end">
               <Button
                 variant="ghost"
                 onClick={() => setIsManageTagsOpen(false)}

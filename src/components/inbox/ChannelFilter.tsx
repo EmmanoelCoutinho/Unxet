@@ -37,7 +37,7 @@ export const ChannelFilter: React.FC<ChannelFilterProps> = ({
       <label className="text-xs font-medium text-gray-600 mb-2 block">
         Canais
       </label>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {channels.map(channel => <button key={channel.value} onClick={() => toggleChannel(channel.value)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${selectedChannels.includes(channel.value) ? 'bg-[#0A84FF] text-white' : 'bg-[#E5E7EB] text-[#1E1E1E] hover:bg-[#E5E7EB]/70'}`}>
             {channel.icon}
             <span>{channel.label}</span>

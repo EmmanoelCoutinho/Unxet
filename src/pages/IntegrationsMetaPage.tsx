@@ -575,7 +575,7 @@ export const MetaIntegrationsPage: React.FC = () => {
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50">
-      <div className="border-b bg-white px-6 py-5">
+      <div className="border-b bg-white px-4 sm:px-6 py-5">
         <div className="flex flex-col justify-center">
           <div className="flex gap-3">
             <PreTitleIcon icon={Settings2Icon} />
@@ -593,7 +593,7 @@ export const MetaIntegrationsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-col space-y-6 px-6 py-6 pb-20">
+      <div className="flex min-h-0 flex-col space-y-6 px-4 sm:px-6 py-6 pb-20">
         {errorMsg ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {errorMsg}
@@ -601,7 +601,7 @@ export const MetaIntegrationsPage: React.FC = () => {
         ) : null}
 
         {!clinicId ? (
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-900">
               Empresa não identificada
             </h2>
@@ -611,7 +611,7 @@ export const MetaIntegrationsPage: React.FC = () => {
           </Card>
         ) : (
           <>
-            <Card className="p-6">
+            <Card className="p-4 sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">
@@ -753,7 +753,7 @@ export const MetaIntegrationsPage: React.FC = () => {
               </div>
             </Card>
 
-            <Card className="p-6">
+            <Card className="p-4 sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">

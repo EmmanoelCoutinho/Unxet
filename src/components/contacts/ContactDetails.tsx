@@ -59,7 +59,7 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
 
   if (!contact) {
     return (
-      <section className="flex min-h-0 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+      <section className="flex min-h-0 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-white p-5 sm:p-8 text-center text-sm text-gray-500">
         Selecione um cliente para ver os detalhes.
       </section>
     );
@@ -75,10 +75,10 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
 
   return (
     <section className="min-h-0 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-      <div className="border-b border-gray-100 p-5">
+      <div className="border-b border-gray-100 p-4 sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-lg font-semibold text-gray-700">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="flex h-14 w-14 shrink-0 sm:h-16 sm:w-16 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-lg font-semibold text-gray-700">
               {contact.avatar_url ? (
                 <img
                   src={contact.avatar_url}
@@ -89,8 +89,8 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
                 getInitials(contact.name) || <UserRoundIcon className="h-6 w-6" />
               )}
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-950">
+            <div className="min-w-0">
+              <h2 className="break-words text-lg font-semibold text-gray-950 sm:text-xl">
                 {contact.name}
               </h2>
               <p className="mt-1 text-sm text-gray-500">{contact.phone}</p>
@@ -115,7 +115,7 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
         </div>
       </div>
 
-      <div className="grid gap-3 p-5 md:grid-cols-2">
+      <div className="grid gap-3 p-4 sm:p-5 md:grid-cols-2">
         <DetailRow
           label="Telefone"
           value={contact.phone}
@@ -164,7 +164,7 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
         </div>
       </div>
 
-      <div className="border-t border-gray-100 p-5">
+      <div className="border-t border-gray-100 p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-gray-950">

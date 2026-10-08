@@ -107,7 +107,7 @@ export const QuickMessagesPage: React.FC = () => {
 
   return (
     <div className="flex h-full flex-col bg-slate-50">
-      <div className="border-b bg-white px-8 py-6">
+      <div className="border-b bg-white px-4 sm:px-8 py-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <PreTitleIcon icon={MessageSquareTextIcon} />
@@ -136,9 +136,9 @@ export const QuickMessagesPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6">
         {error ? (
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-900">
               Não foi possível carregar
             </h2>
@@ -162,7 +162,7 @@ export const QuickMessagesPage: React.FC = () => {
             ))}
           </div>
         ) : quickMessages.length === 0 ? (
-          <Card className="rounded-2xl p-8 text-center">
+          <Card className="rounded-2xl p-5 sm:p-8 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
               <MessageSquareTextIcon className="h-6 w-6 text-slate-500" />
             </div>
@@ -233,8 +233,8 @@ export const QuickMessagesPage: React.FC = () => {
       </div>
 
       {modalMode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-3 py-4 sm:px-4">
+          <div className="max-h-full w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl bg-white p-4 sm:p-6 shadow-lg">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">

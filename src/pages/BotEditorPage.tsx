@@ -268,7 +268,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
         onClick={() => setTab(key)}
         disabled={disabled}
         className={[
-          "px-4 py-2 text-sm font-medium transition border-b-2",
+          "shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium transition border-b-2",
           active
             ? "border-blue-600 text-blue-600"
             : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50",
@@ -282,10 +282,10 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50">
-      <div className="px-6 py-5 border-b bg-white">
+      <div className="px-4 sm:px-6 py-5 border-b bg-white">
         <div className="flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="min-w-0">
               <span
                 onClick={() => navigate("/inbox/bots")}
                 className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 cursor-pointer"
@@ -293,17 +293,17 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                 <ChevronLeft className="h-5 w-5" />
                 <span className="pb-0.5">Voltar</span>
               </span>
-              <h1 className="mt-1 text-2xl font-semibold text-gray-900">
+              <h1 className="mt-1 break-words text-xl font-semibold text-gray-900 sm:text-2xl">
                 {title}
               </h1>
-              <p className="text-sm text-gray-500 w-[70%]">
+              <p className="text-sm text-gray-500 sm:w-[70%]">
                 Sistema de criação de bots para triagem e atendimento
                 automático. Configure o fluxo de conversa, mensagens e canais de
                 atendimento.
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-shrink-0 items-center gap-2">
               <Button
                 variant="primary"
                 size="sm"
@@ -328,7 +328,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
             </div>
           </div>
 
-          <div className="flex flex-wrap border-b">
+          <div className="-mx-4 flex overflow-x-auto border-b px-4 sm:mx-0 sm:px-0">
             {tabButton("general", "Geral")}
             {tabButton("nodes", "Etapas", !canUseDetailTabs)}
             {tabButton("bindings", "Canais", !canUseDetailTabs)}
@@ -337,7 +337,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
         </div>
       </div>
 
-      <div className="px-6 pt-6 pb-24">
+      <div className="px-4 sm:px-6 pt-6 pb-24">
         {loading ? (
           <div className="space-y-3">
             {[1, 2].map((i) => (
@@ -348,7 +348,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
             ))}
           </div>
         ) : !isNew && !botId ? (
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">
                 Bot não identificado
@@ -369,7 +369,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
         ) : tab === "general" ? (
           <div className="space-y-5">
             {!clinicId && (
-              <Card className="p-6">
+              <Card className="p-4 sm:p-6">
                 <h2 className="text-lg font-semibold text-gray-900">
                   Empresa não identificada
                 </h2>
@@ -385,7 +385,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
               </div>
             )}
 
-            <Card className="p-6">
+            <Card className="p-4 sm:p-6">
               <div className="flex flex-col gap-5">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">
@@ -516,7 +516,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
             </Card>
           </div>
         ) : !canUseDetailTabs ? (
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">
                 Salve o bot primeiro

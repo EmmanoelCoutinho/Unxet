@@ -41,7 +41,7 @@ export const ForgotPassword: React.FC = () => {
 
   return (
     <div className="min-h-screen w-full bg-white flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-8">
+      <Card className="w-full max-w-md p-5 sm:p-8">
         <div className="text-center mb-8">
           <img
             src={logo}

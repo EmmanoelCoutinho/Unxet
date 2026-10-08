@@ -99,9 +99,9 @@ export const ContactList: React.FC<ContactListProps> = ({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {loading ? (
-          <div className="p-6 text-sm text-gray-500">Carregando clientes...</div>
+          <div className="p-4 sm:p-6 text-sm text-gray-500">Carregando clientes...</div>
         ) : contacts.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">
+          <div className="p-4 sm:p-6 text-sm text-gray-500">
             Nenhum cliente encontrado.
           </div>
         ) : (

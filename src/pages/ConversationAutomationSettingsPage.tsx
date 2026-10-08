@@ -165,7 +165,7 @@ const AutomationCard = ({
   minMinutes?: number;
 }) => {
   return (
-    <Card className="p-6">
+    <Card className="p-4 sm:p-6">
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="max-w-3xl">
@@ -367,7 +367,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
   if (loading) {
     return (
       <div className="flex h-full flex-1 flex-col bg-slate-50">
-        <div className="border-b bg-white px-8 py-6">
+        <div className="border-b bg-white px-4 py-5 sm:px-8 sm:py-6">
           <h1 className="text-2xl font-semibold text-slate-900">
             Automações do chat
           </h1>
@@ -375,7 +375,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             Carregando configuracoes da clinica...
           </p>
         </div>
-        <div className="flex-1 overflow-y-auto px-8 py-6">
+        <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6">
           <div className="space-y-4">
             {[1, 2, 3, 4].map((item) => (
               <div
@@ -391,7 +391,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
 
   return (
     <div className="flex h-full flex-1 flex-col bg-slate-50">
-      <div className="border-b bg-white px-8 py-6">
+      <div className="border-b bg-white px-4 py-5 sm:px-8 sm:py-6">
         <div className="flex gap-3">
           <PreTitleIcon icon={Settings2Icon} />
           <div>
@@ -403,7 +403,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="flex py-4 items-center justify-between">
+        <div className="flex items-center justify-between gap-3 pt-2 sm:py-4">
           <SettingsTabs />
 
           <Button
@@ -412,13 +412,14 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             onClick={handleSubmit}
             isLoading={saving}
             disabled={!canSubmit}
+            className="hidden flex-shrink-0 sm:block"
           >
             Salvar configuracoes
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-4 pt-5 sm:px-8 sm:py-6">
         <div className="mx-auto max-w-4xl space-y-5">
           {loadError ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -504,7 +505,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             showMinutesInput={false}
           />
 
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <div className="flex flex-col gap-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="max-w-3xl">
@@ -583,13 +584,15 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             </div>
           </Card>
 
-          <div className="flex items-center justify-end pt-2">
+          {/* No celular este é o único botão de salvar e fica fixo no rodapé */}
+          <div className="sticky bottom-0 -mx-4 flex items-center justify-end border-t bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-2">
             <Button
               type="button"
               variant="primary"
               onClick={handleSubmit}
               isLoading={saving}
               disabled={!canSubmit}
+              className="w-full sm:w-auto"
             >
               Salvar configuracoes
             </Button>

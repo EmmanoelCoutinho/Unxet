@@ -561,7 +561,7 @@ export const DepartmentsPage: React.FC = () => {
 
   return (
     <div className="flex h-full flex-col bg-slate-50">
-      <div className="px-10 pt-8 pb-4 border-b bg-white">
+      <div className="px-4 pt-6 pb-4 border-b bg-white sm:px-10 sm:pt-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <PreTitleIcon icon={Building2Icon} />
@@ -587,9 +587,9 @@ export const DepartmentsPage: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto bg-slate-50">
-        <div className="px-10 py-8">
+        <div className="px-4 py-6 sm:px-10 sm:py-8">
           {error ? (
-            <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm">
+            <div className="rounded-2xl border border-red-100 bg-white p-5 sm:p-8 text-center shadow-sm">
               <h2 className="text-lg font-semibold text-gray-900">
                 Ocorreu um erro ao carregar
               </h2>
@@ -612,7 +612,7 @@ export const DepartmentsPage: React.FC = () => {
               ))}
             </div>
           ) : sortedDepartments.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center shadow-sm">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center shadow-sm sm:p-10">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
                 <Building2Icon className="h-6 w-6 text-slate-500" />
               </div>
@@ -633,19 +633,22 @@ export const DepartmentsPage: React.FC = () => {
             </div>
           ) : (
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <table className="min-w-full divide-y divide-slate-100">
-                <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <table className="block w-full divide-y divide-slate-100 md:table md:min-w-full">
+                <thead className="hidden bg-slate-50 text-left md:table-header-group text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="px-6 py-4">Nome</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4">Default</th>
-                    <th className="px-6 py-4">Ações</th>
+                    <th className="px-4 sm:px-6 py-4">Nome</th>
+                    <th className="px-4 sm:px-6 py-4">Status</th>
+                    <th className="px-4 sm:px-6 py-4">Default</th>
+                    <th className="px-4 sm:px-6 py-4">Ações</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="block divide-y divide-slate-100 md:table-row-group">
                   {sortedDepartments.map((department) => (
-                    <tr key={department.id}>
-                      <td className="px-6 py-4">
+                    <tr
+                      key={department.id}
+                      className="flex flex-wrap items-center gap-2 p-4 md:table-row md:p-0"
+                    >
+                      <td className="block basis-full md:basis-auto md:table-cell md:px-6 md:py-4">
                         <p className="text-sm font-semibold text-slate-800">
                           {department.name}
                         </p>
@@ -655,7 +658,7 @@ export const DepartmentsPage: React.FC = () => {
                           </p>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="block md:table-cell md:px-6 md:py-4">
                         <span
                           className={[
                             "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium",
@@ -667,7 +670,7 @@ export const DepartmentsPage: React.FC = () => {
                           {department.is_active ? "Ativo" : "Inativo"}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="block md:table-cell md:px-6 md:py-4">
                         <span
                           className={[
                             "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium",
@@ -676,10 +679,11 @@ export const DepartmentsPage: React.FC = () => {
                               : "border-slate-200 text-slate-500 bg-slate-50",
                           ].join(" ")}
                         >
+                          <span className="mr-1 md:hidden">Padrão:</span>
                           {department.is_default ? "Sim" : "Não"}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="block basis-full pt-1 md:basis-auto md:pt-4 md:table-cell md:px-6 md:py-4">
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
@@ -733,8 +737,8 @@ export const DepartmentsPage: React.FC = () => {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-3 py-4 sm:px-4">
+          <div className="max-h-full w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl bg-white p-4 sm:p-6 shadow-lg">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h2 className="text-lg font-semibold text-slate-900">
                 {modalMode === "create"
@@ -852,8 +856,8 @@ export const DepartmentsPage: React.FC = () => {
       )}
 
       {isConfirmOpen && pendingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-3 py-4 sm:px-4">
+          <div className="max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-4 sm:p-6 shadow-lg">
             <h3 className="text-lg font-semibold text-slate-900">
               Excluir departamento
             </h3>

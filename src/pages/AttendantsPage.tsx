@@ -203,9 +203,9 @@ const Modal: React.FC<{
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
-        <div className="flex items-start justify-between border-b px-6 py-4">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-3 py-4 sm:px-4">
+      <div className="max-h-full w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-xl">
+        <div className="flex items-start justify-between border-b px-4 sm:px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
             {description && (
@@ -220,14 +220,14 @@ const Modal: React.FC<{
             ✕
           </button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div className="px-4 sm:px-6 py-5">{children}</div>
       </div>
     </div>
   );
 };
 
 const EmptyState: React.FC<{ onAction: () => void }> = ({ onAction }) => (
-  <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-16 text-center">
+  <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-4 sm:px-6 py-16 text-center">
     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
       <UsersIcon className="h-6 w-6 text-gray-400" />
     </div>
@@ -711,7 +711,7 @@ export const AttendantsPage: React.FC = () => {
 
   return (
     <div className="flex h-full flex-1 flex-col bg-gray-50">
-      <div className="border-b bg-white px-8 py-6">
+      <div className="border-b bg-white px-4 sm:px-8 py-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
@@ -739,10 +739,10 @@ export const AttendantsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
-        <div className="mb-6 rounded-2xl border border-gray-100 bg-white px-6 py-5 shadow-sm">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6">
+        <div className="mb-6 rounded-2xl border border-gray-100 bg-white px-4 sm:px-6 py-5 shadow-sm">
           <div className="flex flex-wrap items-center gap-4">
-            <div className="flex flex-1 items-center gap-3">
+            <div className="flex min-w-0 flex-1 basis-full items-center gap-3 sm:basis-auto">
               <Input
                 placeholder="Buscar por nome, email ou ID"
                 value={search}
@@ -754,7 +754,7 @@ export const AttendantsPage: React.FC = () => {
                 Filtros
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
               <label className="text-xs font-medium text-gray-500">
                 Cargo
                 <div className="relative mt-1">
@@ -763,7 +763,7 @@ export const AttendantsPage: React.FC = () => {
                     onChange={(e) =>
                       setRoleFilter(e.target.value as RoleFilter)
                     }
-                    className="w-36 appearance-none rounded-full border border-gray-200 bg-white px-3 py-2 pr-8 text-sm text-gray-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="w-full appearance-none rounded-full sm:w-36 border border-gray-200 bg-white px-3 py-2 pr-8 text-sm text-gray-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="all">Todos</option>
                     <option value="admin">Administrador</option>
@@ -778,7 +778,7 @@ export const AttendantsPage: React.FC = () => {
                   <select
                     value={departmentFilter}
                     onChange={(e) => setDepartmentFilter(e.target.value)}
-                    className="w-48 appearance-none rounded-full border border-gray-200 bg-white px-3 py-2 pr-8 text-sm text-gray-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="w-full appearance-none rounded-full sm:w-48 border border-gray-200 bg-white px-3 py-2 pr-8 text-sm text-gray-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="all">Todos</option>
                     {departments.map((dept) => (
@@ -795,7 +795,7 @@ export const AttendantsPage: React.FC = () => {
         </div>
 
         {error ? (
-          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-6 text-sm text-rose-700">
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 sm:p-6 text-sm text-rose-700">
             <div className="flex items-center gap-3">
               <AlertTriangleIcon className="h-5 w-5" />
               <div>
@@ -829,7 +829,7 @@ export const AttendantsPage: React.FC = () => {
           />
         ) : (
           <div className="space-y-3">
-            <div className="grid grid-cols-12 gap-4 px-5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <div className="hidden grid-cols-12 gap-4 px-5 text-xs font-semibold uppercase tracking-wide text-gray-400 xl:grid">
               <span className="col-span-3">Nome</span>
               <span className="col-span-3">Email</span>
               <span className="col-span-2">Cargo</span>
@@ -837,7 +837,9 @@ export const AttendantsPage: React.FC = () => {
               <span className="col-span-1">Status</span>
               <span className="col-span-1 text-right">Ações</span>
             </div>
-            <Divider />
+            <div className="hidden xl:block">
+              <Divider />
+            </div>
             {filteredUsers.map((user) => {
               const department = user.department_id
                 ? departmentsById[user.department_id]
@@ -845,15 +847,15 @@ export const AttendantsPage: React.FC = () => {
               return (
                 <div
                   key={user.user_id}
-                  className="grid grid-cols-12 items-center gap-4 rounded-2xl border border-gray-100 bg-white px-5 py-4 shadow-sm"
+                  className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm xl:grid xl:grid-cols-12 xl:items-center xl:gap-4 xl:px-5"
                 >
-                  <div className="col-span-3">
+                  <div className="min-w-0 xl:col-span-3">
                     <p className="text-sm font-semibold text-gray-800">
                       {user.name?.trim() || "Sem nome"}
                     </p>
                   </div>
-                  <div className="col-span-3">
-                    <p className="text-sm text-gray-700">
+                  <div className="-mt-2 min-w-0 xl:col-span-3 xl:mt-0">
+                    <p className="break-all text-sm text-gray-700">
                       {user.email || "---"}
                     </p>
                     {!user.email && (
@@ -862,21 +864,24 @@ export const AttendantsPage: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <div className="col-span-2">
-                    <RoleBadge role={user.role} />
-                  </div>
-                  <div className="col-span-2">
-                    <div className="text-sm text-gray-700">
-                      {department?.name || "Sem setor"}
+                  <div className="flex flex-wrap items-center gap-2 xl:contents">
+                    <div className="xl:col-span-2">
+                      <RoleBadge role={user.role} />
                     </div>
-                    {department && !department.is_active && (
-                      <Badge variant="warning">Inativo</Badge>
-                    )}
+                    <div className="flex items-center gap-2 xl:col-span-2 xl:block">
+                      <div className="text-sm text-gray-700">
+                        <span className="text-gray-400 xl:hidden">Setor: </span>
+                        {department?.name || "Sem setor"}
+                      </div>
+                      {department && !department.is_active && (
+                        <Badge variant="warning">Inativo</Badge>
+                      )}
+                    </div>
+                    <div className="xl:col-span-1">
+                      <StatusBadge status="active" />
+                    </div>
                   </div>
-                  <div className="col-span-1">
-                    <StatusBadge status="active" />
-                  </div>
-                  <div className="col-span-1 flex justify-end gap-2">
+                  <div className="flex justify-end gap-2 border-t border-gray-100 pt-3 xl:col-span-1 xl:border-0 xl:pt-0">
                     <button
                       type="button"
                       onClick={() => handleOpenEdit(user)}

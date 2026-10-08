@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
-import { MessageSquareIcon } from "lucide-react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { MessageSquareIcon, SlidersHorizontalIcon } from "lucide-react";
 
 import { Input } from "../components/ui/Input";
 import { Badge } from "../components/ui/Badge";
@@ -15,6 +15,9 @@ type InboxTab = "open" | "pending";
 
 export const Inbox: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Abaixo de lg mostramos um painel por vez: a lista em /inbox e as demais telas no lugar dela
+  const isInboxRoot = location.pathname.replace(/\/+$/, "") === "/inbox";
 
   const {
     conversations,
@@ -39,6 +42,8 @@ export const Inbox: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedChannels, setSelectedChannels] = useState<Channel[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const activeFiltersCount = selectedChannels.length + selectedTagIds.length;
 
   useEffect(() => {
     const handleTabChange = (event: Event) => {
@@ -88,34 +93,64 @@ export const Inbox: React.FC = () => {
   const currentList = tab === "open" ? openConversations : pendingConversations;
 
   return (
-    <div className="flex h-screen w-full overflow-x-hidden bg-white">
+    <div className="flex h-full w-full overflow-x-hidden bg-white">
       <AppSidebar />
 
-      <div className="flex h-screen min-h-0 w-96 flex-col border-r">
-        <div className="shrink-0 border-b p-4">
-          <div className="mb-4 flex items-center justify-between">
+      <div
+        className={[
+          "h-full min-h-0 w-full flex-col border-r lg:flex lg:w-96 lg:flex-shrink-0",
+          isInboxRoot ? "flex" : "hidden",
+        ].join(" ")}
+      >
+        <div className="shrink-0 border-b p-3 sm:p-4">
+          <div className="mb-3 flex items-center justify-between gap-2 sm:mb-4">
             <h2 className="text-xl font-semibold">Conversas</h2>
             {totalUnreadCount > 0 && (
               <Badge variant="warning">{totalUnreadCount} não lidas</Badge>
             )}
           </div>
 
-          <Input
-            placeholder="Buscar..."
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            className="mb-3"
-          />
+          <div className="mb-3 flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <Input
+                type="search"
+                placeholder="Buscar..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((value) => !value)}
+              className={[
+                "relative flex h-[42px] w-[42px] flex-shrink-0 items-center justify-center rounded-lg border transition lg:hidden",
+                filtersOpen || activeFiltersCount > 0
+                  ? "border-blue-500 bg-blue-50 text-blue-600"
+                  : "border-[#E5E7EB] text-gray-600 hover:bg-gray-50",
+              ].join(" ")}
+              aria-label="Filtros"
+              aria-expanded={filtersOpen}
+            >
+              <SlidersHorizontalIcon className="h-5 w-5" />
+              {activeFiltersCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0A84FF] px-1 text-[11px] font-semibold text-white">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+          </div>
 
-          <ChannelFilter
-            selectedChannels={selectedChannels}
-            onChange={setSelectedChannels}
-          />
+          <div className={filtersOpen ? "block" : "hidden lg:block"}>
+            <ChannelFilter
+              selectedChannels={selectedChannels}
+              onChange={setSelectedChannels}
+            />
 
-          <TagFilter
-            selectedTagIds={selectedTagIds}
-            onChange={setSelectedTagIds}
-          />
+            <TagFilter
+              selectedTagIds={selectedTagIds}
+              onChange={setSelectedTagIds}
+            />
+          </div>
 
           <div className="mt-3 flex items-center">
             <button
@@ -177,7 +212,7 @@ export const Inbox: React.FC = () => {
               ))}
             </div>
           ) : currentList.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+            <div className="flex h-full flex-col items-center justify-center p-5 sm:p-8 text-center">
               <MessageSquareIcon className="mb-3 h-12 w-12 text-gray-300" />
               <p className="font-medium">
                 {tab === "open"
@@ -189,7 +224,7 @@ export const Inbox: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="divide-y pb-20">
+            <div className="divide-y pb-6 lg:pb-20">
               {currentList.map((conversation) => (
                 <ConversationItem
                   key={conversation.id}
@@ -205,7 +240,12 @@ export const Inbox: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div
+        className={[
+          "min-h-0 min-w-0 flex-1 flex-col lg:flex",
+          isInboxRoot ? "hidden" : "flex",
+        ].join(" ")}
+      >
         <Outlet />
       </div>
     </div>

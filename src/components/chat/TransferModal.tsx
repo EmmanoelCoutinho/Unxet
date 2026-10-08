@@ -52,7 +52,7 @@ export const TransferModal: React.FC<{
     <div className="fixed inset-0 z-[9999]">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-      <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white shadow-xl border border-gray-200">
+      <div className="absolute left-1/2 top-1/2 max-h-[90dvh] w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-white shadow-xl border border-gray-200">
         <div className="p-5 border-b border-gray-200">
           <h3 className="text-base font-semibold text-gray-900">
             Transferir conversa

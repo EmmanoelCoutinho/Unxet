@@ -145,7 +145,7 @@ export const MassMessagesPage: React.FC<MassMessagesPageProps> = () => {
   };
 
   return (
-    <div className="p-6 h-full overflow-y-auto bg-gray-50 w-full flex justify-center">
+    <div className="p-4 sm:p-6 h-full overflow-y-auto bg-gray-50 w-full flex justify-center">
       <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         
         {/* LADO ESQUERDO: Formulários e Configurações */}
@@ -499,7 +499,7 @@ const CampaignHistory: React.FC<CampaignHistoryProps> = () => {
 
       <div className="overflow-y-auto flex-1 space-y-3 pr-1">
         {campaigns.length === 0 && !loading ? (
-          <p className="text-sm text-gray-400 text-center py-8 italic">Nenhum disparo realizado.</p>
+          <p className="text-sm text-gray-400 text-center py-6 sm:py-8 italic">Nenhum disparo realizado.</p>
         ) : (
           campaigns.map((camp) => (
             <div key={camp.id} className="p-4 rounded-xl border border-gray-100 hover:border-gray-200 bg-gray-50/30 space-y-3 transition-all">
@@ -576,7 +576,7 @@ const CampaignHistory: React.FC<CampaignHistoryProps> = () => {
       {/* Relatório Drawer */}
       {selectedCampaign && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-end z-50 animate-fadeIn">
-          <div className="bg-white w-full max-w-md h-full p-6 shadow-xl flex flex-col justify-between">
+          <div className="bg-white w-full max-w-md h-full p-4 sm:p-6 shadow-xl flex flex-col justify-between">
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between border-b pb-3 mb-4">
                 <h4 className="font-bold text-gray-800 text-lg">Relatório de Entrega</h4>
