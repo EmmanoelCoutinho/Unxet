@@ -303,12 +303,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <div className={`flex w-full group ${isClient ? "justify-start" : "justify-end"}`}>
       <div
-        className={`flex items-end gap-2 max-w-md ${
+        className={`flex min-w-0 items-end gap-1 max-w-[88%] sm:gap-2 sm:max-w-md ${
           isClient ? "" : "flex-row-reverse"
         }`}
       >
         {canDelete && (
-          <div className="opacity-0 group-hover:opacity-100 flex items-center mb-6 transition-opacity duration-150 order-first">
+          <div className="opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 flex items-center mb-6 transition-opacity duration-150 order-first">
             <button
               type="button"
               onClick={handleDeleteClick}
@@ -321,7 +321,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         )}
 
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <div className={bubbleClass}>
             {mediaUrl && (
               <>
@@ -329,7 +329,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   <img
                     src={imageThumbnailUrl}
                     alt="Imagem"
-                    className="h-48 w-48 cursor-zoom-in rounded-lg object-cover"
+                    className="h-48 w-48 max-w-full cursor-zoom-in rounded-lg object-cover"
                     onError={(event) => {
                       if (event.currentTarget.src !== mediaUrl) {
                         event.currentTarget.src = mediaUrl;
@@ -350,7 +350,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     >
                       <audio
                         controls
-                        className="w-56 h-9 bg-transparent outline-none"
+                        className="w-56 max-w-full h-9 bg-transparent outline-none"
                         src={mediaUrl}
                       >
                         Seu navegador não suporta o player de áudio.
@@ -420,7 +420,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsExpanded((prev) => !prev)}
-                    className="ml-2 text-xs font-medium text-blue-600 hover:text-blue-700"
+                    className={`ml-2 text-xs font-medium ${
+                      isClient
+                        ? "text-blue-600 hover:text-blue-700"
+                        : "text-white underline hover:text-blue-100"
+                    }`}
                   >
                     {isExpanded ? "Ler menos" : "Ler mais..."}
                   </button>
@@ -444,7 +448,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
       {previewSrc && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
           onClick={() => setPreviewSrc(null)}
           role="button"
           tabIndex={0}

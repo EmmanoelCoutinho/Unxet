@@ -491,7 +491,7 @@ const ModalShell: React.FC<ModalShellProps> = ({
     <div
       className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ${widthClassName}`}
     >
-      <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+      <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 sm:px-6 py-5">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
           <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
@@ -536,7 +536,7 @@ const EmptyState = ({
   description: string;
   action?: React.ReactNode;
 }) => (
-  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 sm:px-6 py-10 text-center">
     <p className="text-base font-semibold text-slate-900">{title}</p>
     <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-500">
       {description}
@@ -1084,7 +1084,7 @@ export const MarketingCampaignsPage: React.FC = () => {
 
   if (clinicLoading) {
     return (
-      <div className="flex h-full flex-col bg-slate-50 px-8 py-8">
+      <div className="flex h-full flex-col bg-slate-50 px-4 sm:px-8 py-6 sm:py-8">
         <TableSkeleton rows={6} />
       </div>
     );
@@ -1092,7 +1092,7 @@ export const MarketingCampaignsPage: React.FC = () => {
 
   if (!clinicId) {
     return (
-      <div className="flex h-full flex-col bg-slate-50 px-8 py-8">
+      <div className="flex h-full flex-col bg-slate-50 px-4 sm:px-8 py-6 sm:py-8">
         <EmptyState
           title="Clinica não identificada"
           description="Aguarde o carregamento da clinica atual para gerenciar templates e campanhas."
@@ -1103,7 +1103,7 @@ export const MarketingCampaignsPage: React.FC = () => {
 
   return (
     <div className="flex h-full flex-col bg-slate-50">
-      <div className="border-b bg-white px-8 py-6">
+      <div className="border-b bg-white px-4 sm:px-8 py-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <PreTitleIcon icon={MegaphoneIcon} />
@@ -1140,7 +1140,7 @@ export const MarketingCampaignsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6">
         {activeTab === "templates" ? (
           <div className="space-y-6 pb-10">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1166,7 +1166,7 @@ export const MarketingCampaignsPage: React.FC = () => {
               />
             </div>
 
-            <Card className="rounded-3xl p-6">
+            <Card className="rounded-3xl p-4 sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">
@@ -1323,7 +1323,7 @@ export const MarketingCampaignsPage: React.FC = () => {
               />
             </div>
 
-            <Card className="rounded-3xl p-6">
+            <Card className="rounded-3xl p-4 sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">
@@ -1488,7 +1488,7 @@ export const MarketingCampaignsPage: React.FC = () => {
           onClose={resetTemplateForm}
           widthClassName="max-w-4xl"
         >
-          <div className="grid gap-6 px-6 py-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid gap-6 px-4 sm:px-6 py-6 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-4">
               {selectedTemplateId && selectedTemplateLoading ? (
                 <TableSkeleton rows={3} />
@@ -1709,7 +1709,7 @@ export const MarketingCampaignsPage: React.FC = () => {
             </Card>
           </div>
 
-          <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
+          <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-4 sm:px-6 py-4">
             <Button type="button" variant="ghost" onClick={resetTemplateForm}>
               Fechar
             </Button>
@@ -1740,7 +1740,7 @@ export const MarketingCampaignsPage: React.FC = () => {
           onClose={resetCampaignForm}
           widthClassName="max-w-5xl"
         >
-          <div className="border-b border-slate-200 px-6 py-4">
+          <div className="border-b border-slate-200 px-4 sm:px-6 py-4">
             <div className="flex flex-wrap gap-2">
               {[
                 { step: 1 as CampaignWizardStep, label: "Informacoes" },
@@ -1765,7 +1765,7 @@ export const MarketingCampaignsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid gap-6 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="grid gap-6 px-4 sm:px-6 py-6 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="space-y-5">
               {selectedCampaignId && selectedCampaignLoading ? (
                 <TableSkeleton rows={3} />
@@ -2092,7 +2092,7 @@ export const MarketingCampaignsPage: React.FC = () => {
             </Card>
           </div>
 
-          <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
+          <div className="flex items-center justify-between border-t border-slate-200 px-4 sm:px-6 py-4">
             <Button type="button" variant="ghost" onClick={resetCampaignForm}>
               Cancelar
             </Button>
@@ -2148,12 +2148,12 @@ export const MarketingCampaignsPage: React.FC = () => {
           widthClassName="max-w-6xl"
         >
           {metricsCampaignLoading && !metricsCampaign ? (
-            <div className="px-6 py-6">
+            <div className="px-4 sm:px-6 py-6">
               <TableSkeleton rows={5} />
             </div>
           ) : metricsCampaign ? (
             <>
-              <div className="space-y-6 px-6 py-6">
+              <div className="space-y-6 px-4 sm:px-6 py-6">
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <SummaryCard
                     label="Taxa de entrega"
@@ -2192,7 +2192,7 @@ export const MarketingCampaignsPage: React.FC = () => {
                   />
                 </div>
 
-                <Card className="rounded-3xl p-6">
+                <Card className="rounded-3xl p-4 sm:p-6">
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <div>
                       <p className="text-sm font-medium text-slate-500">
@@ -2296,7 +2296,7 @@ export const MarketingCampaignsPage: React.FC = () => {
                   </div>
                 </Card>
 
-                <Card className="rounded-3xl p-6">
+                <Card className="rounded-3xl p-4 sm:p-6">
                   <div className="mb-4 flex items-center gap-2">
                     <BarChart3Icon className="h-5 w-5 text-slate-600" />
                     <h3 className="text-lg font-semibold text-slate-900">
@@ -2367,7 +2367,7 @@ export const MarketingCampaignsPage: React.FC = () => {
                 </Card>
               </div>
 
-              <div className="flex justify-end border-t border-slate-200 px-6 py-4">
+              <div className="flex justify-end border-t border-slate-200 px-4 sm:px-6 py-4">
                 <Button
                   type="button"
                   variant="ghost"
@@ -2378,7 +2378,7 @@ export const MarketingCampaignsPage: React.FC = () => {
               </div>
             </>
           ) : (
-            <div className="px-6 py-6">
+            <div className="px-4 sm:px-6 py-6">
               <EmptyState
                 title="Campanha não encontrada"
                 description="Não foi possivel carregar os detalhes desta campanha."

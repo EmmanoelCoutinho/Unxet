@@ -850,7 +850,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     : "Digite uma mensagem...";
 
   return (
-    <div className="sticky bottom-0 border-t border-[#E5E7EB] bg-white p-4 z-20 shadow-sm">
+    <div className="sticky bottom-0 shrink-0 border-t border-[#E5E7EB] bg-white p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-20 shadow-sm sm:p-4">
       {disabled && (
         <div className="mb-2 flex items-center gap-2 text-xs text-[#6B7280]">
           <LockIcon className="w-4 h-4" />
@@ -875,27 +875,28 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
       <form
         onSubmit={handleSubmit}
-        className="relative flex items-stretch gap-2"
+        className="relative flex items-end gap-1 sm:items-stretch sm:gap-2"
       >
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 gap-0.5 sm:gap-2">
           <button
             type="button"
             onClick={handleAttachmentClick}
             disabled={disabled}
-            className="relative flex h-12 w-12 items-center justify-center rounded-lg hover:bg-[#E5E7EB] transition-colors disabled:opacity-50 disabled:hover:bg-transparent"
+            aria-label="Anexar"
+            className="relative flex h-11 w-10 items-center justify-center rounded-lg hover:bg-[#E5E7EB] transition-colors disabled:opacity-50 disabled:hover:bg-transparent sm:h-12 sm:w-12"
           >
             <PaperclipIcon className="w-5 h-5 text-gray-500" />
 
             {showAttachments && !disabled && (
               <div
                 ref={attachmentsRef}
-                className="absolute bottom-full left-0 mb-2 w-56 rounded-lg border border-[#E5E7EB] bg-white shadow-lg overflow-hidden"
+                className="absolute bottom-full left-0 z-30 mb-2 w-56 rounded-lg border border-[#E5E7EB] bg-white shadow-lg overflow-hidden"
               >
                 <button
                   type="button"
                   onMouseDown={openQuickMessagesPicker}
                   onClick={openQuickMessagesPicker}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-[#F3F4F6] transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-[#F3F4F6] transition-colors sm:py-2"
                 >
                   <span className="flex items-center gap-2 text-[#1F2937]">
                     <MessageSquareTextIcon className="w-4 h-4" />
@@ -907,7 +908,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 <button
                   type="button"
                   onClick={handleImageOption}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-[#F3F4F6] transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-[#F3F4F6] transition-colors sm:py-2"
                 >
                   <span className="flex items-center gap-2 text-[#1F2937]">
                     <ImageIcon className="w-4 h-4" />
@@ -919,7 +920,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 <button
                   type="button"
                   onClick={handleAudioOption}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-[#F3F4F6] transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-[#F3F4F6] transition-colors sm:py-2"
                 >
                   <span className="flex items-center gap-2 text-[#1F2937]">
                     <MicIcon className="w-4 h-4" />
@@ -935,7 +936,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     setShowAttachments(false);
                     docInputRef.current?.click();
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-[#F3F4F6] transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-[#F3F4F6] transition-colors sm:py-2"
                 >
                   <span className="flex items-center gap-2 text-[#1F2937]">
                     <FileIcon className="w-4 h-4" />
@@ -955,7 +956,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               setShowEmojis((v) => !v);
               setShowAttachments(false);
             }}
-            className="flex h-12 w-12 items-center justify-center rounded-lg hover:bg-[#E5E7EB] transition-colors disabled:opacity-50 disabled:hover:bg-transparent"
+            aria-label="Emojis"
+            className="flex h-11 w-10 items-center justify-center rounded-lg hover:bg-[#E5E7EB] transition-colors disabled:opacity-50 disabled:hover:bg-transparent sm:h-12 sm:w-12"
           >
             <SmileIcon className="w-5 h-5 text-gray-500" />
           </button>
@@ -968,13 +970,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           placeholder={placeholderText}
           rows={1}
           disabled={disabled}
-          className="min-h-12 flex-1 rounded-lg border border-[#E5E7EB] px-4 py-3 resize-none max-h-32 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] disabled:cursor-not-allowed disabled:bg-[#F9FAFB] disabled:text-[#9CA3AF]"
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-[#E5E7EB] px-3 py-2.5 resize-none sm:min-h-12 sm:px-4 sm:py-3 max-h-32 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] disabled:cursor-not-allowed disabled:bg-[#F9FAFB] disabled:text-[#9CA3AF]"
         />
 
         <Button
           type="button"
           variant="primary"
-          className={`h-12 min-h-12 shrink-0 px-4 ${
+          aria-label={message.trim() || isRecording ? "Enviar" : "Gravar áudio"}
+          className={`flex h-11 min-w-11 shrink-0 items-center justify-center !px-0 sm:h-12 sm:w-auto sm:min-h-12 sm:!px-4 ${
             isRecording ? "bg-red-500 hover:bg-red-600 focus:ring-red-500" : ""
           }`}
           disabled={disabled || isSendingAudio}

@@ -169,7 +169,7 @@ export function MetaCallbackPage() {
   };
 
   return (
-    <div className="max-w-xl p-6">
+    <div className="max-w-xl p-4 sm:p-6">
       <h1 className="text-xl font-semibold">
         {flow === "whatsapp" ? "Conectando WhatsApp" : "Conectando Meta"}
       </h1>

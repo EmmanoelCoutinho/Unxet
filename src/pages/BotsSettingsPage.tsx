@@ -237,8 +237,8 @@ export const BotsSettingsPage: React.FC = () => {
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50">
-      <div className="px-6 py-5 border-b bg-white">
-        <div className="flex items-start justify-between gap-4">
+      <div className="px-4 sm:px-6 py-5 border-b bg-white">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="flex items-center gap-3">
             <PreTitleIcon icon={BotIcon} />
             <div>
@@ -257,7 +257,7 @@ export const BotsSettingsPage: React.FC = () => {
               onClick={() => navigate("/inbox/bots/new")}
               disabled={!clinicId || !isAdmin}
             >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-2 whitespace-nowrap">
                 <PlusIcon className="h-4 w-4" />
                 Novo bot
               </span>
@@ -266,7 +266,7 @@ export const BotsSettingsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="px-6 py-6">
+      <div className="px-4 sm:px-6 py-6">
         <Card className="p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="grid gap-3 md:grid-cols-3 md:items-end">
@@ -343,7 +343,7 @@ export const BotsSettingsPage: React.FC = () => {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <Card className="p-6">
+            <Card className="p-4 sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">

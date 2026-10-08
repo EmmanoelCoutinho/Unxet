@@ -138,7 +138,10 @@ export function EmojiPicker({
   // Foca a busca ao abrir e limpa ao fechar
   useEffect(() => {
     if (open && !disabled) {
-      inputRef.current?.focus();
+      // Em telas de toque o foco abriria o teclado por cima do seletor
+      if (window.matchMedia?.("(hover: hover)").matches) {
+        inputRef.current?.focus();
+      }
     } else {
       setQuery("");
     }
@@ -179,7 +182,7 @@ export function EmojiPicker({
   return (
     <div
       ref={pickerRef as any}
-      className="absolute bottom-full left-16 mb-2 w-[360px] max-h-[420px] overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-lg"
+      className="absolute bottom-full left-0 right-0 z-30 mb-2 max-h-[min(420px,60dvh)] overflow-hidden sm:left-16 sm:right-auto sm:w-[360px] rounded-lg border border-[#E5E7EB] bg-white shadow-lg"
     >
       {/* Header: busca */}
       <div className="p-2 border-b border-[#E5E7EB]">
@@ -217,7 +220,7 @@ export function EmojiPicker({
       </div>
 
       {/* Conteúdo */}
-      <div className="max-h-[260px] overflow-y-auto overflow-x-hidden p-2 pb-8">
+      <div className="max-h-[min(260px,40dvh)] overflow-y-auto overflow-x-hidden p-2 pb-8">
         {!activeCategoryData ? (
           <div className="text-sm text-[#6B7280] p-2">
             Nenhum emoji encontrado.
@@ -233,7 +236,7 @@ export function EmojiPicker({
               </div>
             </div>
 
-            <div className="grid grid-cols-10 gap-2">
+            <div className="grid grid-cols-8 gap-1 sm:grid-cols-10 sm:gap-2">
               {activeCategoryData.emojis.map((emoji) => (
                 <button
                   key={`${activeCategoryData.key}-${emoji}`}

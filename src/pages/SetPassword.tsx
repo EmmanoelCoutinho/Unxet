@@ -63,7 +63,7 @@ export const SetPassword: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
         <h1 className="text-lg font-semibold text-gray-900">Defina sua senha</h1>
         <p className="mt-2 text-sm text-gray-600">
           Defina uma senha para acessar o sistema.

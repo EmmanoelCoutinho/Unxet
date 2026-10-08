@@ -88,7 +88,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       <span
         key={tag.id}
         title={tag.name}
-        className="inline-flex max-w-[120px] truncate rounded-full px-3 py-1 text-xs font-medium text-white select-none"
+        className="inline-block min-w-0 max-w-[120px] truncate rounded-full px-3 py-1 text-xs font-medium text-white select-none"
         style={{ backgroundColor: tag.color ?? "#0A84FF" }}
       >
         {tag.name}

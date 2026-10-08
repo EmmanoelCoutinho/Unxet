@@ -251,7 +251,7 @@ export const Tags: React.FC = () => {
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50">
-      <div className="px-6 py-5 border-b bg-white">
+      <div className="px-4 sm:px-6 py-5 border-b bg-white">
         <div className="flex items-center gap-3">
           <PreTitleIcon icon={TagIcon} />
           <div>
@@ -263,7 +263,7 @@ export const Tags: React.FC = () => {
         </div>
       </div>
 
-      <div className="px-6 py-6 space-y-6">
+      <div className="px-4 sm:px-6 py-6 space-y-6">
         {errorMsg ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {errorMsg}
@@ -271,7 +271,7 @@ export const Tags: React.FC = () => {
         ) : null}
 
         {!clinicId ? (
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-900">
               Empresa não identificada
             </h2>
@@ -280,8 +280,8 @@ export const Tags: React.FC = () => {
             </p>
           </Card>
         ) : activeTab === "list" ? (
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
+          <Card className="p-4 sm:p-6">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
                   Etiquetas cadastradas
@@ -300,7 +300,7 @@ export const Tags: React.FC = () => {
                     resetForm();
                   }}
                 >
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-2 whitespace-nowrap">
                     <PlusCircleIcon className="h-4 w-4" />
                     Nova Etiqueta
                   </span>
@@ -354,7 +354,7 @@ export const Tags: React.FC = () => {
             )}
           </Card>
         ) : (
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
@@ -397,7 +397,7 @@ export const Tags: React.FC = () => {
                   onEscapeKeyDown={(e: any) => {
                     if (isDeleting) e.preventDefault();
                   }}
-                  className="fixed left-1/2 top-1/2 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-xl border border-gray-200"
+                  className="fixed left-1/2 top-1/2 max-h-[90dvh] w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl bg-white p-4 sm:p-6 shadow-xl border border-gray-200"
                 >
                   <Dialog.Title className="text-base font-semibold text-gray-900">
                     Excluir Etiqueta

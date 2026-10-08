@@ -233,7 +233,7 @@ export const BotSimulator = ({
 
   return (
     <div className="space-y-4">
-      <Card className="p-6">
+      <Card className="p-4 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4 pb-5">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Simulador</h2>
@@ -297,8 +297,8 @@ export const BotSimulator = ({
         </div>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr,360px]">
-        <Card className="p-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr,360px]">
+        <Card className="p-4 sm:p-6">
           <div className="space-y-3">
             {history.length === 0 ? (
               <div className="text-sm text-slate-500">Sem mensagens.</div>
@@ -319,7 +319,7 @@ export const BotSimulator = ({
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <div className="text-sm font-semibold text-slate-900">
             Opções da etapa
           </div>
