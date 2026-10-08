@@ -361,8 +361,7 @@ serve(async (req)=>{
     }
     queueInboundPush(supabase, {
       conversationId: conversation.id,
-      messageType,
-      text
+      messageType
     });
     // ── 11. Evento de reabertura ──────────────────────────────────────────
     if (shouldReopen) {

@@ -1287,7 +1287,6 @@ serve(async (req)=>{
           queueInboundPush(supabase, {
             conversationId: conversation.id,
             messageType: dbType,
-            text,
             after: botCall
           });
         }

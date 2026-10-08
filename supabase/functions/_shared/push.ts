@@ -18,26 +18,18 @@ if (PUSH_ENABLED) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 }
 
-const BODY_MAX_LENGTH = 140;
-
-const MEDIA_LABELS: Record<string, string> = {
-  image: "📷 Foto",
-  audio: "🎤 Áudio",
-  video: "🎥 Vídeo",
-  document: "📄 Documento",
-  sticker: "Figurinha",
+// Privacidade: a notificação aparece na tela bloqueada, então nunca leva o
+// texto da mensagem (ele nem sai do servidor), só o tipo dela.
+const BODY_BY_TYPE: Record<string, string> = {
+  image: "📷 Enviou uma foto",
+  audio: "🎤 Enviou um áudio",
+  video: "🎥 Enviou um vídeo",
+  document: "📄 Enviou um documento",
+  sticker: "Enviou uma figurinha",
 };
 
-function buildBody(messageType: string | null, text: string | null) {
-  const trimmed = (text ?? "").trim();
-  const label = MEDIA_LABELS[messageType ?? ""];
-  if (label && trimmed) return truncate(`${label}: ${trimmed}`);
-  if (label) return label;
-  return truncate(trimmed || "Nova mensagem");
-}
-
-function truncate(value: string) {
-  return value.length > BODY_MAX_LENGTH ? `${value.slice(0, BODY_MAX_LENGTH - 1)}…` : value;
+function buildBody(messageType: string | null) {
+  return BODY_BY_TYPE[messageType ?? ""] ?? "Nova mensagem";
 }
 
 async function resolveRecipients(supabase, conversation) {
@@ -77,7 +69,7 @@ async function hasActiveBotSession(supabase, conversationId: string) {
   return (count ?? 0) > 0;
 }
 
-async function sendInboundPush(supabase, { conversationId, messageType, text }) {
+async function sendInboundPush(supabase, { conversationId, messageType }) {
   if (!PUSH_ENABLED) return;
 
   // Enquanto o bot está atendendo, ninguém precisa ser avisado.
@@ -103,7 +95,7 @@ async function sendInboundPush(supabase, { conversationId, messageType, text }) 
 
   const payload = JSON.stringify({
     title: conversation.contact?.name || conversation.contact?.phone || "Novo contato",
-    body: buildBody(messageType, text),
+    body: buildBody(messageType),
     conversationId,
     url: `/inbox/chat/${conversationId}`,
   });
@@ -140,7 +132,7 @@ async function sendInboundPush(supabase, { conversationId, messageType, text }) 
  */
 export function queueInboundPush(
   supabase,
-  params: { conversationId: string; messageType?: string | null; text?: string | null; after?: Promise<unknown> },
+  params: { conversationId: string; messageType?: string | null; after?: Promise<unknown> },
 ) {
   const task = Promise.resolve(params.after)
     .catch(() => {})
