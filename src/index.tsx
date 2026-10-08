@@ -1,3 +1,4 @@
+import "./lib/registerServiceWorker";
 import "./index.css";
 import { render } from "react-dom";
 import { App } from "./App";
