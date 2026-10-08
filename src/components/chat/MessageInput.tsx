@@ -981,7 +981,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             isRecording ? "bg-red-500 hover:bg-red-600 focus:ring-red-500" : ""
           }`}
           disabled={disabled || isSendingAudio}
-          isLoading={isSendingAudio}
           onClick={handlePrimaryClick}
         >
           {disabled ? (

@@ -1267,27 +1267,19 @@ export const Chat: React.FC = () => {
         </button>
       )}
 
-      {(recordingUiState.isRecording || recordingUiState.isSendingAudio) && (
+      {recordingUiState.isRecording && (
         <div className="pointer-events-none absolute bottom-28 left-1/2 z-20 sm:bottom-32 w-[calc(100%-2rem)] max-w-md -translate-x-1/2">
           <div className="rounded-xl border border-red-100 bg-white/95 px-4 py-3 text-sm text-[#1F2937] shadow-lg backdrop-blur">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
-              <span className="font-medium">
-                {recordingUiState.isSendingAudio
-                  ? "Enviando audio..."
-                  : "Gravando..."}
+              <span className="font-medium">Gravando...</span>
+              <span className="text-[#6B7280]">
+                {formatRecordTime(recordingUiState.recordSeconds)}
               </span>
-              {recordingUiState.isRecording && (
-                <span className="text-[#6B7280]">
-                  {formatRecordTime(recordingUiState.recordSeconds)}
-                </span>
-              )}
             </div>
-            {recordingUiState.isRecording && (
-              <p className="mt-1 text-xs text-[#6B7280]">
-                Toque no botão de envio para concluir e enviar.
-              </p>
-            )}
+            <p className="mt-1 text-xs text-[#6B7280]">
+              Toque no botão de envio para concluir e enviar.
+            </p>
           </div>
         </div>
       )}

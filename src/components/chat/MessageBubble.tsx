@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { DownloadIcon, FileIcon, Trash2 } from "lucide-react"; // 🔥 Importado Trash2 para o visual do botão
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { ChevronDown, DownloadIcon, FileIcon, Trash2 } from "lucide-react";
 import type { Message as UiMessage } from "../../types";
 import { AudioTranscriptStatus } from "./AudioTranscriptStatus";
 import { getSupabaseTransformedImageUrl } from "../../lib/imageUtils";
@@ -112,6 +114,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const isClient = message.author === "cliente";
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const longPressTimer = useRef<number | null>(null);
+  const longPressFired = useRef(false);
 
   // UI-only metadata (falha/envio)
   const local = (message as unknown as LocalMeta) ?? {};
@@ -219,8 +226,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             : `rounded-lg ${bubblePadding} bg-[#0A84FF] text-white`
         }`;
 
-  const showStatusRow =
-    !isClient && (localStatus === "sending" || localStatus === "failed");
+  // Mensagens enviadas aparecem como já entregues; só mostramos algo se der erro.
+  const showStatusRow = !isClient && localStatus === "failed";
   const canRetryFailedMessage =
     localStatus === "failed" && typeof onRetry === "function";
 
@@ -233,14 +240,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const statusNode = useMemo(() => {
     if (!showStatusRow) return null;
-
-    if (localStatus === "sending") {
-      return (
-        <div className="flex items-center justify-end gap-2 mt-1">
-          <span className="text-xs text-gray-400">Enviando...</span>
-        </div>
-      );
-    }
 
     if (localStatus === "failed") {
       return (
@@ -281,16 +280,42 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const deleteLabel =
     deleteMode === "everyone" ? "Apagar para todos" : "Remover do Unxet";
 
-  const handleDeleteClick = async () => {
+  const handleConfirmDelete = async () => {
     if (!onDeleteMessage) return;
-    const confirmed = window.confirm(
-      deleteMode === "everyone"
-        ? "Apagar esta mensagem para todos? Ela também será apagada no WhatsApp do cliente."
-        : "Remover esta mensagem do Unxet? Este canal não permite apagar mensagens já entregues, então o cliente continuará vendo a mensagem.",
-    );
-    if (confirmed) {
+    setIsDeleting(true);
+    try {
       await onDeleteMessage(message.id);
+      setIsDeleteDialogOpen(false);
+    } finally {
+      setIsDeleting(false);
     }
+  };
+
+  // Mobile: pressionar e segurar a mensagem abre o menu (como no WhatsApp).
+  const clearLongPress = () => {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  useEffect(() => clearLongPress, []);
+
+  const handleTouchStart = () => {
+    longPressFired.current = false;
+    clearLongPress();
+    longPressTimer.current = window.setTimeout(() => {
+      longPressFired.current = true;
+      longPressTimer.current = null;
+      navigator.vibrate?.(30);
+      setIsMenuOpen(true);
+    }, 500);
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent) => {
+    clearLongPress();
+    // Evita que o toque longo vire um clique na mensagem.
+    if (longPressFired.current) event.preventDefault();
   };
 
   const canDelete =
@@ -301,136 +326,179 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     localStatus !== "sending";
 
   return (
-    <div className={`flex w-full group ${isClient ? "justify-start" : "justify-end"}`}>
+    <div className={`flex w-full ${isClient ? "justify-start" : "justify-end"}`}>
       <div
         className={`flex min-w-0 items-end gap-1 max-w-[88%] sm:gap-2 sm:max-w-md ${
           isClient ? "" : "flex-row-reverse"
         }`}
       >
-        {canDelete && (
-          <div className="opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 flex items-center mb-6 transition-opacity duration-150 order-first">
-            <button
-              type="button"
-              onClick={handleDeleteClick}
-              className="p-1.5 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-              title={deleteLabel}
-              aria-label={deleteLabel}
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-
         <div className="flex min-w-0 flex-col">
-          <div className={bubbleClass}>
-            {mediaUrl && (
-              <>
-                {mediaType === "image" && (
-                  <img
-                    src={imageThumbnailUrl}
-                    alt="Imagem"
-                    className="h-48 w-48 max-w-full cursor-zoom-in rounded-lg object-cover"
-                    onError={(event) => {
-                      if (event.currentTarget.src !== mediaUrl) {
-                        event.currentTarget.src = mediaUrl;
-                      }
-                    }}
-                    onClick={() => setPreviewSrc(imagePreviewUrl ?? mediaUrl)}
-                  />
-                )}
-
-                {mediaType === "audio" && (
-                  <div className="space-y-1">
-                    <div
-                      className={`
-                        flex items-center gap-3 rounded-2xl px-3 py-2
-                        ${isClient ? "bg-[#E5E7EB]" : "bg-[#0A84FF]"}
-                        text-[#1E1E1E]
-                      `}
-                    >
-                      <audio
-                        controls
-                        className="w-56 max-w-full h-9 bg-transparent outline-none"
-                        src={mediaUrl}
-                      >
-                        Seu navegador não suporta o player de áudio.
-                      </audio>
-                    </div>
-                    <AudioTranscriptStatus
-                      status={transcriptStatus}
-                      transcriptText={transcriptText}
-                      onRetry={
-                        onRetryTranscript
-                          ? () => onRetryTranscript(message)
-                          : undefined
-                      }
+          <div
+            className={`group/bubble relative ${canDelete ? "[@media(hover:none)]:select-none" : ""}`}
+            onTouchStart={canDelete ? handleTouchStart : undefined}
+            onTouchMove={canDelete ? clearLongPress : undefined}
+            onTouchEnd={canDelete ? handleTouchEnd : undefined}
+            onTouchCancel={canDelete ? clearLongPress : undefined}
+            onContextMenu={
+              canDelete
+                ? (event) => {
+                    // No celular o toque longo abre o nosso menu, não o do sistema.
+                    if (window.matchMedia("(hover: none)").matches) {
+                      event.preventDefault();
+                    }
+                  }
+                : undefined
+            }
+          >
+            <div className={bubbleClass}>
+              {mediaUrl && (
+                <>
+                  {mediaType === "image" && (
+                    <img
+                      src={imageThumbnailUrl}
+                      alt="Imagem"
+                      className="h-48 w-48 max-w-full cursor-zoom-in rounded-lg object-cover"
+                      onError={(event) => {
+                        if (event.currentTarget.src !== mediaUrl) {
+                          event.currentTarget.src = mediaUrl;
+                        }
+                      }}
+                      onClick={() => setPreviewSrc(imagePreviewUrl ?? mediaUrl)}
                     />
-                  </div>
-                )}
+                  )}
 
-                {mediaType === "video" && (
-                  <video
-                    controls
-                    className="h-48 w-48 rounded-lg object-cover"
-                    src={mediaUrl}
-                  />
-                )}
+                  {mediaType === "audio" && (
+                    <div className="space-y-1">
+                      <div
+                        className={`
+                          flex items-center gap-3 rounded-2xl px-3 py-2
+                          ${isClient ? "bg-[#E5E7EB]" : "bg-[#0A84FF]"}
+                          text-[#1E1E1E]
+                        `}
+                      >
+                        <audio
+                          controls
+                          className="w-56 max-w-full h-9 bg-transparent outline-none"
+                          src={mediaUrl}
+                        >
+                          Seu navegador não suporta o player de áudio.
+                        </audio>
+                      </div>
+                      <AudioTranscriptStatus
+                        status={transcriptStatus}
+                        transcriptText={transcriptText}
+                        onRetry={
+                          onRetryTranscript
+                            ? () => onRetryTranscript(message)
+                            : undefined
+                        }
+                      />
+                    </div>
+                  )}
 
-                {mediaType === "document" && (
-                  <a
-                    href={mediaUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-3 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-[#1E1E1E] transition hover:bg-[#F3F4F6]"
-                  >
-                    <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-lg ${documentAccentClass}`}
+                  {mediaType === "video" && (
+                    <video
+                      controls
+                      className="h-48 w-48 rounded-lg object-cover"
+                      src={mediaUrl}
+                    />
+                  )}
+
+                  {mediaType === "document" && (
+                    <a
+                      href={mediaUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-3 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-[#1E1E1E] transition hover:bg-[#F3F4F6]"
                     >
-                      <FileIcon className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[#111827] truncate">
-                        {documentFilename || "Documento"}
-                      </p>
-                      <p className="text-xs text-[#6B7280]">{documentMeta}</p>
-                    </div>
-                    <div className="ml-auto flex h-8 w-8 items-center justify-center rounded-full border border-[#D1D5DB] text-[#6B7280]">
-                      <DownloadIcon className="h-4 w-4" />
-                    </div>
-                  </a>
-                )}
+                      <div
+                        className={`flex h-10 w-10 items-center justify-center rounded-lg ${documentAccentClass}`}
+                      >
+                        <FileIcon className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[#111827] truncate">
+                          {documentFilename || "Documento"}
+                        </p>
+                        <p className="text-xs text-[#6B7280]">{documentMeta}</p>
+                      </div>
+                      <div className="ml-auto flex h-8 w-8 items-center justify-center rounded-full border border-[#D1D5DB] text-[#6B7280]">
+                        <DownloadIcon className="h-4 w-4" />
+                      </div>
+                    </a>
+                  )}
 
-                {mediaType === "sticker" && (
-                  <img
-                    src={mediaUrl}
-                    alt="Figurinha"
-                    className="h-24 w-24 rounded-lg object-cover"
-                  />
-                )}
-              </>
-            )}
+                  {mediaType === "sticker" && (
+                    <img
+                      src={mediaUrl}
+                      alt="Figurinha"
+                      className="h-24 w-24 rounded-lg object-cover"
+                    />
+                  )}
+                </>
+              )}
 
-            {displayText && mediaType !== "audio" && !onlyAudio ? (
-              <div className="text-sm whitespace-pre-wrap break-words">
-                <span>
-                  {visibleText}
-                  {shouldTruncate && !isExpanded ? "..." : ""}
-                </span>
-                {shouldTruncate && (
+              {displayText && mediaType !== "audio" && !onlyAudio ? (
+                <div className="text-sm whitespace-pre-wrap break-words">
+                  <span>
+                    {visibleText}
+                    {shouldTruncate && !isExpanded ? "..." : ""}
+                  </span>
+                  {shouldTruncate && (
+                    <button
+                      type="button"
+                      onClick={() => setIsExpanded((prev) => !prev)}
+                      className={`ml-2 text-xs font-medium ${
+                        isClient
+                          ? "text-blue-600 hover:text-blue-700"
+                          : "text-white underline hover:text-blue-100"
+                      }`}
+                    >
+                      {isExpanded ? "Ler menos" : "Ler mais..."}
+                    </button>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {canDelete && (
+              <DropdownMenu.Root
+                open={isMenuOpen}
+                onOpenChange={setIsMenuOpen}
+                modal={false}
+              >
+                <DropdownMenu.Trigger asChild>
                   <button
                     type="button"
-                    onClick={() => setIsExpanded((prev) => !prev)}
-                    className={`ml-2 text-xs font-medium ${
-                      isClient
-                        ? "text-blue-600 hover:text-blue-700"
-                        : "text-white underline hover:text-blue-100"
+                    title="Opções da mensagem"
+                    aria-label="Opções da mensagem"
+                    className={`absolute flex items-center opacity-0 transition-opacity duration-150 focus:opacity-100 group-hover/bubble:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:pointer-events-none ${
+                      onlyAudio || onlyDocument
+                        ? "right-1 top-1 h-6 w-6 justify-center rounded-full bg-white/90 text-gray-600 shadow-sm"
+                        : "right-0 top-0 h-7 w-10 justify-end rounded-tr-lg bg-gradient-to-l from-[#0A84FF] from-60% to-transparent pr-1.5 text-white"
                     }`}
                   >
-                    {isExpanded ? "Ler menos" : "Ler mais..."}
+                    <ChevronDown className="h-4 w-4" />
                   </button>
-                )}
-              </div>
-            ) : null}
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="end"
+                    sideOffset={4}
+                    collisionPadding={8}
+                    className="z-[60] min-w-[180px] rounded-lg border border-gray-200 bg-white py-1.5 shadow-lg"
+                  >
+                    <DropdownMenu.Item
+                      onSelect={() => setIsDeleteDialogOpen(true)}
+                      className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm text-gray-700 outline-none data-[highlighted]:bg-gray-100"
+                    >
+                      <Trash2 className="h-4 w-4 text-gray-500" />
+                      Apagar
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            )}
           </div>
 
           {statusNode}
@@ -445,6 +513,50 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </span>
         </div>
       </div>
+
+      {canDelete && (
+        <Dialog.Root
+          open={isDeleteDialogOpen}
+          onOpenChange={(open) => {
+            if (!isDeleting) setIsDeleteDialogOpen(open);
+          }}
+        >
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/40" />
+            <Dialog.Content className="fixed left-1/2 top-1/2 z-[80] w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-xl sm:p-6">
+              <Dialog.Title className="text-base font-semibold text-gray-900">
+                {deleteMode === "everyone"
+                  ? "Apagar mensagem?"
+                  : "Remover mensagem?"}
+              </Dialog.Title>
+              <Dialog.Description className="mt-2 text-sm text-gray-600">
+                {deleteMode === "everyone"
+                  ? "A mensagem também será apagada no WhatsApp do cliente."
+                  : "Este canal não permite apagar mensagens já entregues, então o cliente continuará vendo a mensagem. Ela será removida apenas do Unxet."}
+              </Dialog.Description>
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    className="rounded-full border border-gray-300 px-5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </Dialog.Close>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                  className="rounded-full bg-red-500 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+                >
+                  {isDeleting ? "Apagando..." : deleteLabel}
+                </button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
 
       {previewSrc && (
         <div

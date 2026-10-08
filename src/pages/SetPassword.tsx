@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { canSetPassword, clearSetPasswordGrant } from "../lib/passwordLink";
 import { translateAuthError } from "../lib/authErrors";
+import { PasswordInput } from "../components/ui/PasswordInput";
 
 export const SetPassword: React.FC = () => {
   const navigate = useNavigate();
@@ -91,22 +92,22 @@ export const SetPassword: React.FC = () => {
             <div className="mt-5 space-y-3">
               <label className="block text-sm font-medium text-gray-700">
                 Senha
-                <input
-                  type="password"
+                <PasswordInput
+                  containerClassName="mt-2"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   placeholder="Mínimo 8 caracteres"
                 />
               </label>
 
               <label className="block text-sm font-medium text-gray-700">
                 Confirmar senha
-                <input
-                  type="password"
+                <PasswordInput
+                  containerClassName="mt-2"
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   placeholder="Repita a senha"
                 />
               </label>
