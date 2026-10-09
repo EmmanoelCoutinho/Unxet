@@ -220,7 +220,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
           "Informe um inteiro positivo maior que zero.";
       } else if (minutes < 5) {
         nextErrors.returnToPendingAfterMinutes =
-          "O tempo minimo e de 5 minutos.";
+          "O tempo mínimo é de 5 minutos.";
       }
     }
 
@@ -256,7 +256,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
   const fetchSettings = useCallback(async () => {
     if (!clinicId) {
       setLoading(false);
-      setLoadError("Clinica não identificada.");
+      setLoadError("Clínica não identificada.");
       return;
     }
 
@@ -295,12 +295,12 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
   const persistSettings = useCallback(
     async (values: AutomationFormValues, showSuccessToast: boolean) => {
       if (!clinicId) {
-        toast.error("Não foi possivel identificar a clinica atual.");
+        toast.error("Não foi possível identificar a clínica atual.");
         return;
       }
 
       if (!validateForm(values)) {
-        toast.error("Corrija os campos obrigatorios antes de salvar.");
+        toast.error("Corrija os campos obrigatórios antes de salvar.");
         return;
       }
 
@@ -337,7 +337,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
         .single();
 
       if (error) {
-        toast.error("Erro ao salvar configuracoes.");
+        toast.error("Erro ao salvar configurações.");
         setSaving(false);
         return;
       }
@@ -345,7 +345,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
       setFormValues(mapRowToForm(data as ConversationAutomationSettingsRow));
       setFormErrors({});
       if (showSuccessToast) {
-        toast.success("Configuracoes salvas com sucesso.");
+        toast.success("Configurações salvas com sucesso.");
       }
       setSaving(false);
     },
@@ -372,7 +372,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             Automações do chat
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Carregando configuracoes da clinica...
+            Carregando configurações da clínica...
           </p>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6">
@@ -399,7 +399,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
               Automações do chat
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Configure regras automaticas de SLA e ciclo de vida das conversas.
+              Configure regras automáticas de SLA e ciclo de vida das conversas.
             </p>
           </div>
         </div>
@@ -414,7 +414,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             disabled={!canSubmit}
             className="hidden flex-shrink-0 sm:block"
           >
-            Salvar configuracoes
+            Salvar configurações
           </Button>
         </div>
       </div>
@@ -423,7 +423,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
         <div className="mx-auto max-w-4xl space-y-5">
           {loadError ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              <p>Não foi possivel carregar as configuracoes.</p>
+              <p>Não foi possível carregar as configurações.</p>
               <p className="mt-1">{loadError}</p>
               <button
                 type="button"
@@ -437,7 +437,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
 
           <AutomationCard
             title="SLA da primeira resposta"
-            description="Indica quando o cliente aguardou a primeira resposta alem do limite definido."
+            description="Indica quando o cliente aguardou a primeira resposta além do limite definido."
             enabled={formValues.slaFirstResponseEnabled}
             onEnabledChange={(value) =>
               handleToggleChange({
@@ -475,7 +475,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
           />
 
           <AutomationCard
-            title="Fechamento automatico"
+            title="Fechamento automático"
             description="Encerra a conversa automaticamente depois do tempo configurado sem novas mensagens."
             enabled={formValues.autoCloseEnabled}
             onEnabledChange={(value) =>
@@ -594,7 +594,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
               disabled={!canSubmit}
               className="w-full sm:w-auto"
             >
-              Salvar configuracoes
+              Salvar configurações
             </Button>
           </div>
         </div>

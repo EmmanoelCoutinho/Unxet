@@ -670,7 +670,7 @@ export const AttendantsPage: React.FC = () => {
 
     const email = inviteEmail.trim().toLowerCase();
     if (!email) {
-      toast.error("Informe um email para enviar o convite");
+      toast.error("Informe um e-mail para enviar o convite");
       return;
     }
 
@@ -745,7 +745,7 @@ export const AttendantsPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex min-w-0 flex-1 basis-full items-center gap-3 sm:basis-auto">
               <Input
-                placeholder="Buscar por nome, email ou ID"
+                placeholder="Buscar por nome, e-mail ou ID"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="max-w-md"
@@ -832,7 +832,7 @@ export const AttendantsPage: React.FC = () => {
           <div className="space-y-3">
             <div className="hidden grid-cols-12 gap-4 px-5 text-xs font-semibold uppercase tracking-wide text-gray-400 xl:grid">
               <span className="col-span-3">Nome</span>
-              <span className="col-span-3">Email</span>
+              <span className="col-span-3">E-mail</span>
               <span className="col-span-2">Cargo</span>
               <span className="col-span-2">Setor principal</span>
               <span className="col-span-1">Status</span>
@@ -861,7 +861,7 @@ export const AttendantsPage: React.FC = () => {
                     </p>
                     {!user.email && (
                       <p className="text-xs text-gray-400">
-                        Email não disponível.
+                        E-mail não disponível.
                       </p>
                     )}
                   </div>
@@ -1060,7 +1060,7 @@ export const AttendantsPage: React.FC = () => {
       >
         <div className="space-y-4">
           <label className="text-sm font-medium text-gray-700">
-            Email
+            E-mail
             <Input
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}

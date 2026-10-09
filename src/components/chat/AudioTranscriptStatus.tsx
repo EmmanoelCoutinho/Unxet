@@ -116,7 +116,7 @@ export const AudioTranscriptStatus: React.FC<AudioTranscriptStatusProps> =
               <p className="text-xs leading-relaxed text-[#1F2937]" style={transcriptBlockStyle}>
                 {hasTranscript
                   ? transcriptText?.trim()
-                  : "Transcricao indisponivel para este audio."}
+                  : "Transcrição indisponível para este áudio."}
               </p>
               {isLongTranscript && (
                 <button

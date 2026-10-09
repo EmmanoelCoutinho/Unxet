@@ -1025,7 +1025,7 @@ export const Chat: React.FC = () => {
       const inserted = (data as any)?.message;
       if (!inserted) {
         console.warn(
-          `Envio concluido sem mensagem persistida imediata (${functionName}). Aguardando sincronizacao pelo realtime.`,
+          `Envio concluído sem mensagem persistida imediata (${functionName}). Aguardando sincronização pelo realtime.`,
           data,
         );
         markLocalMessage(tempId, {
@@ -1189,11 +1189,11 @@ export const Chat: React.FC = () => {
       );
 
       if (error) {
-        console.error("Erro ao reprocessar transcricao:", error);
+        console.error("Erro ao reprocessar transcrição:", error);
         // Mostra o motivo enviado pela função (ex.: indisponível para o canal)
         const response = (error as { context?: Response }).context;
         const payload = await response?.json?.().catch(() => null);
-        toast.error(payload?.error ?? "Não foi possivel reprocessar a transcricao.");
+        toast.error(payload?.error ?? "Não foi possível reprocessar a transcrição.");
         return;
       }
 
@@ -1208,7 +1208,7 @@ export const Chat: React.FC = () => {
         ),
       );
 
-      toast.info("Transcricao solicitada novamente.");
+      toast.info("Transcrição solicitada novamente.");
     },
     [id, setMessages],
   );
@@ -1382,7 +1382,7 @@ export const Chat: React.FC = () => {
           type="button"
           onClick={() => scrollToBottom("smooth")}
           className="absolute left-1/2 -translate-x-1/2 bottom-28 z-20 sm:bottom-32 flex h-12 w-12 items-center justify-center rounded-full bg-[#0A84FF] text-white shadow-lg transition-colors hover:bg-[#0066d6]"
-          aria-label="Ir para ultima mensagem"
+          aria-label="Ir para última mensagem"
         >
           <ArrowDownIcon className="w-5 h-5" />
         </button>

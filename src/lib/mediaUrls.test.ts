@@ -66,7 +66,7 @@ describe("mediaUrls", () => {
 
   it("retorna null quando a função falha", async () => {
     const { resolveMediaUrl } = await loadModule();
-    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
     invoke.mockResolvedValue({ data: null, error: new Error("boom") });
     await expect(resolveMediaUrl(`${BASE}/clinic/x.jpg`)).resolves.toBeNull();
   });

@@ -532,7 +532,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     if (disabled) return;
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      toast.error("Seu navegador não permite gravacao de audio.");
+      toast.error("Seu navegador não permite gravação de áudio.");
       return;
     }
 
@@ -573,8 +573,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
           await sendAudioBlob(blob);
         } catch (err) {
-          console.error("Erro ao finalizar gravacao:", err);
-          toast.error("Não foi possivel enviar o audio.");
+          console.error("Erro ao finalizar gravação:", err);
+          toast.error("Não foi possível enviar o áudio.");
         } finally {
           setIsRecording(false);
           setIsSendingAudio(false);
@@ -587,8 +587,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       setIsRecording(true);
       setRecordSeconds(0);
     } catch (err) {
-      console.error("Erro ao iniciar gravacao:", err);
-      toast.error("Não foi possivel acessar o microfone.");
+      console.error("Erro ao iniciar gravação:", err);
+      toast.error("Não foi possível acessar o microfone.");
       stopStreamTracks();
       setIsRecording(false);
     }
@@ -719,7 +719,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     if (validImages.length === 0) {
-      toast.info("Por enquanto so aceitamos imagens JPG ou PNG validas.");
+      toast.info("Por enquanto só aceitamos imagens JPG ou PNG válidas.");
       e.target.value = "";
       return;
     }
@@ -772,7 +772,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     if (!validAudio) {
       console.warn("Arquivo selecionado não é um áudio suportado");
-      toast.info("Por enquanto so aceitamos audios AAC, AMR, MP3, M4A ou OGG.");
+      toast.info("Por enquanto só aceitamos áudios AAC, AMR, MP3, M4A ou OGG.");
       e.target.value = "";
       return;
     }
@@ -790,7 +790,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       });
     } catch (err) {
       console.error("Erro ao enviar áudio:", err);
-      toast.error("Não foi possivel enviar o audio.");
+      toast.error("Não foi possível enviar o áudio.");
     } finally {
       e.target.value = "";
     }
@@ -814,7 +814,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     if (!validDocument) {
       toast.info(
-        "Por enquanto so aceitamos documentos TXT, PDF, DOC, DOCX, XLS, XLSX, PPT ou PPTX.",
+        "Por enquanto só aceitamos documentos TXT, PDF, DOC, DOCX, XLS, XLSX, PPT ou PPTX.",
       );
       e.target.value = "";
       return;
@@ -838,7 +838,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       setMessage("");
     } catch (err) {
       console.error("Erro ao enviar documento:", err);
-      toast.error("Não foi possivel enviar o documento.");
+      toast.error("Não foi possível enviar o documento.");
     } finally {
       e.target.value = "";
     }
