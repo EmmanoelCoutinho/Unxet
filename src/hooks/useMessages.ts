@@ -177,6 +177,38 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
 };
 
 const messagesCache = new Map<string, UiMessage[]>();
+// Se ainda existem mensagens mais antigas que as carregadas, por conversa
+const hasMoreCache = new Map<string, boolean>();
+
+// Mensagens carregadas por vez (a conversa abre com as mais recentes)
+export const MESSAGES_PAGE_SIZE = 50;
+
+const MESSAGE_COLUMNS = `
+  id,
+  conversation_id,
+  direction,
+  text,
+  sent_at,
+  created_at,
+  sender,
+  type,
+  payload,
+  image_url,
+  media_url,
+  media_mime_type,
+  filename,
+  transcript_status,
+  transcript_text,
+  deleted_at,
+  deleted_for_everyone,
+  delivered_at,
+  read_at
+`;
+
+const oldestPersistedTime = (list: UiMessage[]) => {
+  const persisted = list.filter((m) => !isLocalOptimisticId(m.id));
+  return persisted.length ? toTime(persisted[0].createdAt) : null;
+};
 
 export function isLocalOptimisticId(id: any) {
   return typeof id === "string" && id.startsWith("local-");
@@ -268,8 +300,15 @@ export function useMessages(conversationId: string | null) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
 
   const didInitialLoadRef = useRef(false);
+  // Lista atual, para calcular a mescla fora do setState
+  const messagesRef = useRef<UiMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
   const activeConversationIdRef = useRef<string | null>(conversationId);
   const fetchMessagesRef = useRef<
     (opts?: { reason?: "initial" | "refetch" }) => Promise<void>
@@ -295,6 +334,8 @@ export function useMessages(conversationId: string | null) {
       setMessages([]);
       setLoading(true);
     }
+    setHasMore(hasMoreCache.get(conversationId) ?? false);
+    setLoadingOlder(false);
 
     setError(null);
     didInitialLoadRef.current = false;
@@ -329,33 +370,13 @@ export function useMessages(conversationId: string | null) {
 
       setError(null);
 
+      // Página mais recente (+1 para saber se existem mensagens anteriores)
       const { data, error } = await supabase
         .from("messages")
-        .select(
-          `
-            id,
-            conversation_id,
-            direction,
-            text,
-            sent_at,
-            created_at,
-            sender,
-            type,
-            payload,
-            image_url,
-            media_url,
-            media_mime_type,
-            filename,
-            transcript_status,
-            transcript_text,
-            deleted_at,
-            deleted_for_everyone,
-            delivered_at,
-            read_at
-          `,
-        )
+        .select(MESSAGE_COLUMNS)
         .eq("conversation_id", conversationId)
-        .order("sent_at", { ascending: true });
+        .order("sent_at", { ascending: false })
+        .limit(MESSAGES_PAGE_SIZE + 1);
 
       if (error) {
         setError(error);
@@ -365,13 +386,43 @@ export function useMessages(conversationId: string | null) {
         return;
       }
 
-      const mapped = (data ?? []).map((row) => mapDbMessage(row as DbMessage));
+      const rows = data ?? [];
+      const pageHasMore = rows.length > MESSAGES_PAGE_SIZE;
+      const mapped = rows
+        .slice(0, MESSAGES_PAGE_SIZE)
+        .reverse()
+        .map((row) => mapDbMessage(row as DbMessage));
+
+      // Numa atualização, preserva as páginas antigas já carregadas
+      let base = mapped;
+      let keptOlder = false;
+      if (pageHasMore && mapped.length) {
+        const pageStart = toTime(mapped[0].createdAt);
+        const pageIds = new Set(mapped.map((m) => m.id));
+        const older = messagesRef.current.filter(
+          (m) =>
+            m.conversationId === conversationId &&
+            !isLocalOptimisticId(m.id) &&
+            !pageIds.has(m.id) &&
+            toTime(m.createdAt) < pageStart,
+        );
+        if (older.length) {
+          keptOlder = true;
+          base = [...older, ...mapped];
+        }
+      }
 
       setMessages((prev) => {
-        const next = mergeDbWithLocalOptimistics(prev, mapped);
+        const next = mergeDbWithLocalOptimistics(prev, base);
         messagesCache.set(conversationId, next);
         return next;
       });
+
+      // Com páginas antigas carregadas, quem decide "há mais" é loadOlder
+      if (!keptOlder) {
+        setHasMore(pageHasMore);
+        hasMoreCache.set(conversationId, pageHasMore);
+      }
 
       setLoading(false);
       setRefreshing(false);
@@ -511,6 +562,48 @@ export function useMessages(conversationId: string | null) {
     };
   }, [conversationId]);
 
+  // Carrega a página anterior à mensagem mais antiga exibida
+  const loadOlder = useCallback(async () => {
+    if (!conversationId || loadingOlder || !hasMore) return;
+
+    const oldest = oldestPersistedTime(messages);
+    if (oldest === null) return;
+
+    setLoadingOlder(true);
+    const { data, error } = await supabase
+      .from("messages")
+      .select(MESSAGE_COLUMNS)
+      .eq("conversation_id", conversationId)
+      .lt("sent_at", new Date(oldest).toISOString())
+      .order("sent_at", { ascending: false })
+      .limit(MESSAGES_PAGE_SIZE + 1);
+
+    // A conversa pode ter mudado durante a requisição
+    if (activeConversationIdRef.current !== conversationId) return;
+    setLoadingOlder(false);
+
+    if (error) {
+      setError(error);
+      return;
+    }
+
+    const rows = data ?? [];
+    const pageHasMore = rows.length > MESSAGES_PAGE_SIZE;
+    const older = rows
+      .slice(0, MESSAGES_PAGE_SIZE)
+      .reverse()
+      .map((row) => mapDbMessage(row as DbMessage));
+
+    setMessages((prev) => {
+      const ids = new Set(prev.map((m) => m.id));
+      const next = sortMessages([...older.filter((m) => !ids.has(m.id)), ...prev]);
+      messagesCache.set(conversationId, next);
+      return next;
+    });
+    setHasMore(pageHasMore);
+    hasMoreCache.set(conversationId, pageHasMore);
+  }, [conversationId, hasMore, loadingOlder, messages]);
+
   const setMessagesSafe = useCallback(
     (updater: UiMessage[] | ((prev: UiMessage[]) => UiMessage[])) => {
       setMessages((prev) => {
@@ -530,5 +623,8 @@ export function useMessages(conversationId: string | null) {
     error,
     refetch: () => fetchMessages({ reason: "refetch" }),
     setMessages: setMessagesSafe,
+    hasMore,
+    loadingOlder,
+    loadOlder,
   };
 }

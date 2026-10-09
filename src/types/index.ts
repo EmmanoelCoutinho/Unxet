@@ -45,6 +45,8 @@ export type Conversation = {
   assignedTo?: string;
   status: "open" | "pending" | "closed";
   provider?: "meta" | "evolution";
+  // Última mensagem do cliente (janela de 24h do WhatsApp oficial)
+  lastInboundAt?: string;
 };
 export type Message = {
   id: string;

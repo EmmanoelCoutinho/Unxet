@@ -70,6 +70,23 @@ function getLastInboundClientAt(messages: Message[]) {
   return null;
 }
 
+// Mais recente entre a coluna last_inbound_at da conversa e as mensagens
+// carregadas: com paginação, a última mensagem do cliente pode não estar
+// entre as mensagens exibidas
+function latestIso(...values: Array<string | null | undefined>) {
+  let best: string | null = null;
+  let bestTime = -Infinity;
+  for (const value of values) {
+    if (!value) continue;
+    const time = new Date(value).getTime();
+    if (Number.isFinite(time) && time > bestTime) {
+      best = value;
+      bestTime = time;
+    }
+  }
+  return best;
+}
+
 function isInside24hWindow(lastInboundAtIso: string | null) {
   if (!lastInboundAtIso) return false;
   const last = new Date(lastInboundAtIso).getTime();
@@ -158,6 +175,10 @@ export const Chat: React.FC = () => {
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const justOpenedRef = useRef(true);
+  // Posição da rolagem antes de carregar mensagens antigas (para restaurar)
+  const pendingScrollRestoreRef = useRef<{ height: number; top: number } | null>(
+    null,
+  );
 
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -184,6 +205,9 @@ export const Chat: React.FC = () => {
     messages,
     loading: loadingMessages,
     setMessages,
+    hasMore: hasOlderMessages,
+    loadingOlder: loadingOlderMessages,
+    loadOlder: loadOlderMessages,
   } = useMessages(id ?? null);
 
   const { quickMessages, loading: loadingQuickMessages } = useQuickMessages(
@@ -228,14 +252,34 @@ export const Chat: React.FC = () => {
         ? Number.MAX_SAFE_INTEGER
         : new Date(message.createdAt).getTime(),
     }));
-    const eventItems = events.map((event) => ({
-      kind: "event" as const,
-      event,
-      sortAt: new Date(event.createdAt).getTime(),
-    }));
+    // Com mensagens antigas ainda não carregadas, eventos anteriores à mensagem
+    // mais antiga exibida ficariam soltos no topo: aparecem junto da página
+    const oldestMessageAt = messageItems.find(
+      (item) => item.sortAt !== Number.MAX_SAFE_INTEGER,
+    )?.sortAt;
+    const eventItems = events
+      .map((event) => ({
+        kind: "event" as const,
+        event,
+        sortAt: new Date(event.createdAt).getTime(),
+      }))
+      .filter(
+        (item) =>
+          !hasOlderMessages ||
+          oldestMessageAt === undefined ||
+          item.sortAt >= oldestMessageAt,
+      );
 
     return [...messageItems, ...eventItems].sort((a, b) => a.sortAt - b.sortAt);
-  }, [messages, events]);
+  }, [messages, events, hasOlderMessages]);
+
+  // Chave do último item: muda quando chega mensagem nova no fim, mas não
+  // quando mensagens antigas entram no topo
+  const lastTimelineKey = useMemo(() => {
+    const last = timelineItems[timelineItems.length - 1];
+    if (!last) return null;
+    return last.kind === "message" ? `m:${last.message.id}` : `e:${last.event.id}`;
+  }, [timelineItems]);
 
   const loadingTimeline = loadingMessages || loadingEvents;
 
@@ -340,6 +384,24 @@ export const Chat: React.FC = () => {
     }, 100);
   }, [loadingTimeline, timelineItems.length, scrollToBottom]);
 
+  const requestOlderMessages = useCallback(() => {
+    if (!hasOlderMessages || loadingOlderMessages || loadingMessages) return;
+    const container = messagesContainerRef.current;
+    if (container) {
+      pendingScrollRestoreRef.current = {
+        height: container.scrollHeight,
+        top: container.scrollTop,
+      };
+    }
+    void loadOlderMessages();
+  }, [hasOlderMessages, loadingOlderMessages, loadingMessages, loadOlderMessages]);
+
+  // handleScrollCheck é estável (sem dependências); lê a versão atual pela ref
+  const requestOlderMessagesRef = useRef(requestOlderMessages);
+  useEffect(() => {
+    requestOlderMessagesRef.current = requestOlderMessages;
+  }, [requestOlderMessages]);
+
   const handleScrollCheck = useCallback(() => {
     const containerMetrics = getContainerMetrics();
     const windowMetrics = getWindowMetrics();
@@ -353,6 +415,9 @@ export const Chat: React.FC = () => {
       const distanceToBottom = fullHeight - (currentScrollTop + visibleHeight);
 
       setShowScrollToBottom(distanceToBottom > 40);
+
+      // Perto do topo: carrega a página anterior
+      if (currentScrollTop < 120) requestOlderMessagesRef.current();
     } else if (useWindow && windowMetrics) {
       const { fullHeight, visibleHeight, currentScrollTop } = windowMetrics;
       const distanceToBottom = fullHeight - (currentScrollTop + visibleHeight);
@@ -441,6 +506,7 @@ export const Chat: React.FC = () => {
         created_at,
         assigned_user_id,
         contacts:contact_id (*),
+        last_inbound_at,
         messages (
           id,
           text,
@@ -463,6 +529,9 @@ export const Chat: React.FC = () => {
         .eq("id", requestedId)
         .eq("clinic_id", clinicId)
         .in("department_id", accessibleDepartmentIds)
+        // Só a última mensagem (prévia); a lista completa vem paginada
+        .order("sent_at", { referencedTable: "messages", ascending: false })
+        .limit(1, { referencedTable: "messages" })
         .maybeSingle();
 
       if (
@@ -495,7 +564,7 @@ export const Chat: React.FC = () => {
           type?: string | null;
         }[]) ?? [];
 
-      const last = messagesRows[messagesRows.length - 1];
+      const last = messagesRows[0];
 
       const rawContacts: any = (data as any).contacts;
       const contactRow = Array.isArray(rawContacts)
@@ -538,6 +607,7 @@ export const Chat: React.FC = () => {
         unreadCount: 0,
         tags: tagsFromConv,
         assignedTo: (data as any).assigned_user_id ?? undefined,
+        lastInboundAt: (data as any).last_inbound_at ?? undefined,
       };
 
       setSelectedTags(tagsFromConv);
@@ -554,9 +624,18 @@ export const Chat: React.FC = () => {
   }, [timelineItems.length, handleScrollCheck]);
 
   useEffect(() => {
-    if (loadingTimeline || timelineItems.length === 0) return;
+    if (loadingTimeline || !lastTimelineKey) return;
     scrollToBottom("auto");
-  }, [loadingTimeline, timelineItems.length, scrollToBottom]);
+  }, [loadingTimeline, lastTimelineKey, scrollToBottom]);
+
+  // Mantém na tela a mesma mensagem depois de inserir as antigas no topo
+  useLayoutEffect(() => {
+    const pending = pendingScrollRestoreRef.current;
+    const container = messagesContainerRef.current;
+    if (!pending || !container || loadingOlderMessages) return;
+    pendingScrollRestoreRef.current = null;
+    container.scrollTop = container.scrollHeight - pending.height + pending.top;
+  }, [timelineItems, loadingOlderMessages]);
 
   useEffect(() => {
     const onWindowScroll = () => handleScrollCheck();
@@ -856,7 +935,10 @@ export const Chat: React.FC = () => {
 
       const { tempId, input } = opts;
 
-      const lastInboundAt = getLastInboundClientAt(messages);
+      const lastInboundAt = latestIso(
+        conversation.lastInboundAt,
+        getLastInboundClientAt(messages),
+      );
 
       const isMetaProvider = conversation.provider === "meta";
       const canSend = !isMetaProvider || isInside24hWindow(lastInboundAt);
@@ -1258,6 +1340,20 @@ export const Chat: React.FC = () => {
           </div>
         ) : (
           <>
+            {hasOlderMessages ? (
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={requestOlderMessages}
+                  disabled={loadingOlderMessages}
+                  className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 shadow-sm transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-70"
+                >
+                  {loadingOlderMessages
+                    ? "Carregando mensagens anteriores..."
+                    : "Carregar mensagens anteriores"}
+                </button>
+              </div>
+            ) : null}
             {timelineItems.map((item) =>
               item.kind === "message" ? (
                 <div key={`message-${item.message.id}`}>
