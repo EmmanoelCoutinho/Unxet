@@ -9,6 +9,12 @@ import { ConversationItem } from "../components/inbox/ConversationItem";
 import { ChannelFilter } from "../components/inbox/ChannelFilter";
 import { TagFilter } from "../components/inbox/TagFilter";
 import { useConversations } from "../hooks/useConversations";
+import {
+  getAssigneeLabel,
+  useClinicUserNames,
+} from "../hooks/useClinicUserNames";
+import { useAuth } from "../contexts/AuthContext";
+import { useClinic } from "../contexts/ClinicContext";
 import { setAppBadge } from "../lib/pushNotifications";
 import { PushNotificationsPrompt } from "../components/inbox/PushNotificationsPrompt";
 import type { Channel } from "../types";
@@ -29,6 +35,11 @@ export const Inbox: React.FC = () => {
     totalUnreadOpen,
     totalUnreadPending,
   } = useConversations();
+
+  const { authUser } = useAuth();
+  const { clinicId, membership } = useClinic();
+  const isAdmin = membership?.role === "admin";
+  const userNames = useClinicUserNames(clinicId, isAdmin);
 
   useEffect(() => {
     const baseTitle = "Unxet";
@@ -234,6 +245,15 @@ export const Inbox: React.FC = () => {
                 <ConversationItem
                   key={conversation.id}
                   conversation={conversation}
+                  assigneeName={
+                    isAdmin
+                      ? getAssigneeLabel(
+                          conversation.assignedTo,
+                          authUser?.id,
+                          userNames,
+                        )
+                      : undefined
+                  }
                   onClick={() => {
                     markAsRead(conversation.id);
                     navigate(`/inbox/chat/${conversation.id}`);

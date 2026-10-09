@@ -26,6 +26,7 @@ export type MessageDeliveryStatus = "sent" | "delivered" | "read";
 export type Conversation = {
   id: string;
   clinicId?: string;
+  departmentId?: string;
   channel: Channel;
   contactName: string;
   contactNumber?: string;
