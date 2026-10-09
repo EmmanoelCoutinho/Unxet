@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { computePeakHour, type PeakHourSummary } from "../lib/peakHour";
 
 export type AnalyticsFilters = {
   clinicId: string;
@@ -57,6 +58,8 @@ export type AnalyticsResponse = {
   leadsByUserId: Array<{ userId: string; userName: string; leads: number }>;
   dailyLeads: Array<{ day: string; leads: number }>;
   slaByChannel: SlaByChannel[];
+  // Distribuição das mensagens recebidas por hora do dia
+  peakHour: PeakHourSummary;
   funnelByChannel: Array<{ channel: string; converted: number; lost: number }>;
 };
 
@@ -424,6 +427,11 @@ export const fetchInboxAnalytics = async (
       .map(([day, leads]) => ({ day, leads }))
       .sort((a, b) => a.day.localeCompare(b.day)),
     slaByChannel,
+    peakHour: computePeakHour(
+      messages
+        .filter((m) => m.direction === "inbound")
+        .map((m) => m.created_at),
+    ),
     funnelByChannel: Array.from(funnelByChannelMap.entries()).map(
       ([channel, v]) => ({
         channel,
