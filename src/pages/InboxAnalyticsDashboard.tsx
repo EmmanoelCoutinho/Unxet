@@ -11,6 +11,7 @@ import {
   type BacklogItem,
   type SatisfactionSummary,
 } from "../services/inboxAnalytics";
+import { formatHourRange, type PeakHourSummary } from "../lib/peakHour";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { MessageCircleIcon } from "lucide-react";
 
@@ -177,6 +178,50 @@ const DailyLeadsChart = ({
           </span>
         </div>
       ))}
+    </div>
+  );
+};
+
+const PeakHourChart = ({ summary }: { summary: PeakHourSummary }) => {
+  if (summary.peakHour === null) {
+    return <p className="text-sm text-slate-500">Sem dados no período.</p>;
+  }
+
+  const max = Math.max(1, summary.peakMessages);
+
+  return (
+    <div>
+      <div className="flex h-40 items-end gap-0.5 sm:gap-1">
+        {summary.byHour.map((item) => {
+          const isPeak = item.hour === summary.peakHour;
+          return (
+            <div
+              key={item.hour}
+              className="flex h-full flex-1 flex-col justify-end"
+              title={`${formatHourRange(item.hour)}: ${item.messages} mensagens`}
+            >
+              <div
+                className={`w-full rounded-t transition-all duration-500 ${
+                  isPeak ? "bg-orange-500" : "bg-blue-200"
+                }`}
+                style={{
+                  height: `${item.messages > 0 ? Math.max(3, (item.messages / max) * 100) : 0}%`,
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-1 flex gap-0.5 border-t border-slate-200 pt-1 sm:gap-1">
+        {summary.byHour.map((item) => (
+          <span
+            key={item.hour}
+            className="flex-1 text-center text-[10px] text-slate-500"
+          >
+            {item.hour % 3 === 0 ? `${item.hour}h` : ""}
+          </span>
+        ))}
+      </div>
     </div>
   );
 };
@@ -590,6 +635,35 @@ export const InboxAnalyticsDashboard: React.FC = () => {
               <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <SectionHeader title="Evolução diária de leads" />
                 <DailyLeadsChart rows={analytics.dailyLeads} />
+              </article>
+
+              <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
+                <SectionHeader
+                  title="Horário de pico"
+                  subtitle="Mensagens recebidas por hora do dia, somando todo o período selecionado."
+                />
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_1fr]">
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+                    <div className="rounded-lg border border-orange-100 bg-orange-50 p-3">
+                      <p className="text-xs text-slate-500">Horário de pico</p>
+                      <p className="mt-1 text-xl font-semibold text-orange-600">
+                        {formatHourRange(analytics.peakHour.peakHour)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs text-slate-500">Mensagens no pico</p>
+                      <p className="mt-1 text-xl font-semibold text-slate-900">
+                        {analytics.peakHour.peakMessages}
+                        {analytics.peakHour.peakSharePct !== null ? (
+                          <span className="ml-1 text-sm font-normal text-slate-500">
+                            ({Math.round(analytics.peakHour.peakSharePct)}% do total)
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                  </div>
+                  <PeakHourChart summary={analytics.peakHour} />
+                </div>
               </article>
 
               {satisfaction ? (
