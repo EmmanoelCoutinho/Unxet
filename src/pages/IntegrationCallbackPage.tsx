@@ -108,7 +108,7 @@ export function MetaCallbackPage() {
           });
 
           if (res.error) {
-            setError("Erro ao conectar a Pagina.");
+            setError("Erro ao conectar a Página.");
             setLoading(false);
             return;
           }
@@ -139,13 +139,13 @@ export function MetaCallbackPage() {
     }
 
     if (!selectedPageId) {
-      setError("Selecione uma Pagina.");
+      setError("Selecione uma Página.");
       setLoading(false);
       return;
     }
 
     if (!userAccessToken) {
-      setError("Token de usuario ausente.");
+      setError("Token de usuário ausente.");
       setLoading(false);
       return;
     }
@@ -160,7 +160,7 @@ export function MetaCallbackPage() {
     });
 
     if (fnErr) {
-      setError("Erro ao conectar a Pagina.");
+      setError("Erro ao conectar a Página.");
       setLoading(false);
       return;
     }
@@ -177,8 +177,8 @@ export function MetaCallbackPage() {
       {loading && (
         <div className="mt-4 text-sm text-gray-600">
           {flow === "whatsapp"
-            ? "Finalizando conexao do WhatsApp..."
-            : "Processando autorizacao..."}
+            ? "Finalizando conexão do WhatsApp..."
+            : "Processando autorização..."}
         </div>
       )}
 
@@ -191,7 +191,7 @@ export function MetaCallbackPage() {
       {!loading && flow === "meta" && needsSelection && (
         <div className="mt-6 rounded-lg border p-4">
           <div className="text-sm text-gray-700">
-            Escolha a Pagina do Facebook da sua empresa.
+            Escolha a Página do Facebook da sua empresa.
           </div>
 
           <select
@@ -227,7 +227,7 @@ export function MetaCallbackPage() {
 
       {!loading && !needsSelection && !error && (
         <div className="mt-4 text-sm text-gray-600">
-          {flow === "whatsapp" ? "Conexao concluida." : "Finalizando..."}
+          {flow === "whatsapp" ? "Conexão concluída." : "Finalizando..."}
         </div>
       )}
     </div>

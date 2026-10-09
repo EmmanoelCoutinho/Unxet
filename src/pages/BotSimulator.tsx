@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { botsService } from "../services/bots";
@@ -22,7 +22,7 @@ const actionTypeToLabel: Record<string, string> = {
   transfer_to_department: "Transferir para departamento",
   add_tag: "Adicionar tag",
   send_message: "Enviar mensagem",
-  handoff_to_human: "Transferencia para atendente",
+  handoff_to_human: "Transferência para atendente",
   end_flow: "Encerrar fluxo",
 };
 
@@ -333,7 +333,7 @@ export const BotSimulator = ({
             <div className="mt-4 text-sm text-slate-500">Sessão encerrada.</div>
           ) : options.length === 0 ? (
             <div className="mt-4 text-sm text-slate-500">
-              Nenhuma opção disponivel.
+              Nenhuma opção disponível.
             </div>
           ) : (
             <div className="mt-4 space-y-2">

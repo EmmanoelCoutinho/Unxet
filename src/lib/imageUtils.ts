@@ -38,7 +38,7 @@ const loadImageFromFile = (file: File) =>
 
     image.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error("Nao foi possivel carregar a imagem."));
+      reject(new Error("Não foi possível carregar a imagem."));
     };
 
     image.src = objectUrl;
@@ -71,7 +71,7 @@ const canvasToBlob = (
           return;
         }
 
-        reject(new Error("Nao foi possivel comprimir a imagem."));
+        reject(new Error("Não foi possível comprimir a imagem."));
       },
       mimeType,
       quality,
@@ -110,7 +110,7 @@ export const compressImageFile = async (
   const context = canvas.getContext("2d");
 
   if (!context) {
-    throw new Error("Canvas nao suportado pelo navegador.");
+    throw new Error("Canvas não suportado pelo navegador.");
   }
 
   canvas.width = width;

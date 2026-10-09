@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import {
   ArrowDownIcon,
@@ -74,7 +74,7 @@ const getEndSessionControlState = (
     return {
       disabled: true,
       helper:
-        "Desativado porque uma opcao com proxima etapa não pode encerrar a Sessão.",
+        "Desativado porque uma opção com próxima etapa não pode encerrar a sessão.",
     };
   }
 
@@ -83,38 +83,38 @@ const getEndSessionControlState = (
       return {
         disabled: true,
         helper:
-          "Desativado porque ir para a proxima etapa mantem o fluxo em andamento.",
+          "Desativado porque ir para a próxima etapa mantém o fluxo em andamento.",
       };
     case "transfer_to_department":
       return {
         disabled: true,
         helper:
-          "Ativado automaticamente porque a transferencia para departamento encerra o bot.",
+          "Ativado automaticamente porque a transferência para departamento encerra o bot.",
       };
     case "handoff_to_human":
       return {
         disabled: true,
         helper:
-          "Ativado automaticamente porque a transferencia para atendente encerra o bot.",
+          "Ativado automaticamente porque a transferência para atendente encerra o bot.",
       };
     case "end_flow":
       return {
         disabled: true,
         helper:
-          "Ativado automaticamente porque esta acao foi definida para encerrar o fluxo.",
+          "Ativado automaticamente porque esta ação foi definida para encerrar o fluxo.",
       };
     case "send_message":
       return {
         disabled: false,
         helper:
-          "Opcional: use quando esta mensagem deve finalizar o bot apos o envio.",
+          "Opcional: use quando esta mensagem deve finalizar o bot após o envio.",
       };
     case "add_tag":
     default:
       return {
         disabled: false,
         helper:
-          "Opcional: ative apenas quando adicionar a tag tambem deve encerrar o atendimento do bot.",
+          "Opcional: ative apenas quando adicionar a tag também deve encerrar o atendimento do bot.",
       };
   }
 };
@@ -123,7 +123,7 @@ const NodeBadge = ({ node }: { node: BotNodeRow }) => {
   const isRoot = node.node_key === BOT_ROOT_NODE_KEY;
   return (
     <span className="inline-flex items-center gap-2">
-      {isRoot ? <Badge variant="success">Inicio</Badge> : null}
+      {isRoot ? <Badge variant="success">Início</Badge> : null}
       <span className="font-mono text-xs text-slate-500">{node.node_key}</span>
     </span>
   );
@@ -282,19 +282,17 @@ export const BotNodesEditor = ({
     if (!node.title.trim()) return toast.error("Título é obrigatório.");
     if (!node.message.trim()) return toast.error("Mensagem é obrigatória.");
     if (!node.node_key.trim())
-      return toast.error("A chave da etapa e obrigatoria.");
+      return toast.error("A chave da etapa é obrigatória.");
 
     if (
       node.node_key === BOT_ROOT_NODE_KEY &&
       nodes.some((n) => n.id !== node.id && n.node_key === BOT_ROOT_NODE_KEY)
     ) {
-      return toast.error('Ja existe uma etapa com chave "root".');
+      return toast.error('Já existe uma etapa com chave "root".');
     }
 
     setSavingNodeId(node.id);
     const res = await botsService.updateNode(node.id, {
-      clinic_id: clinicId,
-      bot_id: botId,
       node_key: node.node_key.trim(),
       title: node.title.trim(),
       message: node.message.trim(),
@@ -338,13 +336,9 @@ export const BotNodesEditor = ({
 
     const [r1, r2] = await Promise.all([
       botsService.updateNode(a.id, {
-        clinic_id: clinicId,
-        bot_id: botId,
         sort_order: bOrder,
       }),
       botsService.updateNode(b.id, {
-        clinic_id: clinicId,
-        bot_id: botId,
         sort_order: aOrder,
       }),
     ]);
@@ -541,7 +535,7 @@ export const BotNodesEditor = ({
           <div>
             <div className="text-sm font-semibold text-slate-900">Etapas</div>
             <div className="mt-0.5 text-xs text-slate-500">
-              Etapa inicial obrigatoria:{" "}
+              Etapa inicial obrigatória:{" "}
               <span className="font-mono">{BOT_ROOT_NODE_KEY}</span>
             </div>
           </div>
@@ -563,7 +557,7 @@ export const BotNodesEditor = ({
           <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-3 text-sm text-yellow-800">
             <div className="font-medium">Etapa inicial ausente</div>
             <div className="mt-1">
-              Para publicar, e necessario ter uma etapa com chave{" "}
+              Para publicar, é necessário ter uma etapa com chave{" "}
               <span className="font-mono">"root"</span>.
             </div>
             <div className="mt-3">
@@ -906,7 +900,7 @@ export const BotNodesEditor = ({
                             {showNextNode ? (
                               <div className="w-full">
                                 <label className="mb-1 block text-sm font-medium text-[#1E1E1E]">
-                                  Proxima etapa
+                                  Próxima etapa
                                 </label>
                                 <select
                                   value={opt.next_node_id ?? ""}

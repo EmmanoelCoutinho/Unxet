@@ -217,7 +217,7 @@ export const MetaIntegrationsPage: React.FC = () => {
 
     if (!META_APP_ID || !META_REDIRECT_URI) {
       setErrorMsg(
-        "Configuracao do Meta OAuth ausente (VITE_META_APP_ID / VITE_META_REDIRECT_URI).",
+        "Configuração do Meta OAuth ausente (VITE_META_APP_ID / VITE_META_REDIRECT_URI).",
       );
       return;
     }
@@ -252,7 +252,7 @@ export const MetaIntegrationsPage: React.FC = () => {
 
     if (!META_APP_WABA_ID || !META_REDIRECT_URI || !META_WA_CONFIG_ID) {
       setErrorMsg(
-        "Configuracao Meta ausente (App ID / Redirect URI / Config ID).",
+        "Configuração Meta ausente (App ID / Redirect URI / Config ID).",
       );
       return;
     }
@@ -360,7 +360,7 @@ export const MetaIntegrationsPage: React.FC = () => {
       const message =
         error instanceof Error
           ? error.message
-          : "Não foi possivel iniciar a Conexão via QR Code.";
+          : "Não foi possível iniciar a conexão via QR Code.";
       setErrorMsg(message);
       setQrLoading(false);
       return;
@@ -371,7 +371,7 @@ export const MetaIntegrationsPage: React.FC = () => {
 
   const disconnectEvolutionConnection = useCallback(async () => {
     if (!whatsappEvolution?.id) {
-      setErrorMsg("Conexao Evolution não encontrada para desconectar.");
+      setErrorMsg("Conexão Evolution não encontrada para desconectar.");
       return;
     }
 
@@ -398,7 +398,7 @@ export const MetaIntegrationsPage: React.FC = () => {
         throw new Error(
           errorPayload?.error ??
             errorPayload?.message ??
-            "Não foi possivel desconectar a instancia Evolution.",
+            "Não foi possível desconectar a instância Evolution.",
         );
       }
 
@@ -407,7 +407,7 @@ export const MetaIntegrationsPage: React.FC = () => {
       const message =
         error instanceof Error
           ? error.message
-          : "Não foi possivel desconectar a instancia Evolution.";
+          : "Não foi possível desconectar a instância Evolution.";
       setErrorMsg(message);
     } finally {
       setDisconnectLoading(false);
@@ -626,7 +626,7 @@ export const MetaIntegrationsPage: React.FC = () => {
               <div className="mt-6 grid gap-3 md:grid-cols-2">
                 <PlatformCard
                   title="WhatsApp via Meta"
-                  description="Integracao oficial da Meta Cloud API."
+                  description="Integração oficial da Meta Cloud API."
                   status={whatsappMeta?.status}
                   icon={
                     <MessageCircleIcon className="h-5 w-5 text-green-600" />
@@ -691,17 +691,17 @@ export const MetaIntegrationsPage: React.FC = () => {
                       <p className="font-medium">WhatsApp conectado</p>
                       {whatsappEvolutionConnectedPhoneLabel ? (
                         <p className="mt-1">
-                          <span className="font-medium">Numero conectado:</span>{" "}
+                          <span className="font-medium">Número conectado:</span>{" "}
                           {whatsappEvolutionConnectedPhoneLabel}
                         </p>
                       ) : null}
-                      {whatsappEvolution.connected_name ? (
+                      {whatsappEvolution?.connected_name ? (
                         <p className="mt-1">
                           {whatsappEvolution.connected_name}
                         </p>
                       ) : null}
-                      {!whatsappEvolution.connected_phone &&
-                      !whatsappEvolution.connected_name &&
+                      {!whatsappEvolution?.connected_phone &&
+                      !whatsappEvolution?.connected_name &&
                       whatsappEvolutionConnectedLabel ? (
                         <p className="mt-1">
                           {whatsappEvolutionConnectedLabel}
@@ -736,7 +736,7 @@ export const MetaIntegrationsPage: React.FC = () => {
                       </div>
                       {lastDisconnectionLabel ? (
                         <p className="mt-4 text-xs text-gray-500">
-                          Ultima desConexão em {lastDisconnectionLabel}
+                          Última desconexão em {lastDisconnectionLabel}
                         </p>
                       ) : null}
                     </div>
@@ -768,11 +768,11 @@ export const MetaIntegrationsPage: React.FC = () => {
               <div className="mt-6 grid gap-3 md:grid-cols-2">
                 <PlatformCard
                   title="Messenger"
-                  description="Mensagens da Pagina do Facebook"
+                  description="Mensagens da Página do Facebook"
                   status={messenger?.status}
                   icon={<FacebookIcon className="h-5 w-5 text-blue-600" />}
                   accessItems={[
-                    "Receber e responder mensagens da Pagina conectada.",
+                    "Receber e responder mensagens da Página conectada.",
                     "Centralizar o atendimento do Facebook na inbox.",
                     "Sincronizar conversas recebidas pelo Facebook.",
                   ]}
@@ -780,13 +780,13 @@ export const MetaIntegrationsPage: React.FC = () => {
 
                 <PlatformCard
                   title="Instagram"
-                  description="DMs do Instagram vinculado a Pagina"
+                  description="DMs do Instagram vinculado à Página"
                   status={instagram?.status}
                   icon={<InstagramIcon className="h-5 w-5 text-pink-600" />}
                   accessItems={[
                     "Receber e responder mensagens diretas do Instagram.",
                     "Centralizar o atendimento do Instagram na inbox.",
-                    "Manter o canal disponivel para operacao e automacoes.",
+                    "Manter o canal disponível para operação e automações.",
                   ]}
                 />
               </div>
@@ -808,8 +808,8 @@ export const MetaIntegrationsPage: React.FC = () => {
 
               <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
                 <span className="font-medium">Importante:</span> Para realizar a
-                Conexão com o Instagram, e necessario que a conta esteja
-                configurada como conta profissional e vinculada a uma pagina do
+                conexão com o Instagram, é necessário que a conta esteja
+                configurada como conta profissional e vinculada a uma página do
                 Facebook.
               </div>
             </Card>

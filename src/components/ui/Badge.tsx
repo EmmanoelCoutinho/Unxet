@@ -12,20 +12,12 @@ export const Badge: React.FC<BadgeProps> = ({
   tag,
   channel
 }) => {
-  const getTagColor = (tag?: Tag) => {
-    switch (tag) {
-      case 'Pacientes':
-        return 'bg-blue-100 text-blue-700';
-      case 'Médicos':
-        return 'bg-purple-100 text-purple-700';
-      case 'Vendas':
-        return 'bg-green-100 text-green-700';
-      case 'Suporte':
-        return 'bg-orange-100 text-orange-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
-    }
-  };
+  // Etiquetas usam a cor cadastrada (ver tagStyle abaixo)
+  const getTagColor = (tag?: Tag) => (tag?.color ? '' : 'bg-gray-100 text-gray-700');
+  const tagStyle =
+    variant === 'tag' && tag?.color
+      ? { backgroundColor: `${tag.color}1A`, color: tag.color }
+      : undefined;
   const getChannelColor = (channel?: Channel) => {
     switch (channel) {
       case 'whatsapp':
@@ -45,7 +37,7 @@ export const Badge: React.FC<BadgeProps> = ({
     success: 'bg-[#22C55E]/10 text-[#22C55E]',
     warning: 'bg-[#F97316]/10 text-[#F97316]'
   };
-  return <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${variantStyles[variant]}`}>
+  return <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${variantStyles[variant]}`} style={tagStyle}>
       {children}
     </span>;
 };

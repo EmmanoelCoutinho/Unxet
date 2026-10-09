@@ -82,7 +82,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
     return conversation.lastMessage;
   };
 
-  const renderTagPill = (tag: Conversation["tags"][number]) => {
+  const renderTagPill = (tag: NonNullable<Conversation["tags"]>[number]) => {
     if (!tag) return null;
 
     return (

@@ -217,7 +217,10 @@ export function useConversations(options: UseConversationsOptions = {}) {
             .eq("clinic_id", clinicId)
             .in("department_id", accessibleDepartmentIds)
             .neq("status", "closed")
-            .order("last_message_at", { ascending: false });
+            .order("last_message_at", { ascending: false })
+            // Só a última mensagem de cada conversa (prévia na lista)
+            .order("sent_at", { referencedTable: "messages", ascending: false })
+            .limit(1, { referencedTable: "messages" });
 
         const applyChannel = (q: any) =>
           options.channel ? q.eq("channel", options.channel) : q;
