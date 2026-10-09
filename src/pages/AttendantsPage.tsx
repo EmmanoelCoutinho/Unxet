@@ -4,6 +4,7 @@ import {
   ChevronDownIcon,
   FilterIcon,
   Trash2Icon,
+  UserXIcon,
   UsersIcon,
 } from "lucide-react";
 import { Input } from "../components/ui/Input";
@@ -11,6 +12,7 @@ import { Badge } from "../components/ui/Badge";
 import { supabase } from "../lib/supabaseClient";
 import { getAuthCallbackUrl } from "../lib/appUrl";
 import { useClinic } from "../contexts/ClinicContext";
+import { useAuth } from "../contexts/AuthContext";
 import { toast } from "react-toastify";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 
@@ -52,7 +54,7 @@ type ActionError = {
 
 type RoleFilter = "all" | Role;
 
-type ModalMode = "edit" | "remove" | "invite";
+type ModalMode = "edit" | "remove" | "delete" | "invite";
 
 const isPermissionError = (
   error: { status?: number; code?: string } | null,
@@ -261,6 +263,7 @@ const SkeletonRow: React.FC = () => (
 
 export const AttendantsPage: React.FC = () => {
   const { clinicId, membership } = useClinic();
+  const { authUser } = useAuth();
   const isAdmin = membership?.role === "admin";
 
   const [clinicUsers, setClinicUsers] = useState<ClinicUser[]>([]);
@@ -284,6 +287,8 @@ export const AttendantsPage: React.FC = () => {
   const [editDepartments, setEditDepartments] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   // Invite (novo)
   const [inviteEmail, setInviteEmail] = useState("");
@@ -549,6 +554,7 @@ export const AttendantsPage: React.FC = () => {
   const handleCloseModal = () => {
     setActiveModal(null);
     setEditingUser(null);
+    setDeleteConfirmText("");
     setInviteEmail("");
     setInviteName("");
     setInviteRole("agent");
@@ -582,6 +588,15 @@ export const AttendantsPage: React.FC = () => {
       editingUser.role === "admin" && editRole === "agent" && adminCount <= 1
     );
   }, [adminCount, editRole, editingUser]);
+
+  const isEditingSelf = !!editingUser && editingUser.user_id === authUser?.id;
+  const isLastAdmin =
+    !!editingUser && editingUser.role === "admin" && adminCount <= 1;
+  const deleteConfirmTarget =
+    editingUser?.email?.trim() || editingUser?.name?.trim() || "EXCLUIR";
+  const canConfirmDelete =
+    deleteConfirmText.trim().toLowerCase() ===
+    deleteConfirmTarget.toLowerCase();
 
   const handleSave = async () => {
     if (!editingUser || !clinicId) return;
@@ -657,6 +672,39 @@ export const AttendantsPage: React.FC = () => {
       });
     } finally {
       setIsRemoving(false);
+    }
+  };
+
+  const handleDeleteAttendant = async () => {
+    if (!editingUser || !clinicId || !canConfirmDelete) return;
+
+    setIsDeleting(true);
+
+    try {
+      const { error: deleteError } = await supabase.functions.invoke(
+        "delete-attendant",
+        {
+          body: { clinic_id: clinicId, user_id: editingUser.user_id },
+        },
+      );
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      toast.success("Atendente excluído com sucesso");
+      await refreshData();
+      handleCloseModal();
+    } catch (deleteErr: any) {
+      const functionMessage = await getFunctionResponseMessage(deleteErr);
+
+      handleActionError({
+        error: functionMessage ? { message: functionMessage } : deleteErr,
+        fallbackMessage: "Erro ao excluir atendente",
+        isPermission: isPermissionError(deleteErr),
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -990,15 +1038,33 @@ export const AttendantsPage: React.FC = () => {
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <button
-                type="button"
-                onClick={() => setActiveModal("remove")}
-                className="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!isAdmin}
-              >
-                <Trash2Icon className="h-4 w-4" />
-                Remover acesso
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal("remove")}
+                  className="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!isAdmin}
+                >
+                  <Trash2Icon className="h-4 w-4" />
+                  Remover acesso
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveModal("delete")}
+                  className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+                  disabled={!isAdmin || isEditingSelf || isLastAdmin}
+                  title={
+                    isEditingSelf
+                      ? "Você não pode excluir a sua própria conta"
+                      : isLastAdmin
+                        ? "Você não pode excluir o último administrador"
+                        : undefined
+                  }
+                >
+                  <UserXIcon className="h-4 w-4" />
+                  Excluir atendente
+                </button>
+              </div>
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -1047,6 +1113,63 @@ export const AttendantsPage: React.FC = () => {
               className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-400"
             >
               {isRemoving ? "Removendo..." : "Remover acesso"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        title="Excluir atendente"
+        description="Exclui definitivamente a conta do sistema: a pessoa perde o acesso e não consegue mais entrar. O histórico de conversas é mantido."
+        isOpen={activeModal === "delete" && !!editingUser}
+        onClose={handleCloseModal}
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <p className="font-semibold">Esta ação não pode ser desfeita.</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>A conta de login será excluída.</li>
+              <li>
+                Conversas em atendimento com esta pessoa voltam para a fila do
+                setor.
+              </li>
+              <li>
+                Para ela voltar a usar o sistema, será preciso enviar um novo
+                convite.
+              </li>
+            </ul>
+          </div>
+          <label className="block text-sm font-medium text-gray-700">
+            Para confirmar, digite{" "}
+            <span className="font-semibold text-gray-900">
+              {deleteConfirmTarget}
+            </span>
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder={deleteConfirmTarget}
+              className="mt-2"
+              autoComplete="off"
+            />
+          </label>
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteConfirmText("");
+                setActiveModal("edit");
+              }}
+              className="rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:border-gray-300"
+            >
+              Voltar
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteAttendant}
+              disabled={!isAdmin || isDeleting || !canConfirmDelete}
+              className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+            >
+              {isDeleting ? "Excluindo..." : "Excluir atendente"}
             </button>
           </div>
         </div>
