@@ -4,20 +4,24 @@ import {
   InstagramIcon,
   FacebookIcon,
   ImageIcon,
+  UserIcon,
 } from "lucide-react";
 import { Conversation } from "../../types";
 import { CustomTooltip } from "../ui/CustomTooltip";
 import { SecureImage } from "../ui/SecureImage";
 interface ConversationItemProps {
   conversation: Conversation;
+  // Responsável pela conversa (exibido só para admin)
+  assigneeName?: string;
   onClick: () => void;
 }
 type Channel = "whatsapp" | "instagram" | "messenger";
 
 export const ConversationItem: React.FC<ConversationItemProps> = ({
   conversation,
+  assigneeName,
   onClick,
-}) => {  
+}) => {
   
   const CHANNEL_CONFIG: Record<
     Channel,
@@ -127,6 +131,15 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
           <p className="text-sm text-gray-600 truncate mb-2">
             {renderLastMessage()}
           </p>
+          {assigneeName && (
+            <p
+              title={`Responsável: ${assigneeName}`}
+              className="mb-2 flex min-w-0 items-center gap-1 text-xs text-gray-500"
+            >
+              <UserIcon className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="truncate">{assigneeName}</span>
+            </p>
+          )}
           <div className="flex items-center gap-2 min-w-0 relative pr-10">
             <span
               className={`flex items-center gap-1 text-xs font-medium ${channelInfo.textColor} flex-shrink-0`}

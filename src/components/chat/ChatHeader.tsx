@@ -5,13 +5,20 @@ import { TbMessageCheck, TbMessageOff } from "react-icons/tb";
 import { HiOutlineSwitchHorizontal } from "react-icons/hi";
 import { FiSearch } from "react-icons/fi";
 import { CustomTooltip } from "../ui/CustomTooltip";
-import { ArrowLeftIcon, TagIcon, MoreVerticalIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  TagIcon,
+  MoreVerticalIcon,
+  UserIcon,
+} from "lucide-react";
 import { CustomDropdown } from "../ui/CustomDropdown";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { SecureImage } from "../ui/SecureImage";
 
 interface ChatHeaderProps {
   conversation: Conversation;
+  // Responsável pela conversa (exibido só para admin)
+  assigneeName?: string;
   onBack: () => void;
   onManageTags?: () => void;
   onAccept?: () => Promise<void> | void;
@@ -26,6 +33,7 @@ interface ChatHeaderProps {
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   conversation,
+  assigneeName,
   onBack,
   onManageTags,
   onAccept,
@@ -172,6 +180,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               {formattedIdentifier && (
                 <span className="min-w-0 truncate text-xs text-gray-500 sm:flex-shrink-0">
                   {formattedIdentifier}
+                </span>
+              )}
+
+              {assigneeName && (
+                <span
+                  title={`Responsável: ${assigneeName}`}
+                  className="inline-flex min-w-0 max-w-[10rem] flex-shrink-0 items-center gap-1 text-xs text-gray-500"
+                >
+                  <UserIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span className="truncate">{assigneeName}</span>
                 </span>
               )}
 

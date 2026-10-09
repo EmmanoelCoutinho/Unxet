@@ -22,9 +22,14 @@ type DbMessage = {
   created_at?: string | null;
 };
 
+const isAssignedToOther = (conversation: Conversation, userId: string) =>
+  !!conversation.assignedTo && conversation.assignedTo !== userId;
+
 export function useConversations(options: UseConversationsOptions = {}) {
   const { authUser, loading: authLoading } = useAuth();
   const { clinicId, membership } = useClinic();
+  // Admin acompanha todas as conversas da empresa, inclusive as de outros atendentes
+  const isAdmin = membership?.role === "admin";
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,9 +178,11 @@ export function useConversations(options: UseConversationsOptions = {}) {
       setError(null);
 
       try {
-        const accessibleDepartmentIds = await getAccessibleDepartmentIds();
+        const accessibleDepartmentIds = isAdmin
+          ? []
+          : await getAccessibleDepartmentIds();
 
-        if (accessibleDepartmentIds.length === 0) {
+        if (!isAdmin && accessibleDepartmentIds.length === 0) {
           setConversations([]);
           return;
         }
@@ -210,17 +217,23 @@ export function useConversations(options: UseConversationsOptions = {}) {
           )
         `;
 
-        const makeBase = () =>
-          supabase
+        const makeBase = () => {
+          let q = supabase
             .from("conversations")
             .select(baseSelect)
-            .eq("clinic_id", clinicId)
-            .in("department_id", accessibleDepartmentIds)
+            .eq("clinic_id", clinicId);
+          if (!isAdmin) q = q.in("department_id", accessibleDepartmentIds);
+          return q
             .neq("status", "closed")
             .order("last_message_at", { ascending: false })
             // Só a última mensagem de cada conversa (prévia na lista)
             .order("sent_at", { referencedTable: "messages", ascending: false })
             .limit(1, { referencedTable: "messages" });
+        };
+
+        // Atendente vê só as abertas dele; admin vê as de todos
+        const applyOpenOwner = (q: any) =>
+          isAdmin ? q : q.eq("assigned_user_id", authUser.id);
 
         const applyChannel = (q: any) =>
           options.channel ? q.eq("channel", options.channel) : q;
@@ -231,7 +244,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
           let q = applyChannel(makeBase()).eq("status", options.status);
 
           if (options.status === "open") {
-            q = q.eq("assigned_user_id", authUser.id);
+            q = applyOpenOwner(q);
           }
 
           const res = await q;
@@ -239,9 +252,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
           data = res.data ?? [];
         } else {
           const [openRes, pendingRes] = await Promise.all([
-            applyChannel(makeBase())
-              .eq("status", "open")
-              .eq("assigned_user_id", authUser.id),
+            applyOpenOwner(applyChannel(makeBase()).eq("status", "open")),
             applyChannel(makeBase()).eq("status", "pending"),
           ]);
 
@@ -339,7 +350,10 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
           mapped = mapped.map((c) => ({
             ...c,
-            unreadCount: countMap.get(c.id) ?? 0,
+            // Conversa de outro atendente não conta como não lida para o admin
+            unreadCount: isAssignedToOther(c, authUser.id)
+              ? 0
+              : (countMap.get(c.id) ?? 0),
           }));
         }
 
@@ -357,6 +371,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
     [
       authUser,
       clinicId,
+      isAdmin,
       getAccessibleDepartmentIds,
       options.status,
       options.channel,
@@ -439,10 +454,12 @@ export function useConversations(options: UseConversationsOptions = {}) {
     let rtChannel: any = null;
 
     const initConversationsUpdateChannel = async () => {
-      const accessibleDepartmentIds = await getAccessibleDeptIdsRef.current();
+      const accessibleDepartmentIds = isAdmin
+        ? []
+        : await getAccessibleDeptIdsRef.current();
       if (!active) return;
 
-      if (!accessibleDepartmentIds.length) {
+      if (!isAdmin && !accessibleDepartmentIds.length) {
         return;
       }
 
@@ -469,7 +486,11 @@ export function useConversations(options: UseConversationsOptions = {}) {
               ? String(nextRow.department_id)
               : null;
 
-            if (nextDept && !accessibleDepartmentIds.includes(nextDept)) {
+            if (
+              !isAdmin &&
+              nextDept &&
+              !accessibleDepartmentIds.includes(nextDept)
+            ) {
               return;
             }
 
@@ -528,7 +549,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
       active = false;
       if (rtChannel) supabase.removeChannel(rtChannel);
     };
-  }, [authUser, clinicId]);
+  }, [authUser, clinicId, isAdmin]);
 
   // inicial
   useEffect(() => {
@@ -583,7 +604,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
               lastMessage: preview.text || old.lastMessage,
               lastMessageType: preview.type ?? old.lastMessageType,
               lastTimestamp: msg.sent_at ?? msg.created_at ?? old.lastTimestamp,
-              unreadCount: isInbound
+              unreadCount:
+                isInbound && !isAssignedToOther(old, authUser.id)
                 ? (old.unreadCount ?? 0) + 1
                 : (old.unreadCount ?? 0),
             };

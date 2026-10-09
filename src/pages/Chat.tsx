@@ -20,6 +20,10 @@ import {
 } from "../hooks/useMessages";
 import { useConversationEvents } from "../hooks/useConversationEvents";
 import { useQuickMessages } from "../hooks/useQuickMessages";
+import {
+  getAssigneeLabel,
+  useClinicUserNames,
+} from "../hooks/useClinicUserNames";
 import { Button } from "../components/ui/Button";
 import { ChatHeader } from "../components/chat/ChatHeader";
 import { MessageBubble } from "../components/chat/MessageBubble";
@@ -167,7 +171,8 @@ export const Chat: React.FC = () => {
   const navigate = useNavigate();
   const { authUser } = useAuth();
   const { clinicId, membership } = useClinic();
-  const departmentId = membership?.department_id ?? null;
+  const isAdmin = membership?.role === "admin";
+  const userNames = useClinicUserNames(clinicId, isAdmin);
 
   const didInitialConversationLoadRef = useRef(false);
   const activeRouteConversationIdRef = useRef<string | undefined>(id);
@@ -175,6 +180,11 @@ export const Chat: React.FC = () => {
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const justOpenedRef = useRef(true);
+  // Enquanto o usuário estiver no fim, mantém o fim visível quando o conteúdo
+  // cresce depois de renderizar (imagens, áudios e vídeos carregando)
+  const stickToBottomRef = useRef(true);
+  const [messagesContentEl, setMessagesContentEl] =
+    useState<HTMLDivElement | null>(null);
   // Posição da rolagem antes de carregar mensagens antigas (para restaurar)
   const pendingScrollRestoreRef = useRef<{ height: number; top: number } | null>(
     null,
@@ -287,6 +297,7 @@ export const Chat: React.FC = () => {
     activeRouteConversationIdRef.current = id;
     setShowScrollToBottom(false);
     justOpenedRef.current = true;
+    stickToBottomRef.current = true;
     didInitialConversationLoadRef.current = false;
     setConversation(null);
     setSelectedTags([]);
@@ -363,6 +374,7 @@ export const Chat: React.FC = () => {
       });
     }
 
+    stickToBottomRef.current = true;
     setShowScrollToBottom(false);
   }, []);
 
@@ -414,6 +426,7 @@ export const Chat: React.FC = () => {
       const { fullHeight, visibleHeight, currentScrollTop } = containerMetrics;
       const distanceToBottom = fullHeight - (currentScrollTop + visibleHeight);
 
+      stickToBottomRef.current = distanceToBottom <= 40;
       setShowScrollToBottom(distanceToBottom > 40);
 
       // Perto do topo: carrega a página anterior
@@ -478,8 +491,10 @@ export const Chat: React.FC = () => {
 
       if (shouldHardLoad) setLoadingConversation(true);
 
-      const accessibleDepartmentIds = await getAccessibleDepartmentIds();
-      if (accessibleDepartmentIds.length === 0) {
+      const accessibleDepartmentIds = isAdmin
+        ? []
+        : await getAccessibleDepartmentIds();
+      if (!isAdmin && accessibleDepartmentIds.length === 0) {
         if (
           requestId !== conversationLoadRequestRef.current ||
           activeRouteConversationIdRef.current !== requestedId
@@ -492,7 +507,7 @@ export const Chat: React.FC = () => {
         return;
       }
 
-      const { data, error } = await supabase
+      let conversationQuery = supabase
         .from("conversations")
         .select(
           `
@@ -527,8 +542,16 @@ export const Chat: React.FC = () => {
       `,
         )
         .eq("id", requestedId)
-        .eq("clinic_id", clinicId)
-        .in("department_id", accessibleDepartmentIds)
+        .eq("clinic_id", clinicId);
+      // Admin abre conversas de qualquer setor
+      if (!isAdmin) {
+        conversationQuery = conversationQuery.in(
+          "department_id",
+          accessibleDepartmentIds,
+        );
+      }
+
+      const { data, error } = await conversationQuery
         // Só a última mensagem (prévia); a lista completa vem paginada
         .order("sent_at", { referencedTable: "messages", ascending: false })
         .limit(1, { referencedTable: "messages" })
@@ -591,6 +614,7 @@ export const Chat: React.FC = () => {
       const mappedConversation: Conversation = {
         id: (data as any).id,
         clinicId: (data as any).clinic_id ?? undefined,
+        departmentId: (data as any).department_id ?? undefined,
         channel: (data as any).channel as Channel,
         status: ((data as any).status as Conversation["status"]) ?? "pending",
         provider: (data as any).channel_connections?.provider ?? undefined,
@@ -616,7 +640,7 @@ export const Chat: React.FC = () => {
       setLoadingConversation(false);
       didInitialConversationLoadRef.current = true;
     },
-    [id, clinicId, getAccessibleDepartmentIds],
+    [id, clinicId, isAdmin, getAccessibleDepartmentIds],
   );
 
   useEffect(() => {
@@ -627,6 +651,17 @@ export const Chat: React.FC = () => {
     if (loadingTimeline || !lastTimelineKey) return;
     scrollToBottom("auto");
   }, [loadingTimeline, lastTimelineKey, scrollToBottom]);
+
+  // Mídias carregam depois do primeiro scroll e aumentam a altura da lista;
+  // se o usuário estava no fim, continua no fim
+  useEffect(() => {
+    if (!messagesContentEl || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (stickToBottomRef.current) scrollToBottom("auto");
+    });
+    observer.observe(messagesContentEl);
+    return () => observer.disconnect();
+  }, [messagesContentEl, scrollToBottom]);
 
   // Mantém na tela a mesma mensagem depois de inserir as antigas no topo
   useLayoutEffect(() => {
@@ -1303,6 +1338,11 @@ export const Chat: React.FC = () => {
       ) : conversation ? (
         <ChatHeader
           conversation={conversation}
+          assigneeName={
+            isAdmin
+              ? getAssigneeLabel(conversation.assignedTo, authUser?.id, userNames)
+              : undefined
+          }
           onBack={() => navigate("/inbox")}
           onManageTags={() => setIsManageTagsOpen(true)}
           onAccept={handleAcceptConversation}
@@ -1339,7 +1379,7 @@ export const Chat: React.FC = () => {
             <p className="text-gray-500">Nenhuma mensagem ainda</p>
           </div>
         ) : (
-          <>
+          <div ref={setMessagesContentEl} className="space-y-4">
             {hasOlderMessages ? (
               <div className="flex justify-center">
                 <button
@@ -1373,7 +1413,7 @@ export const Chat: React.FC = () => {
                 />
               ),
             )}
-          </>
+          </div>
         )}
       </div>
 
@@ -1486,7 +1526,7 @@ export const Chat: React.FC = () => {
         onConfirm={handleTransferConversation}
         loading={transferringConversation}
         clinicId={clinicId}
-        currentDepartmentId={departmentId}
+        currentDepartmentId={conversation?.departmentId ?? null}
       />
 
       {conversation?.status === "open" && (
