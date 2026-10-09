@@ -130,7 +130,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     ) {
       try {
         mediaRecorderRef.current.stop();
-      } catch {}
+      } catch {
+        // gravador já encerrado: nada a fazer
+      }
     }
     stopStreamTracks();
     setIsRecording(false);

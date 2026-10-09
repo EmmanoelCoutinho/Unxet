@@ -155,7 +155,6 @@ export const Chat: React.FC = () => {
   const didInitialConversationLoadRef = useRef(false);
   const activeRouteConversationIdRef = useRef<string | undefined>(id);
   const conversationLoadRequestRef = useRef(0);
-  const [refreshingConversation, setRefreshingConversation] = useState(false);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const justOpenedRef = useRef(true);
@@ -249,7 +248,6 @@ export const Chat: React.FC = () => {
     setSelectedTags([]);
     setAvailableTags([]);
     setLoadingConversation(true);
-    setRefreshingConversation(false);
     setDraftMessage("");
     setRecordingUiState({
       isRecording: false,
@@ -414,7 +412,6 @@ export const Chat: React.FC = () => {
         !silent && !didInitialConversationLoadRef.current && !conversation;
 
       if (shouldHardLoad) setLoadingConversation(true);
-      else if (!silent) setRefreshingConversation(true);
 
       const accessibleDepartmentIds = await getAccessibleDepartmentIds();
       if (accessibleDepartmentIds.length === 0) {
@@ -426,7 +423,6 @@ export const Chat: React.FC = () => {
         }
         setConversation(null);
         setLoadingConversation(false);
-        setRefreshingConversation(false);
         didInitialConversationLoadRef.current = true;
         return;
       }
@@ -479,7 +475,6 @@ export const Chat: React.FC = () => {
       if (error) {
         console.error("Erro ao buscar conversa:", error);
         setLoadingConversation(false);
-        setRefreshingConversation(false);
         didInitialConversationLoadRef.current = true;
         return;
       }
@@ -487,7 +482,6 @@ export const Chat: React.FC = () => {
       if (!data) {
         setConversation(null);
         setLoadingConversation(false);
-        setRefreshingConversation(false);
         didInitialConversationLoadRef.current = true;
         return;
       }
@@ -550,7 +544,6 @@ export const Chat: React.FC = () => {
       setConversation(mappedConversation);
 
       setLoadingConversation(false);
-      setRefreshingConversation(false);
       didInitialConversationLoadRef.current = true;
     },
     [id, clinicId, getAccessibleDepartmentIds],

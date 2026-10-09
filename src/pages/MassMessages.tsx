@@ -24,7 +24,7 @@ import { useTags, AvailableTag } from "../hooks/useTags"; // Importando o novo h
 
 type TargetType = "all" | "tags";
 
-export const MassMessagesPage: React.FC<MassMessagesPageProps> = () => {
+export const MassMessagesPage: React.FC = () => {
   const [targetType, setTargetType] = useState<TargetType>("all");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [message, setMessage] = useState("");
@@ -44,7 +44,7 @@ export const MassMessagesPage: React.FC<MassMessagesPageProps> = () => {
 
   // Consumindo os Hooks de Backend
   const { triggerMassCampaign, loading: sending } = useMassMessages();
-  const { tags: localTags, loading: loadingTags, createTag, updateTag, deleteTag } = useTags();
+  const { tags: localTags, createTag, updateTag, deleteTag } = useTags();
 
   const handleTagToggle = (tagId: string) => {
     setSelectedTags(prev => 
@@ -163,7 +163,7 @@ export const MassMessagesPage: React.FC<MassMessagesPageProps> = () => {
               <div>
                 <p className="font-semibold">Campanha disparada com sucesso!</p>
                 <p className="text-sm opacity-90">
-                  O sistema gerou a fila e está processando os envios em segundo plano.
+                  A fila com {totalEnviados} contato(s) foi gerada e os envios estão sendo processados em segundo plano.
                 </p>
               </div>
               <button 

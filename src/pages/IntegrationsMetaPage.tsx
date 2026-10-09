@@ -695,13 +695,13 @@ export const MetaIntegrationsPage: React.FC = () => {
                           {whatsappEvolutionConnectedPhoneLabel}
                         </p>
                       ) : null}
-                      {whatsappEvolution.connected_name ? (
+                      {whatsappEvolution?.connected_name ? (
                         <p className="mt-1">
                           {whatsappEvolution.connected_name}
                         </p>
                       ) : null}
-                      {!whatsappEvolution.connected_phone &&
-                      !whatsappEvolution.connected_name &&
+                      {!whatsappEvolution?.connected_phone &&
+                      !whatsappEvolution?.connected_name &&
                       whatsappEvolutionConnectedLabel ? (
                         <p className="mt-1">
                           {whatsappEvolutionConnectedLabel}

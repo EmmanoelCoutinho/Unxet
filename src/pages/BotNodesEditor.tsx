@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import {
   ArrowDownIcon,
@@ -293,8 +293,6 @@ export const BotNodesEditor = ({
 
     setSavingNodeId(node.id);
     const res = await botsService.updateNode(node.id, {
-      clinic_id: clinicId,
-      bot_id: botId,
       node_key: node.node_key.trim(),
       title: node.title.trim(),
       message: node.message.trim(),
@@ -338,13 +336,9 @@ export const BotNodesEditor = ({
 
     const [r1, r2] = await Promise.all([
       botsService.updateNode(a.id, {
-        clinic_id: clinicId,
-        bot_id: botId,
         sort_order: bOrder,
       }),
       botsService.updateNode(b.id, {
-        clinic_id: clinicId,
-        bot_id: botId,
         sort_order: aOrder,
       }),
     ]);

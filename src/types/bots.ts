@@ -1,7 +1,10 @@
 export const BOT_ROOT_NODE_KEY = "root" as const;
 
+// Aceita qualquer texto, mantendo o autocompletar dos valores conhecidos
+type OpenString = string & Record<never, never>;
+
 export const BOT_STATUS_VALUES = ["active", "inactive"] as const;
-export type BotStatus = (typeof BOT_STATUS_VALUES)[number] | (string & {});
+export type BotStatus = (typeof BOT_STATUS_VALUES)[number] | OpenString;
 
 export const BOT_NODE_TYPE_VALUES = [
   "menu",
@@ -9,7 +12,7 @@ export const BOT_NODE_TYPE_VALUES = [
   "handoff",
   "end",
 ] as const;
-export type BotNodeType = (typeof BOT_NODE_TYPE_VALUES)[number] | (string & {});
+export type BotNodeType = (typeof BOT_NODE_TYPE_VALUES)[number] | OpenString;
 
 export const BOT_OPTION_ACTION_TYPE_VALUES = [
   "go_to_node",
@@ -21,14 +24,14 @@ export const BOT_OPTION_ACTION_TYPE_VALUES = [
 ] as const;
 export type BotOptionActionType =
   | (typeof BOT_OPTION_ACTION_TYPE_VALUES)[number]
-  | (string & {});
+  | OpenString;
 
 export const BOT_CHANNEL_BINDING_TRIGGER_TYPE_VALUES = [
   "first_inbound",
 ] as const;
 export type BotChannelBindingTriggerType =
   | (typeof BOT_CHANNEL_BINDING_TRIGGER_TYPE_VALUES)[number]
-  | (string & {});
+  | OpenString;
 
 export const CONVERSATION_BOT_SESSION_STATUS_VALUES = [
   "active",
@@ -37,7 +40,7 @@ export const CONVERSATION_BOT_SESSION_STATUS_VALUES = [
 ] as const;
 export type ConversationBotSessionStatus =
   | (typeof CONVERSATION_BOT_SESSION_STATUS_VALUES)[number]
-  | (string & {});
+  | OpenString;
 
 export const CONVERSATION_BOT_SESSION_ENDED_REASON_VALUES = [
   "end_flow",
@@ -47,7 +50,7 @@ export const CONVERSATION_BOT_SESSION_ENDED_REASON_VALUES = [
 ] as const;
 export type ConversationBotSessionEndedReason =
   | (typeof CONVERSATION_BOT_SESSION_ENDED_REASON_VALUES)[number]
-  | (string & {});
+  | OpenString;
 
 export type BotRow = {
   id: string;
@@ -169,8 +172,8 @@ export type ChannelConnectionRow = {
   id: string;
   clinic_id: string;
   provider?: string | null;
-  channel: "whatsapp" | "instagram" | "messenger" | (string & {});
-  status?: "connected" | "disconnected" | "needs_reauth" | (string & {}) | null;
+  channel: "whatsapp" | "instagram" | "messenger" | OpenString;
+  status?: "connected" | "disconnected" | "needs_reauth" | OpenString | null;
   meta_phone_number_id?: string | null;
   meta_waba_id?: string | null;
   meta_page_id?: string | null;

@@ -680,11 +680,6 @@ export const MarketingCampaignsPage: React.FC = () => {
     [selectedTemplateId, templates],
   );
 
-  const selectedCampaign = useMemo(
-    () => campaigns.find((item) => item.id === selectedCampaignId) ?? null,
-    [campaigns, selectedCampaignId],
-  );
-
   const selectedCampaignTemplate = useMemo(
     () =>
       approvedTemplates.find((item) => item.id === campaignForm.templateId) ??
