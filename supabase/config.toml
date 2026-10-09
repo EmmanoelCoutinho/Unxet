@@ -402,6 +402,9 @@ verify_jwt = true
 [functions.invite-attendant]
 verify_jwt = true
 
+[functions.delete-attendant]
+verify_jwt = true
+
 [functions.meta-connect]
 verify_jwt = true
 
