@@ -13,6 +13,7 @@ import { Inbox } from "./pages/Inbox";
 import { Chat } from "./pages/Chat";
 import { Header } from "./components/layout/Header";
 import { PushNotificationsBridge } from "./components/PushNotificationsBridge";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { InboxAnalyticsDashboard } from "./pages/InboxAnalyticsDashboard";
 import { Tags } from "./pages/Tags";
@@ -96,6 +97,7 @@ function RoutedApp() {
             : "min-h-screen"
         }
       >
+        <AppErrorBoundary resetKey={location.pathname}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -173,7 +175,10 @@ function RoutedApp() {
             }
           />
           <Route path="/" element={<Navigate to="/login" replace />} />
+          {/* Endereço desconhecido: volta para o início (o login cuida de quem não está logado) */}
+          <Route path="*" element={<Navigate to="/inbox" replace />} />
         </Routes>
+        </AppErrorBoundary>
       </main>
     </>
   );

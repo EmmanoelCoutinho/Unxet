@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { computePeakHour, formatHourRange } from "./peakHour";
+import { formatHourRange, summarizeHourlyCounts } from "./peakHour";
 
-// Datas sem sufixo de fuso são interpretadas no horário local,
-// o mesmo usado por computePeakHour
-const at = (hour: number, minute = 0) =>
-  new Date(2026, 9, 8, hour, minute).toISOString();
+// Contagens por hora com os valores informados e zero nas demais
+const hourly = (values: Record<number, number>) =>
+  Array.from({ length: 24 }, (_, hour) => values[hour] ?? 0);
 
-describe("computePeakHour", () => {
+describe("summarizeHourlyCounts", () => {
   it("retorna null quando não há mensagens", () => {
-    const result = computePeakHour([]);
+    const result = summarizeHourlyCounts([]);
     expect(result.peakHour).toBeNull();
     expect(result.peakMessages).toBe(0);
     expect(result.peakSharePct).toBeNull();
@@ -16,23 +15,30 @@ describe("computePeakHour", () => {
   });
 
   it("identifica a hora com mais mensagens", () => {
-    const result = computePeakHour([
-      at(9, 5),
-      at(14, 0),
-      at(14, 30),
-      at(14, 59),
-      at(20, 10),
-    ]);
+    const result = summarizeHourlyCounts(hourly({ 9: 1, 14: 3, 20: 1 }));
     expect(result.peakHour).toBe(14);
     expect(result.peakMessages).toBe(3);
     expect(result.peakSharePct).toBe(60);
     expect(result.byHour[9].messages).toBe(1);
   });
 
-  it("desempata pela hora mais cedo e ignora datas inválidas", () => {
-    const result = computePeakHour([at(16), at(10), "invalid"]);
+  it("desempata pela hora mais cedo", () => {
+    const result = summarizeHourlyCounts(hourly({ 16: 1, 10: 1 }));
     expect(result.peakHour).toBe(10);
     expect(result.peakSharePct).toBe(50);
+  });
+
+  it("ignora valores inválidos e listas incompletas", () => {
+    const result = summarizeHourlyCounts([
+      2,
+      Number.NaN,
+      -5,
+      null as unknown as number,
+    ]);
+    expect(result.peakHour).toBe(0);
+    expect(result.peakMessages).toBe(2);
+    expect(result.byHour).toHaveLength(24);
+    expect(result.byHour[2].messages).toBe(0);
   });
 });
 

@@ -10,17 +10,17 @@ export type PeakHourSummary = {
 };
 
 /**
- * Distribui as mensagens pelas 24 horas do dia (fuso local do navegador)
- * e identifica a hora de maior volume. Em caso de empate, vence a mais cedo.
+ * Monta o resumo a partir das contagens por hora (índice 0 = 0h … 23 = 23h),
+ * já calculadas pelo banco no fuso de quem está olhando o painel.
+ * Em caso de empate, vence a hora mais cedo.
  */
-export const computePeakHour = (timestamps: string[]): PeakHourSummary => {
-  const counts = new Array<number>(24).fill(0);
-
-  for (const timestamp of timestamps) {
-    const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) continue;
-    counts[date.getHours()] += 1;
-  }
+export const summarizeHourlyCounts = (
+  hourlyCounts: number[],
+): PeakHourSummary => {
+  const counts = Array.from({ length: 24 }, (_, hour) => {
+    const value = Number(hourlyCounts[hour] ?? 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  });
 
   const total = counts.reduce((sum, value) => sum + value, 0);
   const peakMessages = Math.max(...counts);
