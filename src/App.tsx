@@ -150,7 +150,10 @@ function RoutedApp() {
             />
             <Route path="bots" element={<BotsSettingsPage />} />
             <Route path="bots/new" element={<BotEditorPage mode="new" />} />
-            <Route path="bots/edit" element={<BotEditorPage mode="edit" />} />
+            <Route
+              path="bots/edit/:botId?"
+              element={<BotEditorPage mode="edit" />}
+            />
             <Route
               path="settings"
               element={

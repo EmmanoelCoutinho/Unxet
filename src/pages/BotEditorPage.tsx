@@ -1,20 +1,24 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Textarea } from "../components/ui/Textarea";
-import { Toggle } from "../components/ui/Toggle";
 import { useClinic } from "../contexts/ClinicContext";
 import { botsService } from "../services/bots";
 import type { BotRow } from "../types/bots";
+import {
+  BOT_SESSION_TIMEOUT_DEFAULT_HOURS,
+  BOT_SESSION_TIMEOUT_HOUR_OPTIONS,
+} from "../types/bots";
 import { BotNodesEditor } from "./BotNodesEditor";
 import { BotBindingsEditor } from "./BotBindingsEditor";
 import { BotSimulator } from "./BotSimulator";
 import { ChevronLeft, Trash } from "lucide-react";
+import { supabase } from "../lib/supabaseClient";
 
 type EditorTab = "general" | "nodes" | "bindings" | "simulator";
 
@@ -22,10 +26,10 @@ type BotFormValues = {
   name: string;
   description: string;
   status: BotRow["status"];
-  published: boolean;
   start_message: string;
   invalid_option_message: string;
   timeout_message: string;
+  session_timeout_hours: number;
   human_handoff_enabled: boolean;
   max_invalid_attempts: string;
 };
@@ -36,10 +40,10 @@ const DEFAULT_FORM: BotFormValues = {
   name: "",
   description: "",
   status: "inactive",
-  published: false,
   start_message: "",
   invalid_option_message: "",
   timeout_message: "",
+  session_timeout_hours: BOT_SESSION_TIMEOUT_DEFAULT_HOURS,
   human_handoff_enabled: true,
   max_invalid_attempts: "3",
 };
@@ -68,13 +72,14 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
   const isAdmin = membership?.role === "admin";
 
   const isNew = mode === "new";
+  const { botId: routeBotId } = useParams<{ botId?: string }>();
   const locationState = location.state as { botId?: string } | null;
-  const stateBotId = locationState?.botId ?? null;
+  const stateBotId = routeBotId ?? locationState?.botId ?? null;
   const [persistedBotId, setPersistedBotId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return sessionStorage.getItem(EDITOR_BOT_ID_STORAGE_KEY);
   });
-  
+
   // Se estamos no modo "new", ignoramos qualquer ID antigo
   const botId = !isNew ? (stateBotId ?? persistedBotId) : null;
 
@@ -127,10 +132,11 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
       name: row.name ?? "",
       description: row.description ?? "",
       status: row.status,
-      published: Boolean(row.published),
       start_message: row.start_message ?? "",
       invalid_option_message: row.invalid_option_message ?? "",
       timeout_message: row.timeout_message ?? "",
+      session_timeout_hours:
+        row.session_timeout_hours ?? BOT_SESSION_TIMEOUT_DEFAULT_HOURS,
       human_handoff_enabled: Boolean(row.human_handoff_enabled),
       max_invalid_attempts: String(row.max_invalid_attempts ?? 1),
     };
@@ -177,15 +183,25 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
     const maxInvalid = parsePositiveInt(form.max_invalid_attempts);
     if (!maxInvalid) return;
 
+    // Ativar exige um fluxo que não deixe o cliente sem resposta
+    const isActivating = form.status === "active" && bot?.status !== "active";
+    if (bot?.id && isActivating) {
+      const flowRes = await botsService.validateBotBeforeActivate(bot.id);
+      if (flowRes.error) {
+        toast.error(flowRes.error.message);
+        return;
+      }
+    }
+
     if (form.status === "active") {
       // 🚀 CORREÇÃO AQUI: Passamos explicitamente null ou string vazia se for novo bot, evitamos undefined
-      const botIdToExcept = bot?.id || ""; 
-      
+      const botIdToExcept = bot?.id || "";
+
       const activeBotRes = await botsService.findAnotherActiveBot(
         clinicId,
         botIdToExcept,
       );
-      
+
       if (activeBotRes.error) {
         toast.error(activeBotRes.error.message);
         return;
@@ -203,10 +219,10 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
       name: form.name.trim(),
       description: form.description.trim() || null,
       status: form.status,
-      published: Boolean(form.published),
       start_message: form.start_message.trim(),
       invalid_option_message: form.invalid_option_message.trim(),
       timeout_message: form.timeout_message.trim() || null,
+      session_timeout_hours: form.session_timeout_hours,
       human_handoff_enabled: Boolean(form.human_handoff_enabled),
       max_invalid_attempts: maxInvalid,
       is_deleted: false,
@@ -225,17 +241,36 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
 
     setBot(res.data);
     setForm(mapBotToForm(res.data));
-    toast.success("Bot salvo.");
 
-    if (isNew) {
-      // Sincroniza o ID no Session Storage para evitar que recarregamentos quebrem o estado
-      sessionStorage.setItem(EDITOR_BOT_ID_STORAGE_KEY, res.data.id);
-      
-      navigate("/inbox/bots/edit", {
-        replace: true,
-        state: { botId: res.data.id },
-      });
+    if (!isNew) {
+      toast.success("Bot salvo.");
+      return;
     }
+
+    const { data: authData } = await supabase.auth.getUser();
+    const setupRes = await botsService.setupNewBot(
+      clinicId,
+      res.data.id,
+      authData.user?.id ?? null,
+    );
+    if (setupRes.error) {
+      toast.warn(
+        `Bot criado, mas a configuração inicial falhou: ${setupRes.error.message}`,
+      );
+    } else if (setupRes.data.channelsBusy > 0) {
+      toast.info(
+        "Bot criado. O WhatsApp já está em uso por outro bot — vincule na aba Canais quando quiser trocar.",
+      );
+    } else if (setupRes.data.channelsLinked > 0) {
+      toast.success("Bot criado e vinculado ao WhatsApp. Agora monte as etapas.");
+    } else {
+      toast.success("Bot criado. Agora monte as etapas.");
+    }
+
+    // Sincroniza o ID no Session Storage para evitar que recarregamentos quebrem o estado
+    sessionStorage.setItem(EDITOR_BOT_ID_STORAGE_KEY, res.data.id);
+    setTab("nodes");
+    navigate(`/inbox/bots/edit/${res.data.id}`, { replace: true });
   };
 
   const handleDelete = async () => {
@@ -245,7 +280,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
       return;
     }
     const ok = window.confirm(
-      `Excluir o bot "${bot.name}"? Isso irá marcar como deletado (soft delete).`,
+      `Excluir o bot "${bot.name}"? Ele deixa de responder e os canais vinculados ficam livres.`,
     );
     if (!ok) return;
 
@@ -286,13 +321,14 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div className="min-w-0">
-              <span
+              <button
+                type="button"
                 onClick={() => navigate("/inbox/bots")}
-                className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 cursor-pointer"
+                className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800"
               >
                 <ChevronLeft className="h-5 w-5" />
                 <span className="pb-0.5">Voltar</span>
-              </span>
+              </button>
               <h1 className="mt-1 break-words text-xl font-semibold text-gray-900 sm:text-2xl">
                 {title}
               </h1>
@@ -304,15 +340,17 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
             </div>
 
             <div className="flex flex-shrink-0 items-center gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleSave}
-                isLoading={saving}
-                disabled={!clinicId || !isAdmin || loading}
-              >
-                Salvar
-              </Button>
+              {tab === "general" ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleSave}
+                  isLoading={saving}
+                  disabled={!clinicId || !isAdmin || loading}
+                >
+                  {isNew ? "Criar bot" : "Salvar"}
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 size="sm"
@@ -416,66 +454,92 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="w-full border rounded-lg p-3">
+                {isNew ? (
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                    O bot é criado inativo, já com a etapa inicial e vinculado
+                    ao WhatsApp (se o canal não estiver em uso por outro bot).
+                    Depois de montar as etapas, ative-o aqui.
+                  </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="w-full">
+                      <label className="block text-sm font-medium text-[#1E1E1E] mb-1">
+                        Status
+                      </label>
+                      <select
+                        value={form.status}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, status: e.target.value as BotRow["status"] }))
+                        }
+                        disabled={!isAdmin || saving}
+                        className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
+                      >
+                        <option value="active">Ativo</option>
+                        <option value="inactive">Inativo</option>
+                      </select>
+                      <div className="mt-1 text-xs text-slate-500">
+                        Habilita o bot para responder mensagens nos canais conectados.
+                      </div>
+                    </div>
+
+                  </div>
+                )}
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <Input
+                      label="Máx. tentativas inválidas"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={form.max_invalid_attempts}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          max_invalid_attempts: e.target.value,
+                        }))
+                      }
+                      error={errors.max_invalid_attempts}
+                      disabled={!isAdmin || saving}
+                    />
+                    <div className="mt-1 text-xs text-slate-500">
+                      Ao atingir o limite o bot para de responder e a conversa
+                      segue na fila de atendimento.
+                    </div>
+                  </div>
+
+                  <div className="w-full">
                     <label className="block text-sm font-medium text-[#1E1E1E] mb-1">
-                      Status
+                      Encerrar sessão por inatividade
                     </label>
                     <select
-                      value={form.status}
+                      value={form.session_timeout_hours}
                       onChange={(e) =>
-                        setForm((p) => ({ ...p, status: e.target.value as BotRow["status"] }))
+                        setForm((p) => ({
+                          ...p,
+                          session_timeout_hours: Number(e.target.value),
+                        }))
                       }
                       disabled={!isAdmin || saving}
                       className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
                     >
-                      <option value="active">Ativo</option>
-                      <option value="inactive">Inativo</option>
+                      {BOT_SESSION_TIMEOUT_HOUR_OPTIONS.map((hours) => (
+                        <option key={hours} value={hours}>
+                          {hours === 1 ? "1 hora" : `${hours} horas`}
+                        </option>
+                      ))}
                     </select>
                     <div className="mt-1 text-xs text-slate-500">
-                      Habilita o bot para responder mensagens nos canais conectados.
+                      Se o cliente parar de responder ao bot por esse tempo, a
+                      sessão é encerrada e a conversa segue na fila de
+                      atendimento.
                     </div>
                   </div>
-
-                  <Toggle
-                    label="Publicado"
-                    helper="Marca este fluxo como versão oficial do bot."
-                    checked={form.published}
-                    onChange={(checked) =>
-                      setForm((p) => ({ ...p, published: checked }))
-                    }
-                    disabled={!isAdmin || saving}
-                  />
-
-                  <Toggle
-                    label="Transferência para atendente"
-                    helper="Quando ativado, o bot pode encaminhar a conversa para atendimento humano."
-                    checked={form.human_handoff_enabled}
-                    onChange={(checked) =>
-                      setForm((p) => ({ ...p, human_handoff_enabled: checked }))
-                    }
-                    disabled={!isAdmin || saving}
-                  />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Input
-                    label="Máx. tentativas inválidas"
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={form.max_invalid_attempts}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        max_invalid_attempts: e.target.value,
-                      }))
-                    }
-                    error={errors.max_invalid_attempts}
-                    disabled={!isAdmin || saving}
-                  />
-                  <Input
-                    label="Mensagem de timeout"
+                <div>
+                  <Textarea
+                    label="Mensagem ao encerrar por inatividade (opcional)"
                     value={form.timeout_message}
                     onChange={(e) =>
                       setForm((p) => ({
@@ -484,12 +548,17 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                       }))
                     }
                     disabled={!isAdmin || saving}
+                    placeholder="Ex: Encerramos o atendimento automático por falta de resposta. Se precisar, é só mandar uma nova mensagem."
                   />
+                  <div className="mt-1 text-xs text-slate-500">
+                    Enviada ao cliente quando a sessão é encerrada por tempo.
+                    Em branco, o bot encerra sem avisar.
+                  </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <Textarea
-                    label="Mensagem inicial"
+                    label="Mensagem de boas-vindas"
                     value={form.start_message}
                     onChange={(e) =>
                       setForm((p) => ({ ...p, start_message: e.target.value }))
@@ -536,6 +605,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
           <BotBindingsEditor
             clinicId={clinicId!}
             botId={bot!.id}
+            botStatus={bot!.status}
             isAdmin={isAdmin}
           />
         ) : tab === "simulator" ? (

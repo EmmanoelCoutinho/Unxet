@@ -15,7 +15,9 @@ import { Toggle } from "../components/ui/Toggle";
 import { Badge } from "../components/ui/Badge";
 import { botsService } from "../services/bots";
 import {
+  BOT_MENU_MAX_OPTIONS,
   BOT_OPTION_ACTION_TYPE_VALUES,
+  BOT_OPTION_LABEL_MAX_LENGTH,
   BOT_ROOT_NODE_KEY,
   type BotNodeRow,
   type BotOptionRow,
@@ -119,6 +121,49 @@ const getEndSessionControlState = (
   }
 };
 
+const isNodeDirty = (node: BotNodeRow, saved?: BotNodeRow) =>
+  !saved ||
+  node.node_key !== saved.node_key ||
+  node.title !== saved.title ||
+  node.message !== saved.message;
+
+const isOptionDirty = (
+  opt: BotOptionRow | OptionDraft,
+  saved?: BotOptionRow,
+) =>
+  !saved ||
+  opt.option_value !== saved.option_value ||
+  opt.label !== saved.label ||
+  opt.action_type !== saved.action_type ||
+  (opt.next_node_id ?? null) !== (saved.next_node_id ?? null) ||
+  (opt.target_department_id ?? null) !== (saved.target_department_id ?? null) ||
+  (opt.tag_id ?? null) !== (saved.tag_id ?? null) ||
+  (opt.message_to_send ?? "") !== (saved.message_to_send ?? "") ||
+  normalizeOptionEndSession(opt) !== Boolean(saved.end_session);
+
+// Campo obrigatório de cada ação: sem ele o cliente escolhe a opção e nada acontece
+const getOptionActionError = (opt: BotOptionRow | OptionDraft) => {
+  if (opt.action_type === "go_to_node" && !opt.next_node_id) {
+    return "Selecione a próxima etapa.";
+  }
+  if (opt.action_type === "transfer_to_department" && !opt.target_department_id) {
+    return "Selecione o departamento.";
+  }
+  if (opt.action_type === "add_tag" && !opt.tag_id) {
+    return "Selecione a tag.";
+  }
+  if (opt.action_type === "send_message" && !opt.message_to_send?.trim()) {
+    return "Escreva a mensagem que será enviada.";
+  }
+  return null;
+};
+
+const UnsavedBadge = () => (
+  <span className="text-xs font-medium text-[#F97316]">
+    Alterações não salvas
+  </span>
+);
+
 const NodeBadge = ({ node }: { node: BotNodeRow }) => {
   const isRoot = node.node_key === BOT_ROOT_NODE_KEY;
   return (
@@ -140,6 +185,13 @@ export const BotNodesEditor = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const [nodes, setNodes] = useState<BotNodeRow[]>([]);
+  // Último estado gravado no banco, para sinalizar o que ainda não foi salvo
+  const [savedNodesById, setSavedNodesById] = useState<
+    Record<string, BotNodeRow>
+  >({});
+  const [savedOptionsById, setSavedOptionsById] = useState<
+    Record<string, BotOptionRow>
+  >({});
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
@@ -189,6 +241,7 @@ export const BotNodesEditor = ({
 
     const list = nodesRes.data;
     setNodes(list);
+    setSavedNodesById(Object.fromEntries(list.map((n) => [n.id, n])));
     setDepartments(depsRes.data ?? []);
     setTags(tagsRes.data ?? []);
 
@@ -215,6 +268,10 @@ export const BotNodesEditor = ({
         return;
       }
       setOptionsByNodeId((prev) => ({ ...prev, [nodeId]: res.data }));
+      setSavedOptionsById((prev) => ({
+        ...prev,
+        ...Object.fromEntries(res.data.map((o) => [o.id, o])),
+      }));
     },
     [optionsByNodeId],
   );
@@ -250,6 +307,7 @@ export const BotNodesEditor = ({
 
     if (res.error) return toast.error(res.error.message);
     setNodes((prev) => [res.data, ...prev]);
+    setSavedNodesById((prev) => ({ ...prev, [res.data.id]: res.data }));
     setSelectedNodeId(res.data.id);
     toast.success("Etapa inicial criada.");
   };
@@ -259,12 +317,17 @@ export const BotNodesEditor = ({
     const nextSort =
       nodes.reduce((max, n) => Math.max(max, n.sort_order ?? 0), 0) + 1;
 
+    // A chave é única por bot; depois de exclusões o número pode repetir
+    const usedKeys = new Set(nodes.map((n) => n.node_key));
+    let keyNumber = nextSort;
+    while (usedKeys.has(`node_${keyNumber}`)) keyNumber++;
+
     setSavingNodeId("new");
     const res = await botsService.createNode({
       bot_id: botId,
       clinic_id: clinicId,
-      node_key: `node_${nextSort}`,
-      title: `Etapa ${nextSort}`,
+      node_key: `node_${keyNumber}`,
+      title: `Etapa ${keyNumber}`,
       message: "",
       node_type: "menu",
       sort_order: nextSort,
@@ -273,8 +336,9 @@ export const BotNodesEditor = ({
 
     if (res.error) return toast.error(res.error.message);
     setNodes((prev) => [...prev, res.data]);
+    // Sem snapshot salvo de propósito: a etapa nasce sem mensagem e precisa ser salva
     setSelectedNodeId(res.data.id);
-    toast.success("Etapa criada.");
+    toast.success("Etapa criada. Escreva a mensagem e salve.");
   };
 
   const handleSaveNode = async (node: BotNodeRow) => {
@@ -302,6 +366,7 @@ export const BotNodesEditor = ({
     setSavingNodeId(null);
     if (res.error) return toast.error(res.error.message);
     setNodes((prev) => prev.map((n) => (n.id === node.id ? res.data : n)));
+    setSavedNodesById((prev) => ({ ...prev, [node.id]: res.data }));
     toast.success("Etapa salva.");
   };
 
@@ -310,7 +375,9 @@ export const BotNodesEditor = ({
     if (node.node_key === BOT_ROOT_NODE_KEY) {
       return toast.error("A etapa inicial não pode ser removida.");
     }
-    const ok = window.confirm(`Remover a etapa "${node.title}"?`);
+    const ok = window.confirm(
+      `Remover a etapa "${node.title}"? As opções dela são apagadas e as opções de outras etapas que levam até ela ficam sem destino.`,
+    );
     if (!ok) return;
 
     setDeletingNodeId(node.id);
@@ -319,11 +386,23 @@ export const BotNodesEditor = ({
     if (res.error) return toast.error(res.error.message);
 
     setNodes((prev) => prev.filter((n) => n.id !== node.id));
+    // O banco zera next_node_id das opções que apontavam para a etapa removida
+    const clearTarget = <T extends BotOptionRow | OptionDraft>(o: T): T =>
+      o.next_node_id === node.id ? { ...o, next_node_id: null } : o;
     setOptionsByNodeId((prev) => {
-      const copy = { ...prev };
-      delete copy[node.id];
+      const copy: typeof prev = {};
+      for (const [nodeId, list] of Object.entries(prev)) {
+        if (nodeId === node.id) continue;
+        copy[nodeId] = list.map(clearTarget);
+      }
       return copy;
     });
+    setSavedOptionsById((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).map(([id, o]) => [id, clearTarget(o)]),
+      ),
+    );
+    setSelectedNodeId(rootNode?.id ?? null);
     toast.success("Etapa removida.");
   };
 
@@ -382,7 +461,11 @@ export const BotNodesEditor = ({
     const current = optionsByNodeId[nodeId] ?? [];
     const nextSort =
       current.reduce((max, o) => Math.max(max, o.sort_order ?? 0), 0) + 1;
-    const nextValue = String(current.length + 1);
+    // Primeiro número livre: o valor é único dentro da etapa
+    const usedValues = new Set(current.map((o) => o.option_value.trim()));
+    let valueNumber = 1;
+    while (usedValues.has(String(valueNumber))) valueNumber++;
+    const nextValue = String(valueNumber);
 
     const draft: OptionDraft = {
       __draftId: makeDraftId(),
@@ -408,9 +491,21 @@ export const BotNodesEditor = ({
   ) => {
     if (!isAdmin) return toast.error("Você não tem permissão para esta ação.");
     if (!opt.option_value.trim())
-      return toast.error("option_value é obrigatório.");
-    if (!opt.label.trim()) return toast.error("label é obrigatório.");
-    if (!opt.action_type) return toast.error("action_type é obrigatório.");
+      return toast.error("Informe o valor da opção (ex.: 1).");
+    if (!opt.label.trim()) return toast.error("Informe o texto da opção.");
+    if (!opt.action_type) return toast.error("Selecione a ação da opção.");
+
+    const actionError = getOptionActionError(opt);
+    if (actionError) return toast.error(actionError);
+
+    const optionValue = opt.option_value.trim().toLowerCase();
+    const duplicated = (optionsByNodeId[nodeId] ?? []).some(
+      (o) =>
+        o !== opt && o.option_value.trim().toLowerCase() === optionValue,
+    );
+    if (duplicated) {
+      return toast.error("Já existe uma opção com esse valor nesta etapa.");
+    }
 
     const optionKey =
       (opt as BotOptionRow).id ?? (opt as OptionDraft).__draftId;
@@ -430,11 +525,9 @@ export const BotNodesEditor = ({
           : null,
       tag_id: opt.action_type === "add_tag" ? (opt.tag_id ?? null) : null,
       message_to_send:
-        opt.action_type === "send_message" ||
-        opt.action_type === "handoff_to_human" ||
-        opt.action_type === "end_flow"
-          ? opt.message_to_send?.trim() || null
-          : null,
+        opt.action_type === "go_to_node"
+          ? null
+          : opt.message_to_send?.trim() || null,
       end_session: normalizeOptionEndSession(opt),
       sort_order: opt.sort_order ?? 1,
     };
@@ -459,6 +552,7 @@ export const BotNodesEditor = ({
     if (res.error) return toast.error(res.error.message);
 
     const saved = res.data;
+    setSavedOptionsById((prev) => ({ ...prev, [saved.id]: saved }));
     setOptionsByNodeId((prev) => {
       const list = prev[nodeId] ?? [];
       const next = list.map((o) => {
@@ -557,7 +651,7 @@ export const BotNodesEditor = ({
           <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-3 text-sm text-yellow-800">
             <div className="font-medium">Etapa inicial ausente</div>
             <div className="mt-1">
-              Para publicar, é necessário ter uma etapa com chave{" "}
+              Para ativar o bot, é necessário ter uma etapa com chave{" "}
               <span className="font-mono">"root"</span>.
             </div>
             <div className="mt-3">
@@ -612,6 +706,14 @@ export const BotNodesEditor = ({
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-slate-900">
                           {n.title || "(sem título)"}
+                          {isNodeDirty(n, savedNodesById[n.id]) ? (
+                            <span
+                              className="ml-1 text-[#F97316]"
+                              title="Alterações não salvas"
+                            >
+                              •
+                            </span>
+                          ) : null}
                         </div>
                         <div className="mt-1">
                           <NodeBadge node={n} />
@@ -664,7 +766,10 @@ export const BotNodesEditor = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {isNodeDirty(selectedNode, savedNodesById[selectedNode.id]) ? (
+                    <UnsavedBadge />
+                  ) : null}
                   <Button
                     variant="primary"
                     size="sm"
@@ -719,20 +824,6 @@ export const BotNodesEditor = ({
                 />
               </div>
 
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <Input
-                  label="Ordem"
-                  type="number"
-                  value={String(selectedNode.sort_order ?? 1)}
-                  disabled={!isAdmin}
-                  onChange={(e) =>
-                    updateNodeLocal(selectedNode.id, {
-                      sort_order: Number(e.target.value),
-                    })
-                  }
-                />
-              </div>
-
               <div className="mt-4">
                 <Textarea
                   label="Mensagem"
@@ -743,7 +834,7 @@ export const BotNodesEditor = ({
                       message: e.target.value,
                     })
                   }
-                  placeholder="Texto enviado quando esta etapa e executada."
+                  placeholder="Texto enviado quando o cliente chega nesta etapa."
                 />
               </div>
             </Card>
@@ -755,7 +846,8 @@ export const BotNodesEditor = ({
                     Opções da etapa
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Configure as opções numeradas e suas ações.
+                    Configure as opções numeradas e suas ações. Cada opção é
+                    salva separadamente.
                   </p>
                 </div>
 
@@ -783,10 +875,18 @@ export const BotNodesEditor = ({
                 </div>
               ) : selectedOptions.length === 0 ? (
                 <div className="mt-4 text-sm text-slate-500">
-                  Nenhuma opção cadastrada.
+                  Nenhuma opção cadastrada. Sem opções, o bot envia a mensagem
+                  desta etapa e encerra o atendimento automático.
                 </div>
               ) : (
                 <div className="mt-4 space-y-3">
+                  {selectedOptions.length > BOT_MENU_MAX_OPTIONS ? (
+                    <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+                      O menu do WhatsApp (API oficial) mostra no máximo{" "}
+                      {BOT_MENU_MAX_OPTIONS} opções. As demais não aparecem
+                      para o cliente — divida em mais etapas.
+                    </div>
+                  ) : null}
                   {selectedOptions
                     .slice()
                     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -803,10 +903,13 @@ export const BotNodesEditor = ({
                       const showDepartment =
                         opt.action_type === "transfer_to_department";
                       const showTag = opt.action_type === "add_tag";
-                      const showMessage =
-                        opt.action_type === "send_message" ||
-                        opt.action_type === "handoff_to_human" ||
-                        opt.action_type === "end_flow";
+                      const showMessage = opt.action_type !== "go_to_node";
+                      const dirty = isOptionDirty(
+                        opt,
+                        savedOptionsById[(opt as BotOptionRow).id],
+                      );
+                      const labelTooLong =
+                        opt.label.trim().length > BOT_OPTION_LABEL_MAX_LENGTH;
                       const normalizedEndSession =
                         normalizeOptionEndSession(opt);
                       const endSessionControl = getEndSessionControlState(opt);
@@ -819,14 +922,10 @@ export const BotNodesEditor = ({
                           <div className="flex items-start justify-between gap-3">
                             <div className="text-sm font-semibold text-slate-900">
                               Opção #{opt.sort_order}
-                              {(opt as BotOptionRow).id ? null : (
-                                <span className="ml-2 text-xs font-medium text-slate-500">
-                                  (não salva)
-                                </span>
-                              )}
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              {dirty ? <UnsavedBadge /> : null}
                               <Button
                                 variant="primary"
                                 size="sm"
@@ -863,16 +962,25 @@ export const BotNodesEditor = ({
                                 })
                               }
                             />
-                            <Input
-                              label="Texto da opção"
-                              value={opt.label}
-                              disabled={!isAdmin}
-                              onChange={(e) =>
-                                updateOptionLocal(selectedNode.id, optId, {
-                                  label: e.target.value,
-                                })
-                              }
-                            />
+                            <div>
+                              <Input
+                                label="Texto da opção"
+                                value={opt.label}
+                                disabled={!isAdmin}
+                                onChange={(e) =>
+                                  updateOptionLocal(selectedNode.id, optId, {
+                                    label: e.target.value,
+                                  })
+                                }
+                              />
+                              {labelTooLong ? (
+                                <div className="mt-1 text-xs text-[#F97316]">
+                                  No menu do WhatsApp (API oficial) o texto é
+                                  cortado em {BOT_OPTION_LABEL_MAX_LENGTH}{" "}
+                                  caracteres.
+                                </div>
+                              ) : null}
+                            </div>
                             <div className="w-full">
                               <label className="mb-1 block text-sm font-medium text-[#1E1E1E]">
                                 Ação
@@ -989,7 +1097,11 @@ export const BotNodesEditor = ({
                           {showMessage ? (
                             <div className="mt-4">
                               <Textarea
-                                label="Mensagem da Ação"
+                                label={
+                                  opt.action_type === "send_message"
+                                    ? "Mensagem enviada"
+                                    : "Mensagem enviada ao escolher (opcional)"
+                                }
                                 value={opt.message_to_send ?? ""}
                                 disabled={!isAdmin}
                                 onChange={(e) =>
@@ -997,7 +1109,11 @@ export const BotNodesEditor = ({
                                     message_to_send: e.target.value,
                                   })
                                 }
-                                placeholder="Mensagem opcional enviada junto da ação."
+                                placeholder={
+                                  opt.action_type === "add_tag"
+                                    ? "Ex.: Anotado! Em breve um atendente fala com você."
+                                    : "Ex.: Certo! Vou te encaminhar para um atendente."
+                                }
                               />
                             </div>
                           ) : null}

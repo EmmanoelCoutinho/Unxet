@@ -396,6 +396,9 @@ verify_jwt = false
 [functions.evolution-connection-sync]
 verify_jwt = false
 
+[functions.bot-session-timeout]
+verify_jwt = false
+
 [functions.transcribe-audio]
 verify_jwt = false
 

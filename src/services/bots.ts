@@ -13,6 +13,7 @@ import type {
   UpdateBotOptionInput,
   UpsertBotChannelBindingInput,
 } from "../types/bots";
+import { BOT_ROOT_NODE_KEY, isBotSupportedChannel } from "../types/bots";
 
 type SupabaseResult<T> =
   | { data: T; error: null }
@@ -25,19 +26,30 @@ type SupabaseLikeError = {
   hint?: string | null;
 };
 
-const BOT_CHANNEL_BINDING_UNIQUE_CONSTRAINT =
-  "ux_bot_channel_bindings_one_active_per_channel";
+const UNIQUE_CONSTRAINT_MESSAGES: Record<string, string> = {
+  ux_bot_channel_bindings_one_active_per_channel:
+    "Este canal já está vinculado a outro bot. Desvincule o outro bot primeiro.",
+  bot_nodes_bot_id_node_key_key:
+    "Já existe uma etapa com essa chave neste bot.",
+  bot_options_bot_node_id_option_value_key:
+    "Já existe uma opção com esse valor nesta etapa.",
+};
 
 const getFriendlySupabaseErrorMessage = (error: SupabaseLikeError) => {
-  if (
-    error.code === "23505" &&
-    error.message?.includes(BOT_CHANNEL_BINDING_UNIQUE_CONSTRAINT)
-  ) {
-    return "Só pode ter um bot ativo por canal de comunicação.";
+  if (error.code === "23505") {
+    for (const [constraint, message] of Object.entries(
+      UNIQUE_CONSTRAINT_MESSAGES,
+    )) {
+      if (error.message?.includes(constraint)) return message;
+    }
   }
 
   return error.message ?? null;
 };
+
+// Nunca inclua access_token / evolution_api_key aqui
+const CHANNEL_CONNECTION_COLUMNS =
+  "id,clinic_id,provider,channel,status,connected_phone,connected_name,updated_at";
 
 const isSupabaseLikeError = (error: unknown): error is SupabaseLikeError =>
   typeof error === "object" && error !== null;
@@ -90,43 +102,73 @@ export const botsService = {
     }
   },
 
-  async validateBotBeforePublish(
-    botId: string,
-  ): Promise<SupabaseResult<{ ok: true }>> {
+  // Lista os problemas que deixariam o cliente preso ou sem resposta no fluxo
+  async validateBotFlow(botId: string): Promise<SupabaseResult<string[]>> {
     try {
       const nodesRes = await this.listNodes(botId);
       if (nodesRes.error) return { data: null, error: nodesRes.error };
 
-      const root =
-        (nodesRes.data ?? []).find((n) => n.node_key === "root") ?? null;
+      const nodes = nodesRes.data;
+      const optsRes = await this.listOptionsByNodeIds(nodes.map((n) => n.id));
+      if (optsRes.error) return { data: null, error: optsRes.error };
+
+      const problems: string[] = [];
+      const root = nodes.find((n) => n.node_key === BOT_ROOT_NODE_KEY) ?? null;
 
       if (!root) {
-        return {
-          data: null,
-          error: new Error(
-            'Publicação bloqueada: node root (node_key="root") ausente.',
-          ),
-        };
+        problems.push("Crie a etapa inicial do fluxo.");
+      } else if ((optsRes.data[root.id] ?? []).length === 0) {
+        problems.push("A etapa inicial precisa ter ao menos uma opção.");
       }
 
-      if (root.node_type === "menu") {
-        const optsRes = await this.listOptions(root.id);
-        if (optsRes.error) return { data: null, error: optsRes.error };
+      for (const node of nodes) {
+        const where = `Etapa "${node.title || node.node_key}"`;
+        if (!node.message?.trim()) problems.push(`${where}: sem mensagem.`);
 
-        if ((optsRes.data ?? []).length === 0) {
-          return {
-            data: null,
-            error: new Error(
-              "Publicação bloqueada: root menu precisa ter ao menos 1 opção.",
-            ),
-          };
+        for (const opt of optsRes.data[node.id] ?? []) {
+          const optWhere = `${where}, opção "${opt.label || opt.option_value}"`;
+          if (opt.action_type === "go_to_node" && !opt.next_node_id) {
+            problems.push(`${optWhere}: selecione a próxima etapa.`);
+          } else if (
+            opt.action_type === "transfer_to_department" &&
+            !opt.target_department_id
+          ) {
+            problems.push(`${optWhere}: selecione o departamento.`);
+          } else if (opt.action_type === "add_tag" && !opt.tag_id) {
+            problems.push(`${optWhere}: selecione a tag.`);
+          } else if (
+            opt.action_type === "send_message" &&
+            !opt.message_to_send?.trim()
+          ) {
+            problems.push(`${optWhere}: escreva a mensagem.`);
+          }
         }
       }
 
-      return { data: { ok: true }, error: null };
+      return { data: problems, error: null };
     } catch (e) {
       return { data: null, error: asError(e) };
     }
+  },
+
+  async validateBotBeforeActivate(
+    botId: string,
+  ): Promise<SupabaseResult<{ ok: true }>> {
+    const res = await this.validateBotFlow(botId);
+    if (res.error) return { data: null, error: res.error };
+
+    if (res.data.length > 0) {
+      const shown = res.data.slice(0, 3).join(" ");
+      const rest = res.data.length - 3;
+      return {
+        data: null,
+        error: new Error(
+          `Corrija o fluxo antes de continuar: ${shown}${rest > 0 ? ` (+${rest})` : ""}`,
+        ),
+      };
+    }
+
+    return { data: { ok: true }, error: null };
   },
 
   async listBots(clinicId: string): Promise<SupabaseResult<BotRow[]>> {
@@ -155,6 +197,7 @@ export const botsService = {
         .select("*")
         .eq("clinic_id", clinicId)
         .eq("id", botId)
+        .eq("is_deleted", false)
         .maybeSingle();
 
       if (error) return { data: null, error: asError(error) };
@@ -206,7 +249,81 @@ export const botsService = {
     clinicId: string,
     botId: string,
   ): Promise<SupabaseResult<BotRow>> {
-    return this.updateBot(clinicId, botId, { is_deleted: true });
+    // Um vínculo ligado de bot excluído continuaria ocupando o canal
+    // (índice único por canal) sem aparecer em nenhuma tela.
+    try {
+      const { error } = await supabase
+        .from("bot_channel_bindings")
+        .update({ enabled: false })
+        .eq("clinic_id", clinicId)
+        .eq("bot_id", botId);
+      if (error) return { data: null, error: asError(error) };
+    } catch (e) {
+      return { data: null, error: asError(e) };
+    }
+
+    return this.updateBot(clinicId, botId, {
+      is_deleted: true,
+      status: "inactive",
+      published: false,
+    });
+  },
+
+  // Etapa inicial + WhatsApp já ligado, para o bot novo sair pronto para editar
+  async setupNewBot(
+    clinicId: string,
+    botId: string,
+    createdBy: string | null,
+  ): Promise<SupabaseResult<{ channelsLinked: number; channelsBusy: number }>> {
+    try {
+      const rootRes = await this.createNode({
+        bot_id: botId,
+        clinic_id: clinicId,
+        node_key: BOT_ROOT_NODE_KEY,
+        title: "Etapa inicial",
+        message: "Escolha uma opção:",
+        node_type: "menu",
+        sort_order: 1,
+      });
+      if (rootRes.error) return { data: null, error: rootRes.error };
+
+      const [connRes, enabledRes] = await Promise.all([
+        this.listChannelConnections(clinicId),
+        this.listEnabledBindings(clinicId),
+      ]);
+      if (connRes.error) return { data: null, error: connRes.error };
+      if (enabledRes.error) return { data: null, error: enabledRes.error };
+
+      const busy = new Set(enabledRes.data.map((b) => b.channel_connection_id));
+      const supported = connRes.data.filter((c) =>
+        isBotSupportedChannel(c.channel),
+      );
+      const free = supported.filter((c) => !busy.has(c.id));
+
+      if (free.length > 0) {
+        const { error } = await supabase.from("bot_channel_bindings").insert(
+          free.map((c) => ({
+            clinic_id: clinicId,
+            bot_id: botId,
+            channel_connection_id: c.id,
+            enabled: true,
+            trigger_type: "first_inbound",
+            created_by: createdBy,
+          })),
+        );
+        if (error) return { data: null, error: asError(error) };
+      }
+
+      return {
+        data: {
+          channelsLinked: free.length,
+          channelsBusy: supported.length - free.length,
+        },
+        error: null,
+      };
+    } catch (e) {
+      return { data: null, error: asError(e) };
+    }
   },
 
   async duplicateBot(
@@ -221,16 +338,13 @@ export const botsService = {
       if (nodesRes.error) return { data: null, error: nodesRes.error };
 
       const oldNodes = nodesRes.data ?? [];
-      const oldOptionsByNodeId = new Map<string, BotOptionRow[]>();
-
-      for (const node of oldNodes) {
-        const optionsRes = await this.listOptions(node.id);
-        if (optionsRes.error) return { data: null, error: optionsRes.error };
-        oldOptionsByNodeId.set(node.id, optionsRes.data ?? []);
-      }
-
-      const bindingsRes = await this.listBindings(clinicId, botId);
-      if (bindingsRes.error) return { data: null, error: bindingsRes.error };
+      const optionsRes = await this.listOptionsByNodeIds(
+        oldNodes.map((n) => n.id),
+      );
+      if (optionsRes.error) return { data: null, error: optionsRes.error };
+      const oldOptionsByNodeId = new Map<string, BotOptionRow[]>(
+        Object.entries(optionsRes.data),
+      );
 
       const sourceBot = botRes.data;
 
@@ -240,7 +354,8 @@ export const botsService = {
           clinic_id: clinicId,
           name: `${sourceBot.name} (cópia)`,
           description: sourceBot.description,
-          status: sourceBot.status,
+          // A cópia nasce desligada: só pode haver um bot ativo
+          status: "inactive",
           type: sourceBot.type,
           published: false,
           start_message: sourceBot.start_message,
@@ -266,6 +381,8 @@ export const botsService = {
         node_type: n.node_type,
         sort_order: n.sort_order,
       }));
+
+      if (nodePayloads.length === 0) return { data: newBot, error: null };
 
       const { data: createdNodes, error: createNodesErr } = await supabase
         .from("bot_nodes")
@@ -331,27 +448,7 @@ export const botsService = {
         }
       }
 
-      const bindingPayloads: UpsertBotChannelBindingInput[] = (
-        bindingsRes.data ?? []
-      ).map((b) => ({
-        clinic_id: clinicId,
-        bot_id: newBot.id,
-        channel_connection_id: b.channel_connection_id,
-        enabled: false,
-        trigger_type: b.trigger_type,
-        created_by: b.created_by ?? null,
-      }));
-
-      if (bindingPayloads.length > 0) {
-        const { error: createBindingsErr } = await supabase
-          .from("bot_channel_bindings")
-          .insert(bindingPayloads);
-
-        if (createBindingsErr) {
-          return { data: null, error: asError(createBindingsErr) };
-        }
-      }
-
+      // Vínculos com canais não são copiados: cada canal aceita um único bot
       return { data: newBot, error: null };
     } catch (e) {
       return { data: null, error: asError(e) };
@@ -438,6 +535,30 @@ export const botsService = {
     }
   },
 
+  async listOptionsByNodeIds(
+    nodeIds: string[],
+  ): Promise<SupabaseResult<Record<string, BotOptionRow[]>>> {
+    try {
+      const byNodeId: Record<string, BotOptionRow[]> = {};
+      for (const id of nodeIds) byNodeId[id] = [];
+      if (nodeIds.length === 0) return { data: byNodeId, error: null };
+
+      const { data, error } = await supabase
+        .from("bot_options")
+        .select("*")
+        .in("bot_node_id", nodeIds)
+        .order("sort_order", { ascending: true });
+
+      if (error) return { data: null, error: asError(error) };
+      for (const opt of (data ?? []) as BotOptionRow[]) {
+        (byNodeId[opt.bot_node_id] ??= []).push(opt);
+      }
+      return { data: byNodeId, error: null };
+    } catch (e) {
+      return { data: null, error: asError(e) };
+    }
+  },
+
   async createOption(
     payload: CreateBotOptionInput,
   ): Promise<SupabaseResult<BotOptionRow>> {
@@ -506,6 +627,64 @@ export const botsService = {
     }
   },
 
+  // Vínculos ligados de bots não excluídos (ativos ou não): é o que ocupa o canal
+  async listEnabledBindings(
+    clinicId: string,
+  ): Promise<
+    SupabaseResult<
+      Array<{ bot_id: string; channel_connection_id: string; bot_name: string }>
+    >
+  > {
+    try {
+      const { data, error } = await supabase
+        .from("bot_channel_bindings")
+        .select("bot_id,channel_connection_id,bots!inner(name,is_deleted)")
+        .eq("clinic_id", clinicId)
+        .eq("enabled", true)
+        .eq("bots.is_deleted", false);
+
+      if (error) return { data: null, error: asError(error) };
+
+      const rows = (data ?? []) as unknown as Array<{
+        bot_id: string;
+        channel_connection_id: string;
+        bots: { name: string } | Array<{ name: string }> | null;
+      }>;
+
+      return {
+        data: rows.map((r) => ({
+          bot_id: r.bot_id,
+          channel_connection_id: r.channel_connection_id,
+          bot_name:
+            (Array.isArray(r.bots) ? r.bots[0]?.name : r.bots?.name) ?? "",
+        })),
+        error: null,
+      };
+    } catch (e) {
+      return { data: null, error: asError(e) };
+    }
+  },
+
+  async disableBinding(
+    clinicId: string,
+    botId: string,
+    channelConnectionId: string,
+  ): Promise<SupabaseResult<true>> {
+    try {
+      const { error } = await supabase
+        .from("bot_channel_bindings")
+        .update({ enabled: false })
+        .eq("clinic_id", clinicId)
+        .eq("bot_id", botId)
+        .eq("channel_connection_id", channelConnectionId);
+
+      if (error) return { data: null, error: asError(error) };
+      return { data: true, error: null };
+    } catch (e) {
+      return { data: null, error: asError(e) };
+    }
+  },
+
   async upsertBinding(
     payload: UpsertBotChannelBindingInput,
   ): Promise<SupabaseResult<BotChannelBindingRow[]>> {
@@ -550,7 +729,7 @@ export const botsService = {
     try {
       const { data, error } = await supabase
         .from("channel_connections")
-        .select("*")
+        .select(CHANNEL_CONNECTION_COLUMNS)
         .eq("clinic_id", clinicId)
         .order("updated_at", { ascending: false });
 

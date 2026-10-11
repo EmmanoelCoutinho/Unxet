@@ -18,6 +18,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { queueTranscription, runInBackground } from "../_shared/transcription.ts";
 import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 import { queueInboundPush } from "../_shared/push.ts";
+import { timingSafeEqual } from "../_shared/security.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -49,8 +50,8 @@ serve(async (req)=>{
         status: 405
       });
     }
-    const secret = req.headers.get("x-internal-secret");
-    if (INTERNAL_BOT_SECRET && secret !== INTERNAL_BOT_SECRET) {
+    const secret = req.headers.get("x-internal-secret") ?? "";
+    if (!INTERNAL_BOT_SECRET || !timingSafeEqual(secret, INTERNAL_BOT_SECRET)) {
       return new Response("Unauthorized", {
         status: 401
       });
