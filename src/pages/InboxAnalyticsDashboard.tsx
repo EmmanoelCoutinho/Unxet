@@ -8,7 +8,7 @@ import {
   fetchSatisfactionSummary,
   type AnalyticsFilters,
   type AnalyticsResponse,
-  type BacklogItem,
+  type BacklogResult,
   type SatisfactionSummary,
 } from "../services/inboxAnalytics";
 import { formatHourRange, type PeakHourSummary } from "../lib/peakHour";
@@ -30,7 +30,36 @@ const CHANNEL_COLORS: Record<string, string> = {
   unknown: "#94a3b8",
 };
 
-const dateInputValue = (date: Date) => date.toISOString().slice(0, 10);
+// Data local (toISOString usaria UTC e viraria o dia às 21h no Brasil)
+const dateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+// Aceita só AAAA-MM-DD válido; vazio ou texto solto na URL caem no padrão
+const parseDateParam = (value: string | null, fallback: string) => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return fallback;
+  return Number.isNaN(new Date(`${value}T00:00:00`).getTime())
+    ? fallback
+    : value;
+};
+
+// Período sempre em ordem: se vier invertido, troca as pontas
+const resolveDateRange = (
+  start: string | null,
+  end: string | null,
+  defaults: { start: string; end: string },
+) => {
+  const safeStart = parseDateParam(start, defaults.start);
+  const safeEnd = parseDateParam(end, defaults.end);
+  return safeStart <= safeEnd
+    ? { start: safeStart, end: safeEnd }
+    : { start: safeEnd, end: safeStart };
+};
+
+const EMPTY_BACKLOG: BacklogResult = { items: [], total: 0 };
 
 const defaultDateRange = () => {
   const end = new Date();
@@ -268,7 +297,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
   );
 
   const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
-  const [backlog, setBacklog] = useState<BacklogItem[]>([]);
+  const [backlog, setBacklog] = useState<BacklogResult>(EMPTY_BACKLOG);
   const [satisfaction, setSatisfaction] = useState<SatisfactionSummary | null>(
     null,
   );
@@ -289,16 +318,22 @@ export const InboxAnalyticsDashboard: React.FC = () => {
   const filters = useMemo<AnalyticsFilters | null>(() => {
     if (!clinicId) return null;
 
-    const urlStart = searchParams.get("start") ?? defaults.start;
-    const urlEnd = searchParams.get("end") ?? defaults.end;
+    const range = resolveDateRange(
+      searchParams.get("start"),
+      searchParams.get("end"),
+      defaults,
+    );
+    // Fim exclusivo: início do dia seguinte ao último dia selecionado
+    const endExclusive = new Date(`${range.end}T00:00:00`);
+    endExclusive.setDate(endExclusive.getDate() + 1);
 
     const departmentId = searchParams.get("department_id") || undefined;
     const assignedUserId = searchParams.get("assigned_user_id") || undefined;
 
     return {
       clinicId,
-      start: new Date(`${urlStart}T00:00:00`).toISOString(),
-      end: new Date(`${urlEnd}T23:59:59`).toISOString(),
+      start: new Date(`${range.start}T00:00:00`).toISOString(),
+      end: endExclusive.toISOString(),
       channels: searchParams.getAll("channel"),
       departmentId,
       assignedUserId,
@@ -306,11 +341,14 @@ export const InboxAnalyticsDashboard: React.FC = () => {
   }, [clinicId, searchParams, defaults.end, defaults.start]);
 
   useEffect(() => {
-    const nextStart = searchParams.get("start") ?? defaults.start;
-    const nextEnd = searchParams.get("end") ?? defaults.end;
+    const range = resolveDateRange(
+      searchParams.get("start"),
+      searchParams.get("end"),
+      defaults,
+    );
 
-    setDraftStart(nextStart);
-    setDraftEnd(nextEnd);
+    setDraftStart(range.start);
+    setDraftEnd(range.end);
     setDraftChannels(searchParams.getAll("channel"));
     setDraftDepartmentId(searchParams.get("department_id") ?? "");
     setDraftAssignedUserId(searchParams.get("assigned_user_id") ?? "");
@@ -339,6 +377,9 @@ export const InboxAnalyticsDashboard: React.FC = () => {
   useEffect(() => {
     if (!filters) return;
 
+    // Filtros trocados no meio do carregamento: a resposta antiga é descartada
+    let cancelled = false;
+
     const load = async () => {
       setLoading(true);
       setError(null);
@@ -355,10 +396,17 @@ export const InboxAnalyticsDashboard: React.FC = () => {
             }),
           ]);
 
+        if (cancelled) return;
         setAnalytics(analyticsResult);
         setBacklog(backlogResult);
         setSatisfaction(satisfactionResult);
       } catch (fetchError: unknown) {
+        if (cancelled) return;
+        console.error("Erro ao carregar o painel:", fetchError);
+        // Não deixa números do filtro anterior na tela como se fossem os atuais
+        setAnalytics(null);
+        setBacklog(EMPTY_BACKLOG);
+        setSatisfaction(null);
         const message =
           fetchError instanceof Error
             ? fetchError.message
@@ -367,17 +415,21 @@ export const InboxAnalyticsDashboard: React.FC = () => {
             : "Erro ao carregar analytics.";
         setError(message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     load();
+    return () => {
+      cancelled = true;
+    };
   }, [filters]);
 
   const applyFilters = () => {
     const params = new URLSearchParams();
-    params.set("start", draftStart);
-    params.set("end", draftEnd);
+    const range = resolveDateRange(draftStart, draftEnd, defaults);
+    params.set("start", range.start);
+    params.set("end", range.end);
     draftChannels.forEach((channel) => params.append("channel", channel));
 
     if (draftDepartmentId) params.set("department_id", draftDepartmentId);
@@ -397,16 +449,22 @@ export const InboxAnalyticsDashboard: React.FC = () => {
 
   const backlogPage = useMemo(() => {
     const startIndex = (page - 1) * 20;
-    return backlog.slice(startIndex, startIndex + 20);
+    return backlog.items.slice(startIndex, startIndex + 20);
   }, [backlog, page]);
 
   useEffect(() => {
     setPage(1);
   }, [backlog]);
 
-  const totalPages = Math.max(1, Math.ceil(backlog.length / 20));
-  const hasData = !!analytics && analytics.kpis.leads > 0;
-  const backlogTotal = backlog.length;
+  const totalPages = Math.max(1, Math.ceil(backlog.items.length / 20));
+  // Mensagens do período também contam: pode haver movimento sem lead novo
+  const hasData =
+    !!analytics &&
+    analytics.kpis.leads +
+      analytics.kpis.inboundMessages +
+      analytics.kpis.outboundMessages >
+      0;
+  const backlogTotal = backlog.total;
 
   return (
     <div className="h-full overflow-y-auto bg-slate-50 p-3 sm:p-6">
@@ -528,7 +586,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
             subtitle="Principais indicadores do período para acompanhar volume, atendimento e backlog."
           />
           <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
-            {loading || !analytics ? (
+            {error ? null : loading || !analytics ? (
               Array.from({ length: 4 }).map((_, index) => <KpiSkeleton key={index} />)
             ) : (
               <>
@@ -541,11 +599,11 @@ export const InboxAnalyticsDashboard: React.FC = () => {
           </section>
 
           <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
-            {loading || !analytics ? (
+            {error ? null : loading || !analytics ? (
               Array.from({ length: 4 }).map((_, index) => <KpiSkeleton key={index} />)
             ) : (
               <>
-                <KpiCard label="Conversas ativas" value={analytics.kpis.activeConversations} />
+                <KpiCard label="Conversas ativas agora"value={analytics.kpis.activeConversations} />
                 <KpiCard
                   label="Tempo típico de 1ª resposta"
                   value={formatSeconds(analytics.kpis.p50FirstResponseSec)}
@@ -555,7 +613,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                   value={formatSeconds(analytics.kpis.p90FirstResponseSec)}
                 />
                 <KpiCard
-                  label="Dentro do SLA (até 2 min)"
+                  label={`1ª resposta em até ${formatSeconds(analytics.slaThresholdSec)}`}
                   value={
                     analytics.kpis.withinSlaPct !== null
                       ? `${analytics.kpis.withinSlaPct}%`
@@ -820,7 +878,10 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                 </p>
               </div>
               <div className="text-sm text-slate-600">
-                Total: <span className="font-semibold text-slate-900">{backlogTotal}</span>
+                Total:{" "}
+                <span className="font-semibold text-slate-900">
+                  {error ? "-" : backlogTotal}
+                </span>
               </div>
             </div>
 
@@ -852,7 +913,9 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                         className="px-2 py-6 sm:py-8 text-center text-slate-500"
                         colSpan={6}
                       >
-                        Sem backlog para os filtros atuais.
+                        {error
+                          ? "Não foi possível carregar as conversas aguardando resposta."
+                          : "Sem backlog para os filtros atuais."}
                       </td>
                     </tr>
                   ) : (
