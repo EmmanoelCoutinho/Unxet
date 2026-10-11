@@ -62,3 +62,55 @@ describe("mediaPathFromUrl (bucket privado)", () => {
     expect(mediaPathFromUrl(url)).toBeNull();
   });
 });
+
+describe("webhook da Evolution", () => {
+  let stripWebhookEventSuffix: (provided: string, secret: string) => string;
+  let redactWebhookSecrets: (body: unknown) => any;
+  let reconcileConnectionStatus: (
+    currentStatus: string,
+    evolutionState: string | null,
+    instanceExists: boolean,
+  ) => string | null;
+
+  beforeAll(async () => {
+    ({ stripWebhookEventSuffix, redactWebhookSecrets, reconcileConnectionStatus } = await import(
+      "./evolutionWebhook"
+    ));
+  });
+
+  it("remove o nome do evento colado no token (Webhook by Events)", () => {
+    expect(stripWebhookEventSuffix("abc123/messages-upsert", "abc123")).toBe("abc123");
+    expect(stripWebhookEventSuffix("abc123/connection-update", "abc123")).toBe("abc123");
+    expect(stripWebhookEventSuffix("abc123", "abc123")).toBe("abc123");
+  });
+
+  it("não transforma um token errado em válido", () => {
+    expect(stripWebhookEventSuffix("abc1234/messages-upsert", "abc123")).not.toBe("abc123");
+    expect(stripWebhookEventSuffix("xyz/messages-upsert", "abc123")).not.toBe("abc123");
+    expect(stripWebhookEventSuffix("", "abc123")).toBe("");
+  });
+
+  it("mascara apikey e token antes de logar, sem alterar o payload original", () => {
+    const body = {
+      event: "messages.set",
+      apikey: "KEY",
+      destination: "https://x.supabase.co/functions/v1/evolution-in?token=SECRET/messages-set",
+    };
+    const redacted = redactWebhookSecrets(body);
+    expect(JSON.stringify(redacted)).not.toMatch(/KEY|SECRET/);
+    expect(redacted.event).toBe("messages.set");
+    expect(body.apikey).toBe("KEY");
+  });
+
+  it.each([
+    ["connected", "close", true, "disconnected"],
+    ["connected", null, false, "disconnected"],
+    ["connected", "open", true, null],
+    ["connected", "connecting", true, null],
+    ["disconnected", "open", true, "connected"],
+    ["disconnected", "close", true, null],
+    ["disconnected", null, false, null],
+  ])("status %s + estado %j (instância existe: %s) → %j", (status, state, exists, expected) => {
+    expect(reconcileConnectionStatus(status, state, exists)).toBe(expected);
+  });
+});
