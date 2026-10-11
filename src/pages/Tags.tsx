@@ -44,6 +44,22 @@ const AVAILABLE_COLORS = [
   "#AC8E68",
 ];
 
+const TAG_NAME_MAX_LENGTH = 60;
+
+// Traduz os erros do banco que o usuário consegue provocar pela tela
+const getTagErrorMessage = (err: any, fallback: string) => {
+  if (err?.code === "23505") {
+    return "Já existe uma etiqueta com este nome.";
+  }
+  if (err?.code === "23514") {
+    return `O nome da etiqueta deve ter entre 1 e ${TAG_NAME_MAX_LENGTH} caracteres.`;
+  }
+  if (err?.code === "PGRST116") {
+    return "Etiqueta não encontrada. Ela pode ter sido excluída por outra pessoa.";
+  }
+  return fallback;
+};
+
 const mapDbToTagItem = (row: DbTagRow): TagItem => ({
   id: row.id,
   name: row.name ?? "",
@@ -118,7 +134,8 @@ export const Tags: React.FC = () => {
       .order("created_at", { ascending: false });
 
     if (error) {
-      setErrorMsg(error.message);
+      console.error("Erro ao carregar etiquetas:", error);
+      setErrorMsg("Não foi possível carregar as etiquetas.");
       setTags([]);
       setIsLoading(false);
       return;
@@ -194,14 +211,9 @@ export const Tags: React.FC = () => {
       .select("id")
       .single();
 
+    // .single() devolve PGRST116 quando nenhuma linha foi excluída
     if (error) throw error;
-
-    // Se não veio nada, não deletou (0 rows affected)
-    if (!data?.id) {
-      throw new Error(
-        "Não foi possível excluir a tag (nenhuma linha encontrada). Verifique permissões (RLS) e clinic_id.",
-      );
-    }
+    if (!data?.id) throw { code: "PGRST116" };
 
     setTags((prev) => prev.filter((t) => t.id !== editingId));
   };
@@ -223,7 +235,10 @@ export const Tags: React.FC = () => {
       setActiveTab("list");
       resetForm();
     } catch (err: any) {
-      setErrorMsg(err?.message ?? "Erro ao excluir tag.");
+      console.error("Erro ao excluir etiqueta:", err);
+      setErrorMsg(
+        getTagErrorMessage(err, "Não foi possível excluir a etiqueta."),
+      );
     } finally {
       setIsDeleting(false);
     }
@@ -243,7 +258,10 @@ export const Tags: React.FC = () => {
       setActiveTab("list");
       resetForm();
     } catch (err: any) {
-      setErrorMsg(err?.message ?? "Erro ao salvar tag.");
+      console.error("Erro ao salvar etiqueta:", err);
+      setErrorMsg(
+        getTagErrorMessage(err, "Não foi possível salvar a etiqueta."),
+      );
     } finally {
       setIsSaving(false);
     }
@@ -315,7 +333,7 @@ export const Tags: React.FC = () => {
             ) : tags.length === 0 ? (
               <div className="text-sm text-gray-500">
                 Nenhuma etiqueta cadastrada para esta empresa, todas as suas
-                etiquetas apareceram aqui.
+                etiquetas aparecerão aqui.
               </div>
             ) : (
               <div className="space-y-3">
@@ -443,6 +461,7 @@ export const Tags: React.FC = () => {
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Ex: Pós-consulta"
+                    maxLength={TAG_NAME_MAX_LENGTH}
                     className="mt-2"
                     disabled={isSaving || isDeleting}
                   />

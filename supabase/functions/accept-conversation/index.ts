@@ -87,8 +87,15 @@ serve(async (req)=>{
         }
       });
     }
-    // regra simples: pode aceitar se pertence à clínica E (se tiver dept) bate com o dept da conversa
-    if (membership.department_id && membership.department_id !== conv.department_id) {
+    // pode aceitar: admin, quem já era o responsável (conversa reaberta) ou
+    // membro do setor da conversa (clinic_users.department_id ou department_members)
+    const isAdmin = String(membership.role ?? "").toLowerCase() === "admin";
+    let allowed = isAdmin || conv.assigned_user_id === user.id || membership.department_id === conv.department_id;
+    if (!allowed) {
+      const { data: deptMember } = await admin.from("department_members").select("department_id").eq("department_id", conv.department_id).eq("clinic_user_id", user.id).maybeSingle();
+      allowed = !!deptMember;
+    }
+    if (!allowed) {
       return new Response(JSON.stringify({
         error: "Not allowed for this department"
       }), {
@@ -99,17 +106,34 @@ serve(async (req)=>{
         }
       });
     }
-    // 3) faz update (assigned + open)
+    // 3) faz update (assigned + open). Só vale para conversa pendente que está
+    // na fila (sem responsável) ou que já era do próprio usuário. A condição
+    // vai no UPDATE: se dois aceitarem ao mesmo tempo, só um vence.
+    const nowIso = new Date().toISOString();
     const { data: updated, error: updErr } = await admin.from("conversations").update({
       assigned_user_id: user.id,
       status: "open",
-      updated_at: new Date().toISOString()
-    }).eq("id", conversationId).select("id, status, assigned_user_id, department_id, clinic_id").maybeSingle();
-    if (updErr || !updated) {
+      closed_at: null,
+      status_changed_at: nowIso,
+      updated_at: nowIso
+    }).eq("id", conversationId).eq("status", "pending").or(`assigned_user_id.is.null,assigned_user_id.eq.${user.id}`).select("id, status, assigned_user_id, department_id, clinic_id").maybeSingle();
+    if (updErr) {
       return new Response(JSON.stringify({
         error: "Failed to accept"
       }), {
         status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+    }
+    if (!updated) {
+      return new Response(JSON.stringify({
+        error: "Esta conversa já foi aceita por outro atendente ou não está mais pendente.",
+        code: "conversation_not_available"
+      }), {
+        status: 409,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json"
