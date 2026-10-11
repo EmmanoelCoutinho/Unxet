@@ -7,7 +7,6 @@ import {
   PlusIcon,
   PowerIcon,
   Trash2Icon,
-  UploadCloudIcon,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button } from "../components/ui/Button";
@@ -17,10 +16,8 @@ import { Badge } from "../components/ui/Badge";
 import { useClinic } from "../contexts/ClinicContext";
 import { botsService } from "../services/bots";
 import type { BotRow } from "../types/bots";
-import { supabase } from "../lib/supabaseClient";
+import { isBotSupportedChannel } from "../types/bots";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
-
-type PublishedFilter = "all" | "published" | "draft";
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return "-";
@@ -34,14 +31,6 @@ const BotStatusBadge = ({ status }: { status: BotRow["status"] }) => {
   return (
     <Badge variant={isActive ? "success" : "warning"}>
       {isActive ? "Ativo" : "Inativo"}
-    </Badge>
-  );
-};
-
-const PublishedBadge = ({ published }: { published: boolean }) => {
-  return (
-    <Badge variant={published ? "success" : "warning"}>
-      {published ? "Publicado" : "Rascunho"}
     </Badge>
   );
 };
@@ -66,8 +55,6 @@ export const BotsSettingsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<BotRow["status"] | "all">(
     "all",
   );
-  const [publishedFilter, setPublishedFilter] =
-    useState<PublishedFilter>("all");
 
   const fetchBots = useCallback(async () => {
     if (!clinicId) {
@@ -98,24 +85,26 @@ export const BotsSettingsPage: React.FC = () => {
       return;
     }
 
-    // Best-effort: counts enabled bindings per bot.
-    const { data: bindings, error: bindingsErr } = await supabase
-      .from("bot_channel_bindings")
-      .select("bot_id,enabled")
-      .in("bot_id", ids);
+    // Best-effort: conta só os canais em que o bot realmente responde.
+    const [enabledRes, connRes] = await Promise.all([
+      botsService.listEnabledBindings(clinicId),
+      botsService.listChannelConnections(clinicId),
+    ]);
 
-    if (bindingsErr) {
+    if (enabledRes.error || connRes.error) {
       setBindingsCountByBotId({});
       setLoading(false);
       return;
     }
 
+    const supportedIds = new Set(
+      connRes.data
+        .filter((c) => isBotSupportedChannel(c.channel))
+        .map((c) => c.id),
+    );
     const counts: Record<string, number> = {};
-    for (const row of (bindings ?? []) as Array<{
-      bot_id: string;
-      enabled: boolean;
-    }>) {
-      if (!row.enabled) continue;
+    for (const row of enabledRes.data) {
+      if (!supportedIds.has(row.channel_connection_id)) continue;
       counts[row.bot_id] = (counts[row.bot_id] ?? 0) + 1;
     }
     setBindingsCountByBotId(counts);
@@ -131,11 +120,9 @@ export const BotsSettingsPage: React.FC = () => {
     return bots.filter((b) => {
       if (q && !b.name.toLowerCase().includes(q)) return false;
       if (statusFilter !== "all" && b.status !== statusFilter) return false;
-      if (publishedFilter === "published" && !b.published) return false;
-      if (publishedFilter === "draft" && b.published) return false;
       return true;
     });
-  }, [bots, publishedFilter, search, statusFilter]);
+  }, [bots, search, statusFilter]);
 
   const setBotUpdating = (botId: string, next: Partial<BotRow>) => {
     setBots((prev) =>
@@ -143,38 +130,17 @@ export const BotsSettingsPage: React.FC = () => {
     );
   };
 
-  const handleTogglePublished = async (bot: BotRow) => {
-    if (!clinicId) return;
-    setActionLoadingId(bot.id);
-    const nextPublished = !bot.published;
-
-    if (nextPublished) {
-      const v = await botsService.validateBotBeforePublish(bot.id);
-      if (v.error) {
-        setActionLoadingId(null);
-        toast.error(v.error.message);
-        return;
-      }
-    }
-
-    setBotUpdating(bot.id, { published: nextPublished });
-    const res = await botsService.updateBot(clinicId, bot.id, {
-      published: nextPublished,
-    });
-    setActionLoadingId(null);
-    if (res.error) {
-      setBotUpdating(bot.id, { published: bot.published });
-      toast.error(res.error.message);
-      return;
-    }
-    toast.success(nextPublished ? "Bot publicado." : "Bot despublicado.");
-  };
-
   const handleToggleStatus = async (bot: BotRow) => {
     if (!clinicId) return;
     const nextStatus = bot.status === "active" ? "inactive" : "active";
 
     if (nextStatus === "active") {
+      const v = await botsService.validateBotBeforeActivate(bot.id);
+      if (v.error) {
+        toast.error(v.error.message);
+        return;
+      }
+
       const activeBotRes = await botsService.findAnotherActiveBot(
         clinicId,
         bot.id,
@@ -213,14 +179,14 @@ export const BotsSettingsPage: React.FC = () => {
       toast.error(res.error.message);
       return;
     }
-    toast.success("Bot duplicado.");
-    navigate("/inbox/bots/edit", { state: { botId: res.data.id } });
+    toast.success("Bot duplicado. A cópia começa inativa e sem canal.");
+    navigate(`/inbox/bots/edit/${res.data.id}`);
   };
 
   const handleDelete = async (bot: BotRow) => {
     if (!clinicId) return;
     const ok = window.confirm(
-      `Excluir o bot "${bot.name}"? Isso irá marcar como deletado (soft delete).`,
+      `Excluir o bot "${bot.name}"? Ele deixa de responder e os canais vinculados ficam livres.`,
     );
     if (!ok) return;
 
@@ -269,7 +235,7 @@ export const BotsSettingsPage: React.FC = () => {
       <div className="px-4 sm:px-6 py-6">
         <Card className="p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div className="grid gap-3 md:grid-cols-3 md:items-end">
+            <div className="grid gap-3 md:grid-cols-2 md:items-end">
               <Input
                 label="Buscar por nome"
                 placeholder="Ex: Triagem WhatsApp"
@@ -294,22 +260,6 @@ export const BotsSettingsPage: React.FC = () => {
                 </select>
               </div>
 
-              <div className="w-full">
-                <label className="block text-sm font-medium text-[#1E1E1E] mb-1">
-                  Publicação
-                </label>
-                <select
-                  value={publishedFilter}
-                  onChange={(e) =>
-                    setPublishedFilter(e.target.value as PublishedFilter)
-                  }
-                  className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
-                >
-                  <option value="all">Todos</option>
-                  <option value="published">Publicado</option>
-                  <option value="draft">Rascunho</option>
-                </select>
-              </div>
             </div>
 
             <div className="text-sm text-gray-500">
@@ -381,8 +331,13 @@ export const BotsSettingsPage: React.FC = () => {
                             {bot.name}
                           </h3>
                           <BotStatusBadge status={bot.status} />
-                          <PublishedBadge published={bot.published} />
                         </div>
+                        {bot.status === "active" && channelsCount === 0 ? (
+                          <p className="mt-1 text-sm text-[#F97316]">
+                            Ativo, mas sem WhatsApp vinculado: o bot não vai
+                            responder. Vincule um canal na edição.
+                          </p>
+                        ) : null}
                         {bot.description ? (
                           <p className="mt-1 text-sm text-gray-500">
                             {bot.description}
@@ -391,7 +346,7 @@ export const BotsSettingsPage: React.FC = () => {
 
                         <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-gray-600">
                           <span>
-                            <span className="text-gray-500">Canais: </span>
+                            <span className="text-gray-500">WhatsApp vinculados: </span>
                             <span className="font-medium">{channelsCount}</span>
                           </span>
                           <span>
@@ -407,11 +362,7 @@ export const BotsSettingsPage: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            navigate("/inbox/bots/edit", {
-                              state: { botId: bot.id },
-                            })
-                          }
+                          onClick={() => navigate(`/inbox/bots/edit/${bot.id}`)}
                           disabled={!isAdmin}
                         >
                           <span className="flex items-center gap-2">
@@ -429,18 +380,6 @@ export const BotsSettingsPage: React.FC = () => {
                           <span className="flex items-center gap-2">
                             <CopyIcon className="h-4 w-4" />
                             Duplicar
-                          </span>
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleTogglePublished(bot)}
-                          disabled={!isAdmin || isActing}
-                        >
-                          <span className="flex items-center gap-2">
-                            <UploadCloudIcon className="h-4 w-4" />
-                            {bot.published ? "Despublicar" : "Publicar"}
                           </span>
                         </Button>
 

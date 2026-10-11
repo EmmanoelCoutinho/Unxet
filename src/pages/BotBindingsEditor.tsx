@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FacebookIcon, InstagramIcon, MessageCircleIcon } from "lucide-react";
+import { MessageCircleIcon } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -9,69 +10,50 @@ import type {
   BotChannelBindingRow,
   BotRow,
   ChannelConnectionRow,
-  UpsertBotChannelBindingInput,
 } from "../types/bots";
-import { BOT_CHANNEL_BINDING_TRIGGER_TYPE_VALUES } from "../types/bots";
+import {
+  BOT_CHANNEL_BINDING_TRIGGER_TYPE_VALUES,
+  isBotSupportedChannel,
+} from "../types/bots";
 import { supabase } from "../lib/supabaseClient";
 
-const ensureValueInList = (values: string[], current: string) => {
-  if (!current) return values;
-  return values.includes(current) ? values : [...values, current];
-};
+// Único acionamento existente hoje, por isso não é um campo editável
+const DEFAULT_TRIGGER = BOT_CHANNEL_BINDING_TRIGGER_TYPE_VALUES[0];
+const TRIGGER_LABEL = "Abertura ou reabertura de conversa";
 
-const channelLabel = (c: ChannelConnectionRow) => {
-  const base =
-    c.channel === "whatsapp"
-      ? "WhatsApp"
-      : c.channel === "instagram"
-        ? "Instagram"
-        : c.channel === "messenger"
-          ? "Facebook Messenger"
-          : (c.label ?? "");
+const providerLabel = (c: ChannelConnectionRow) =>
+  c.provider === "evolution" ? "QR Code" : "API oficial";
 
-  return base;
-};
-
-const channelIcon = (c: ChannelConnectionRow) => {
-  if (c.channel === "whatsapp") {
-    return <MessageCircleIcon className="h-4 w-4 text-green-600" />;
+const formatPhone = (value?: string | null) => {
+  const digits = (value ?? "").split("@")[0].replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.length === 13 && digits.startsWith("55")) {
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
   }
-  if (c.channel === "instagram") {
-    return <InstagramIcon className="h-4 w-4 text-pink-600" />;
+  if (digits.length === 12 && digits.startsWith("55")) {
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
   }
-  if (c.channel === "messenger") {
-    return <FacebookIcon className="h-4 w-4 text-blue-600" />;
-  }
-  return <MessageCircleIcon className="h-4 w-4 text-slate-500" />;
+  return `+${digits}`;
 };
 
 const connectionStatusBadge = (
   status?: ChannelConnectionRow["status"] | null,
 ) => {
   const s = status ?? "disconnected";
-  const cls =
-    s === "connected"
-      ? "success"
-      : s === "needs_reauth"
-        ? "warning"
-        : "default";
-  const text =
-    s === "connected"
-      ? "Conectado"
-      : s === "needs_reauth"
-        ? "Reconectar"
-        : "Desconectado";
-
-  return <Badge variant={cls as any}>{text}</Badge>;
+  if (s === "connected") return <Badge variant="success">Conectado</Badge>;
+  if (s === "needs_reauth") return <Badge variant="warning">Reconectar</Badge>;
+  return <Badge>Desconectado</Badge>;
 };
 
 export const BotBindingsEditor = ({
   clinicId,
   botId,
+  botStatus,
   isAdmin,
 }: {
   clinicId: string;
   botId: string;
+  botStatus: BotRow["status"];
   isAdmin: boolean;
 }) => {
   const [loading, setLoading] = useState(true);
@@ -95,61 +77,34 @@ export const BotBindingsEditor = ({
   const load = useCallback(async () => {
     setLoading(true);
 
-    const [{ data: authData }, connRes, bindingsRes, botsRes] =
+    const [{ data: authData }, connRes, bindingsRes, enabledRes] =
       await Promise.all([
         supabase.auth.getUser(),
         botsService.listChannelConnections(clinicId),
         botsService.listBindings(clinicId, botId),
-        botsService.listBots(clinicId),
+        botsService.listEnabledBindings(clinicId),
       ]);
 
     setCurrentUserId(authData.user?.id ?? null);
 
     if (connRes.error) toast.error(connRes.error.message);
     if (bindingsRes.error) toast.error(bindingsRes.error.message);
-    if (botsRes.error) toast.error(botsRes.error.message);
+    if (enabledRes.error) toast.error(enabledRes.error.message);
 
-    const conns = connRes.data ?? [];
-    const botBindings = bindingsRes.data ?? [];
-    const bots = botsRes.data ?? [];
+    setConnections(
+      (connRes.data ?? []).filter((c) => isBotSupportedChannel(c.channel)),
+    );
+    setBindings(bindingsRes.data ?? []);
 
-    setConnections(conns);
-    setBindings(botBindings);
-
-    const botIds = bots.map((b) => b.id);
-    const activeBots = new Map<string, BotRow>();
-
-    for (const b of bots) {
-      if (b.status === "active") activeBots.set(b.id, b);
-    }
-
+    // O banco aceita um único vínculo ligado por canal, seja qual for o
+    // status do outro bot — então qualquer vínculo ligado é um conflito.
     const conflictMap: Record<string, { botId: string; botName: string }> = {};
-
-    if (botIds.length > 0) {
-      const { data: allBindings, error } = await supabase
-        .from("bot_channel_bindings")
-        .select("bot_id,channel_connection_id,enabled")
-        .eq("clinic_id", clinicId)
-        .in("bot_id", botIds);
-
-      if (!error) {
-        for (const row of (allBindings ?? []) as Array<{
-          bot_id: string;
-          channel_connection_id: string;
-          enabled: boolean;
-        }>) {
-          if (!row.enabled) continue;
-          if (row.bot_id === botId) continue;
-
-          const bot = activeBots.get(row.bot_id);
-          if (!bot) continue;
-
-          conflictMap[row.channel_connection_id] = {
-            botId: row.bot_id,
-            botName: bot.name,
-          };
-        }
-      }
+    for (const row of enabledRes.data ?? []) {
+      if (row.bot_id === botId) continue;
+      conflictMap[row.channel_connection_id] = {
+        botId: row.bot_id,
+        botName: row.bot_name,
+      };
     }
 
     setConflicts(conflictMap);
@@ -159,23 +114,6 @@ export const BotBindingsEditor = ({
   useEffect(() => {
     load();
   }, [load]);
-
-  const upsert = async (payload: UpsertBotChannelBindingInput) => {
-    const key = payload.channel_connection_id;
-    setSavingKey(key);
-
-    const res = await botsService.upsertBinding(payload);
-
-    setSavingKey(null);
-
-    if (res.error) {
-      toast.error(res.error.message);
-      return false;
-    }
-
-    await load();
-    return true;
-  };
 
   const handleToggleEnabled = async (
     conn: ChannelConnectionRow,
@@ -193,57 +131,49 @@ export const BotBindingsEditor = ({
 
     const conflict = conflicts[conn.id];
     if (next && conflict) {
-      toast.error(
-        `Este canal já está vinculado ao bot ativo "${conflict.botName}". Desative o vínculo no outro bot primeiro.`,
+      const ok = window.confirm(
+        `Este canal está sendo usado pelo bot "${conflict.botName}". Deseja passar o canal para este bot?`,
       );
-      return;
+      if (!ok) return;
+    }
+
+    setSavingKey(conn.id);
+
+    if (next && conflict) {
+      const released = await botsService.disableBinding(
+        clinicId,
+        conflict.botId,
+        conn.id,
+      );
+      if (released.error) {
+        setSavingKey(null);
+        toast.error(released.error.message);
+        return;
+      }
     }
 
     const existing = bindingByChannelId[conn.id];
-    const trigger =
-      existing?.trigger_type ?? BOT_CHANNEL_BINDING_TRIGGER_TYPE_VALUES[0]!;
-
-    await upsert({
+    const res = await botsService.upsertBinding({
       clinic_id: clinicId,
       bot_id: botId,
       channel_connection_id: conn.id,
       enabled: next,
-      trigger_type: trigger,
+      trigger_type: existing?.trigger_type ?? DEFAULT_TRIGGER,
       created_by: existing?.created_by ?? currentUserId,
     });
-  };
 
-  const handleChangeTrigger = async (
-    conn: ChannelConnectionRow,
-    triggerType: string,
-  ) => {
-    if (!isAdmin) {
-      toast.error("Você não tem permissão para esta ação.");
-      return;
-    }
+    setSavingKey(null);
 
-    if (!currentUserId) {
-      toast.error("Usuário autenticado não encontrado.");
-      return;
-    }
+    if (res.error) toast.error(res.error.message);
+    else toast.success(next ? "Canal vinculado." : "Canal desvinculado.");
 
-    const existing = bindingByChannelId[conn.id];
-    const enabled = existing?.enabled ?? false;
-
-    await upsert({
-      clinic_id: clinicId,
-      bot_id: botId,
-      channel_connection_id: conn.id,
-      enabled,
-      trigger_type: triggerType,
-      created_by: existing?.created_by ?? currentUserId,
-    });
+    await load();
   };
 
   if (loading) {
     return (
       <div className="space-y-3">
-        {[1, 2, 3].map((i) => (
+        {[1, 2].map((i) => (
           <div
             key={i}
             className="h-24 animate-pulse rounded-lg border border-slate-200 bg-white"
@@ -252,6 +182,10 @@ export const BotBindingsEditor = ({
       </div>
     );
   }
+
+  const hasEnabledChannel = connections.some(
+    (c) => bindingByChannelId[c.id]?.enabled,
+  );
 
   return (
     <div className="space-y-4">
@@ -262,7 +196,8 @@ export const BotBindingsEditor = ({
               Vínculo com canais
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Selecione quais canais de atendimento disponíveis usarão este bot.
+              Escolha em quais números de WhatsApp este bot atende. Instagram e
+              Facebook Messenger ainda não são atendidos por bots.
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={load}>
@@ -271,34 +206,41 @@ export const BotBindingsEditor = ({
         </div>
       </Card>
 
+      {hasEnabledChannel && botStatus !== "active" ? (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+          O canal está vinculado, mas o bot está inativo e não vai responder.
+          Ative o bot na aba Geral quando o fluxo estiver pronto.
+        </div>
+      ) : null}
+
       {connections.length === 0 ? (
         <Card className="p-4 sm:p-6">
           <div className="text-sm text-slate-600">
-            Nenhuma conexão de canal encontrada para esta Empresa.
+            Nenhum WhatsApp conectado nesta Empresa.{" "}
+            <Link
+              to="/inbox/settings/integrations/meta"
+              className="font-medium text-blue-600 hover:text-blue-800"
+            >
+              Conectar WhatsApp
+            </Link>
           </div>
         </Card>
       ) : (
         <div className="space-y-3">
           {connections.map((conn) => {
-            const b = bindingByChannelId[conn.id];
-            const enabled = Boolean(b?.enabled);
-            const trigger =
-              b?.trigger_type ?? BOT_CHANNEL_BINDING_TRIGGER_TYPE_VALUES[0]!;
-            const triggerValues = ensureValueInList(
-              [...BOT_CHANNEL_BINDING_TRIGGER_TYPE_VALUES],
-              String(trigger ?? ""),
-            );
+            const enabled = Boolean(bindingByChannelId[conn.id]?.enabled);
             const conflict = conflicts[conn.id];
             const saving = savingKey === conn.id;
+            const phone = formatPhone(conn.connected_phone);
 
             return (
               <Card key={conn.id} className="p-4 sm:p-5">
                 <div className="flex w-full flex-wrap items-center gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="shrink-0">{channelIcon(conn)}</span>
+                      <MessageCircleIcon className="h-4 w-4 shrink-0 text-green-600" />
                       <div className="text-sm font-semibold text-slate-900">
-                        {channelLabel(conn)}
+                        WhatsApp · {providerLabel(conn)}
                       </div>
                       {connectionStatusBadge(conn.status)}
                       {conflict ? (
@@ -307,40 +249,20 @@ export const BotBindingsEditor = ({
                         </Badge>
                       ) : null}
                     </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {phone ? `${phone} · ` : ""}Acionamento: {TRIGGER_LABEL}
+                    </div>
                   </div>
 
-                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:shrink-0">
-                    <label className="text-sm font-medium text-[#1E1E1E]">
-                      Tipo de acionamento
-                    </label>
-                    <select
-                      value={trigger}
-                      disabled={!isAdmin || saving}
-                      onChange={(e) =>
-                        handleChangeTrigger(conn, e.target.value)
-                      }
-                      className="w-full rounded-lg border sm:w-[300px] border-[#E5E7EB] bg-white px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
-                    >
-                      {triggerValues.map((v) => (
-                        <option key={v} value={v}>
-                          Primeiro Contato/Reabrir conversa
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div
-                    className="flex w-full items-center justify-between gap-2 sm:ml-auto sm:w-auto sm:shrink-0 sm:flex-col sm:justify-start"
-                    title="Um canal pode ter no máximo um bot ativo vinculado."
-                  >
+                  <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:shrink-0">
                     <span className="text-sm font-medium text-slate-800">
-                      Habilitar vínculo
+                      {enabled ? "Vinculado" : "Desvinculado"}
                     </span>
                     <button
                       type="button"
                       role="switch"
                       aria-checked={enabled}
-                      aria-label="Habilitar vínculo"
+                      aria-label={`Vincular WhatsApp ${providerLabel(conn)} a este bot`}
                       disabled={!isAdmin || saving}
                       onClick={() => handleToggleEnabled(conn, !enabled)}
                       className={[

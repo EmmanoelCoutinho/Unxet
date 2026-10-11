@@ -1,10 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { timingSafeEqual } from "../_shared/security.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET");
-const META_APP_ID = Deno.env.get("META_APP_ID") ?? "";
-const META_APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -95,54 +94,6 @@ function resolveSenderIdForChannel(opts) {
   }
   return safeStr(metaInboxIdFromConversation).trim() || null;
 }
-async function graphGet(path, accessToken) {
-  const url = new URL(`https://graph.facebook.com/v21.0/${path}`);
-  url.searchParams.set("access_token", accessToken);
-  const resp = await fetch(url.toString(), {
-    method: "GET"
-  });
-  const body = await resp.json().catch(()=>({}));
-  return {
-    ok: resp.ok,
-    status: resp.status,
-    body
-  };
-}
-async function debugTokenIfPossible(rid, inputToken) {
-  const appId = safeStr(META_APP_ID).trim();
-  const appSecret = safeStr(META_APP_SECRET).trim();
-  if (!appId || !appSecret) {
-    console.log(JSON.stringify({
-      rid,
-      step: "debug_token.skipped",
-      reason: "META_APP_ID/META_APP_SECRET não definidos"
-    }, null, 2));
-    return;
-  }
-  const appAccessToken = `${appId}|${appSecret}`;
-  const url = new URL("https://graph.facebook.com/v21.0/debug_token");
-  url.searchParams.set("input_token", inputToken);
-  url.searchParams.set("access_token", appAccessToken);
-  const resp = await fetch(url.toString(), {
-    method: "GET"
-  });
-  const body = await resp.json().catch(()=>({}));
-  console.log(JSON.stringify({
-    rid,
-    step: "debug_token.result",
-    ok: resp.ok,
-    status: resp.status,
-    data: body?.data ?? null,
-    scopes: body?.data?.scopes ?? null,
-    granular_scopes: body?.data?.granular_scopes ?? null,
-    app_id: body?.data?.app_id ?? null,
-    type: body?.data?.type ?? null,
-    is_valid: body?.data?.is_valid ?? null,
-    user_id: body?.data?.user_id ?? null,
-    issued_at: body?.data?.issued_at ?? null,
-    expires_at: body?.data?.expires_at ?? null
-  }, null, 2));
-}
 function pickProviderMessageId(metaBody) {
   const a = safeStr(metaBody?.message_id).trim() || safeStr(metaBody?.message?.mid).trim() || safeStr(metaBody?.id).trim() || "";
   return a || null;
@@ -206,7 +157,7 @@ serve(async (req)=>{
       });
     }
     const internalSecret = internalSecretHeader(req);
-    if (!INTERNAL_BOT_SECRET || internalSecret !== INTERNAL_BOT_SECRET) {
+    if (!INTERNAL_BOT_SECRET || !timingSafeEqual(internalSecret, INTERNAL_BOT_SECRET)) {
       console.log(JSON.stringify({
         rid,
         step: "auth.invalid_internal_secret"
@@ -386,15 +337,6 @@ serve(async (req)=>{
         }
       });
     }
-    const me = await graphGet("me?fields=id,name", token);
-    console.log(JSON.stringify({
-      rid,
-      step: "token.me",
-      ok: me.ok,
-      status: me.status,
-      body: me.body
-    }, null, 2));
-    await debugTokenIfPossible(rid, token);
     const senderId = resolveSenderIdForChannel({
       channel,
       conn: {

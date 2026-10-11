@@ -26,6 +26,11 @@ const actionTypeToLabel: Record<string, string> = {
   end_flow: "Encerrar fluxo",
 };
 
+const END_WITHOUT_OPTIONS: SimMessage = {
+  role: "system",
+  text: "Etapa sem opções: o bot encerra e a conversa segue para a fila de atendimento.",
+};
+
 const roleStyles: Record<SimMessage["role"], string> = {
   bot: "bg-white border-slate-200 text-slate-800",
   user: "bg-blue-600 border-blue-600 text-white ml-auto",
@@ -86,9 +91,11 @@ export const BotSimulator = ({
       botsService.listDepartments(clinicId),
       botsService.listTags(clinicId),
     ]);
-    setLoading(false);
 
-    if (nodesRes.error) return toast.error(nodesRes.error.message);
+    if (nodesRes.error) {
+      setLoading(false);
+      return toast.error(nodesRes.error.message);
+    }
     if (depsRes.error) toast.error(depsRes.error.message);
     if (tagsRes.error) toast.error(tagsRes.error.message);
 
@@ -97,21 +104,18 @@ export const BotSimulator = ({
     setDepartments(depsRes.data ?? []);
     setTags(tagsRes.data ?? []);
 
-    const optionsMap: Record<string, BotOptionRow[]> = {};
-    for (const n of list) {
-      const optRes = await botsService.listOptions(n.id);
-      if (optRes.error) {
-        toast.error(optRes.error.message);
-        continue;
-      }
-      optionsMap[n.id] = optRes.data;
-    }
-    setOptionsByNodeId(optionsMap);
+    const optRes = await botsService.listOptionsByNodeIds(
+      list.map((n) => n.id),
+    );
+    if (optRes.error) toast.error(optRes.error.message);
+    setOptionsByNodeId(optRes.data ?? {});
 
     const root = list.find((n) => n.node_key === BOT_ROOT_NODE_KEY) ?? null;
     const initial = root?.id ?? list[0]?.id ?? null;
     setStartNodeId((prev) => prev ?? initial);
     setCurrentNodeId((prev) => prev ?? initial);
+    // Por último: o início do fluxo depende das opções e da etapa inicial já carregadas
+    setLoading(false);
   }, [botId, clinicId]);
 
   useEffect(() => {
@@ -122,7 +126,6 @@ export const BotSimulator = ({
     (nodeId?: string | null) => {
       const nextNodeId = nodeId ?? startNodeId;
       setCurrentNodeId(nextNodeId ?? null);
-      setEnded(false);
 
       const start: SimMessage[] = [];
       if (bot.start_message?.trim())
@@ -130,9 +133,14 @@ export const BotSimulator = ({
       const node = nextNodeId ? nodeById.get(nextNodeId) : null;
       if (node?.message?.trim())
         start.push({ role: "bot", text: node.message.trim() });
+
+      const hasOptions =
+        !!nextNodeId && (optionsByNodeId[nextNodeId] ?? []).length > 0;
+      if (node && !hasOptions) start.push(END_WITHOUT_OPTIONS);
+      setEnded(Boolean(node) && !hasOptions);
       setHistory(start);
     },
-    [bot.start_message, nodeById, startNodeId],
+    [bot.start_message, nodeById, optionsByNodeId, startNodeId],
   );
 
   useEffect(() => {
@@ -155,6 +163,10 @@ export const BotSimulator = ({
         ...prev,
         { role: "bot", text: node.message.trim() },
       ]);
+    }
+    if ((optionsByNodeId[nextNodeId] ?? []).length === 0) {
+      setHistory((prev) => [...prev, END_WITHOUT_OPTIONS]);
+      setEnded(true);
     }
   };
 
@@ -238,7 +250,8 @@ export const BotSimulator = ({
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Simulador</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Preview local do fluxo (não chama o bot-engine).
+              Teste o fluxo clicando nas opções. Nenhuma mensagem é enviada
+              de verdade.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -307,7 +320,7 @@ export const BotSimulator = ({
                 <div
                   key={idx}
                   className={[
-                    "max-w-[80%] rounded-xl border px-4 py-3 text-sm leading-relaxed",
+                    "max-w-[80%] whitespace-pre-wrap break-words rounded-xl border px-4 py-3 text-sm leading-relaxed",
                     roleStyles[m.role],
                     m.role === "user" ? "ml-auto" : "",
                   ].join(" ")}

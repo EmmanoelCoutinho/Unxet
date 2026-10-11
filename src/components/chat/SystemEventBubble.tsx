@@ -177,6 +177,9 @@ const getEventText = (event: ConversationEvent) => {
       if (reason === "max_invalid_attempts") {
         return "Bot encerrou a sessão após várias tentativas inválidas";
       }
+      if (reason === "timeout") {
+        return "Bot encerrou a sessão por falta de resposta do cliente";
+      }
       return "Bot encerrou a sessão";
     }
 

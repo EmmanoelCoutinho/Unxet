@@ -63,6 +63,7 @@ export type BotRow = {
   start_message: string;
   invalid_option_message: string;
   timeout_message: string | null;
+  session_timeout_hours: number;
   human_handoff_enabled: boolean;
   max_invalid_attempts: number;
   is_deleted: boolean;
@@ -168,22 +169,32 @@ export type UpsertBotChannelBindingInput = {
   created_by: string | null;
 };
 
+// Somente colunas seguras: tokens e chaves de API nunca vão para o navegador
 export type ChannelConnectionRow = {
   id: string;
   clinic_id: string;
-  provider?: string | null;
+  provider?: "meta" | "evolution" | OpenString | null;
   channel: "whatsapp" | "instagram" | "messenger" | OpenString;
   status?: "connected" | "disconnected" | "needs_reauth" | OpenString | null;
-  meta_phone_number_id?: string | null;
-  meta_waba_id?: string | null;
-  meta_page_id?: string | null;
-  meta_ig_user_id?: string | null;
-  access_token?: string | null;
-  token_expires_at?: string | null;
-  label?: string | null;
+  connected_phone?: string | null;
+  connected_name?: string | null;
   updated_at?: string | null;
-  created_at?: string | null;
 };
+
+// Canais em que o bot-engine realmente responde hoje
+export const BOT_SUPPORTED_CHANNELS = ["whatsapp"] as const;
+
+export const isBotSupportedChannel = (channel?: string | null) =>
+  (BOT_SUPPORTED_CHANNELS as readonly string[]).includes(String(channel ?? ""));
+
+// Tempo sem interação até o bot encerrar a sessão. O teto é 24h: depois disso
+// o WhatsApp oficial não deixa mais enviar mensagem livre ao cliente.
+export const BOT_SESSION_TIMEOUT_HOUR_OPTIONS = [1, 2, 5, 12, 24] as const;
+export const BOT_SESSION_TIMEOUT_DEFAULT_HOURS = 24;
+
+// Limites das listas interativas do WhatsApp (API oficial)
+export const BOT_OPTION_LABEL_MAX_LENGTH = 24;
+export const BOT_MENU_MAX_OPTIONS = 10;
 
 export type DepartmentRow = {
   id: string;

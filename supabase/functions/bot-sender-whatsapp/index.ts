@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { timingSafeEqual } from "../_shared/security.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const META_WABA_TOKEN = Deno.env.get("META_WABA_TOKEN");
@@ -178,10 +179,8 @@ async function sendMetaMessage(params) {
   console.log(JSON.stringify({
     rid,
     step: "meta.send.attempt",
-    url,
     phoneNumberId,
-    waId,
-    payload: metaPayload
+    messageType
   }, null, 2));
   const metaResp = await fetch(url, {
     method: "POST",
@@ -281,16 +280,13 @@ async function sendEvolutionMessage(params) {
         optionsText
       ].filter(Boolean).join("\n\n");
     }
-    payload = buildEvolutionTextPayload(waId, fullText || text);
+    payload = buildEvolutionTextPayload(waId, text || fullText);
   }
   console.log(JSON.stringify({
     rid,
     step: "evolution.send.attempt",
-    endpoint,
     instanceName,
-    waId,
-    messageType,
-    fullPayload: payload
+    messageType
   }, null, 2));
   const resp = await fetch(endpoint, {
     method: "POST",
@@ -340,7 +336,7 @@ serve(async (req)=>{
       });
     }
     const internalSecret = internalSecretHeader(req);
-    const isInternalCall = !!INTERNAL_BOT_SECRET && internalSecret === INTERNAL_BOT_SECRET;
+    const isInternalCall = !!INTERNAL_BOT_SECRET && timingSafeEqual(internalSecret, INTERNAL_BOT_SECRET);
     console.log(JSON.stringify({
       rid,
       step: "auth.check",
@@ -446,9 +442,7 @@ serve(async (req)=>{
       rid,
       step: "contact.loaded",
       contactId: contact.id,
-      hasPhone: !!waId,
-      rawPhone: contact.phone,
-      waId
+      hasPhone: !!waId
     }, null, 2));
     if (!waId) {
       return jsonResponse(400, {

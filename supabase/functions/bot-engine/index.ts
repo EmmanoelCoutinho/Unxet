@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { timingSafeEqual } from "../_shared/security.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -14,6 +15,7 @@ const SESSION_STATUS_ACTIVE = "active";
 const SESSION_STATUS_COMPLETED = "completed";
 const SESSION_STATUS_CANCELLED = "cancelled";
 const SESSION_STATUS_EXPIRED = "expired";
+const DEFAULT_SESSION_TIMEOUT_HOURS = 24;
 function logStep(step, meta) {
   console.log(`[bot-engine] ${step}`, meta ? JSON.stringify(meta, null, 2) : "");
 }
@@ -30,7 +32,7 @@ serve(async (req)=>{
       });
     }
     const providedSecret = req.headers.get("x-internal-secret") ?? "";
-    if (!INTERNAL_BOT_SECRET || providedSecret !== INTERNAL_BOT_SECRET) {
+    if (!INTERNAL_BOT_SECRET || !timingSafeEqual(providedSecret, INTERNAL_BOT_SECRET)) {
       return json(401, {
         error: "Unauthorized"
       });
@@ -43,13 +45,6 @@ serve(async (req)=>{
     }
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const inboundMessage = await getMessageById(supabase, body.messageId, body.conversationId);
-    logStep("inbound_payload_raw", {
-      messageType: body.messageType,
-      interactive: body.interactive,
-      text: body.text,
-      inboundMessageText: inboundMessage.text,
-      inboundMessagePayload: inboundMessage.payload
-    });
     if (!inboundMessage) {
       return json(404, {
         error: "Inbound message not found"
@@ -70,6 +65,11 @@ serve(async (req)=>{
       return json(200, {
         ok: true,
         skipped: "channel_not_supported"
+      });
+    }
+    if (conversation.channel_connection_id && conversation.channel_connection_id !== body.channelConnectionId) {
+      return json(400, {
+        error: "channelConnectionId does not match conversation"
       });
     }
     const contact = await getContact(supabase, conversation.contact_id);
@@ -111,19 +111,64 @@ serve(async (req)=>{
       body.text,
       inboundMessage.text
     ].map((value)=>String(value ?? "").trim()).filter(Boolean);
-    logStep("selection_candidates", {
-      isInteractiveMessage,
-      messageType: body.messageType,
-      interactive: body.interactive ?? null,
-      bodyText: body.text ?? null,
-      inboundMessageText: inboundMessage.text ?? null,
-      selectionCandidates
-    });
     const selectedOptionValue = String(body.interactive?.selectedId ?? body.interactive?.selectedTitle ?? body.text ?? inboundMessage.text ?? "").trim();
     const inboundCount = await getInboundCount(supabase, body.conversationId);
-    const isFirstInbound = inboundCount <= 1;
+    // Falha na contagem (null) não pode ser lida como "primeira mensagem"
+    const isFirstInbound = inboundCount !== null && inboundCount <= 1;
     const reopenedFromClosed = body.reopenedFromClosed === true;
     let activeSession = await getActiveSession(supabase, body.conversationId, bot.id, body.channelConnectionId);
+    if (activeSession && isSessionExpired(activeSession, bot)) {
+      await insertBotEvent(supabase, {
+        clinicId: body.clinicId,
+        conversationId: body.conversationId,
+        botId: bot.id,
+        conversationBotSessionId: activeSession.id,
+        nodeId: activeSession.current_node_id,
+        eventType: "session_completed",
+        payload: {
+          reason: "timeout"
+        }
+      });
+      await finishSession({
+        supabase,
+        sessionId: activeSession.id,
+        status: SESSION_STATUS_EXPIRED,
+        endedReason: "timeout"
+      });
+      await insertConversationEvent(supabase, body.conversationId, "bot_session_ended", {
+        bot_id: bot.id,
+        conversation_bot_session_id: activeSession.id,
+        reason: "timeout"
+      });
+      activeSession = null;
+    }
+    // Um atendente assumiu a conversa: o bot sai de cena em vez de responder
+    // "opção inválida" para o que o cliente escreve ao humano.
+    if (conversation.status === STATUS_OPEN) {
+      if (activeSession) {
+        await insertBotEvent(supabase, {
+          clinicId: body.clinicId,
+          conversationId: body.conversationId,
+          botId: bot.id,
+          conversationBotSessionId: activeSession.id,
+          nodeId: activeSession.current_node_id,
+          eventType: "session_cancelled",
+          payload: {
+            reason: "human_reply"
+          }
+        });
+        await finishSession({
+          supabase,
+          sessionId: activeSession.id,
+          status: SESSION_STATUS_CANCELLED,
+          endedReason: "human_reply"
+        });
+      }
+      return json(200, {
+        ok: true,
+        skipped: "human_attending"
+      });
+    }
     const shouldResetSessionOnReopen = reopenedFromClosed && activeSession && !isInteractiveMessage;
     if (shouldResetSessionOnReopen) {
       logStep("resetting_session_on_reopen", {
@@ -156,16 +201,13 @@ serve(async (req)=>{
     }
     const shouldStart = !activeSession && binding.trigger_type === "first_inbound" && (isFirstInbound || reopenedFromClosed);
     logStep("flow_context", {
-      selectedOptionValue,
       inboundCount,
       isFirstInbound,
       reopenedFromClosed,
       isInteractiveMessage,
       hasActiveSession: !!activeSession,
       shouldStart,
-      messageType: body.messageType,
-      interactive: body.interactive ?? null,
-      inboundMessageText: inboundMessage.text ?? null
+      messageType: body.messageType
     });
     if (shouldStart) {
       const rootNode = await getRootNode(supabase, body.clinicId, bot.id);
@@ -195,6 +237,23 @@ serve(async (req)=>{
           reopened_from_closed: reopenedFromClosed
         }
       });
+      if (bot.start_message?.trim()) {
+        await sendBotText({
+          supabase,
+          clinicId: body.clinicId,
+          channelConnectionId: body.channelConnectionId,
+          conversationId: body.conversationId,
+          channelConnection,
+          bot,
+          text: bot.start_message.trim(),
+          session: activeSession,
+          nodeContext: {
+            nodeId: rootNode.id,
+            nodeKey: rootNode.node_key,
+            nodeType: "start_message"
+          }
+        });
+      }
       await executeNode({
         supabase,
         clinicId: body.clinicId,
@@ -232,24 +291,6 @@ serve(async (req)=>{
       });
     }
     const options = await getOptionsByNodeId(supabase, currentNode.id);
-    const normalizedSelectedValue = normalizeOptionValue(selectedOptionValue);
-    logStep("option_matching_debug", {
-      selectedOptionValue,
-      normalizedSelectedValue,
-      messageType: body.messageType,
-      interactive: body.interactive ?? null,
-      inboundMessageText: inboundMessage.text ?? null,
-      options: options.map((opt)=>({
-          id: opt.id,
-          option_value: opt.option_value,
-          label: opt.label,
-          normalized_option_value: normalizeOptionValue(opt.option_value),
-          normalized_label: normalizeOptionValue(opt.label),
-          action_type: opt.action_type,
-          next_node_id: opt.next_node_id,
-          has_message_to_send: !!opt.message_to_send?.trim()
-        }))
-    });
     const selectedOption = options.find((opt)=>{
       const optionValueNormalized = normalizeOptionValue(opt.option_value);
       const labelNormalized = normalizeOptionValue(opt.label);
@@ -309,7 +350,7 @@ serve(async (req)=>{
   } catch (err) {
     console.error("bot-engine unexpected error:", err);
     return json(500, {
-      error: String(err)
+      error: "Internal error"
     });
   }
 });
@@ -323,6 +364,13 @@ function json(status, body) {
 }
 function normalizeOptionValue(value) {
   return String(value ?? "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+}
+function isSessionExpired(session, bot) {
+  const configured = Number(bot.session_timeout_hours);
+  const hours = Number.isFinite(configured) && configured >= 1 ? Math.min(configured, DEFAULT_SESSION_TIMEOUT_HOURS) : DEFAULT_SESSION_TIMEOUT_HOURS;
+  const lastInteraction = new Date(session.last_interaction_at).getTime();
+  if (!Number.isFinite(lastInteraction)) return false;
+  return Date.now() - lastInteraction >= hours * 60 * 60 * 1000;
 }
 function truncateText(value, max) {
   const text = String(value ?? "").trim();
@@ -345,12 +393,12 @@ async function getInboundCount(supabase, conversationId) {
   }).eq("conversation_id", conversationId).eq("direction", DIRECTION_INBOUND);
   if (error) {
     console.error("getInboundCount error:", error);
-    return 0;
+    return null;
   }
   return count ?? 0;
 }
 async function getConversation(supabase, clinicId, conversationId) {
-  const { data, error } = await supabase.from("conversations").select("id, clinic_id, contact_id, channel, status, department_id, whatsapp_number_id, closed_at").eq("id", conversationId).eq("clinic_id", clinicId).maybeSingle();
+  const { data, error } = await supabase.from("conversations").select("id, clinic_id, contact_id, channel, status, department_id, whatsapp_number_id, channel_connection_id, closed_at").eq("id", conversationId).eq("clinic_id", clinicId).maybeSingle();
   if (error) {
     console.error("getConversation error:", error);
     return null;
@@ -382,7 +430,7 @@ async function getActiveBinding(supabase, clinicId, channelConnectionId) {
   return data;
 }
 async function getBot(supabase, clinicId, botId) {
-  const { data, error } = await supabase.from("bots").select("id, clinic_id, name, status, published, invalid_option_message, start_message, timeout_message, human_handoff_enabled, max_invalid_attempts").eq("id", botId).eq("clinic_id", clinicId).eq("is_deleted", false).maybeSingle();
+  const { data, error } = await supabase.from("bots").select("id, clinic_id, name, status, published, invalid_option_message, start_message, timeout_message, session_timeout_hours, human_handoff_enabled, max_invalid_attempts").eq("id", botId).eq("clinic_id", clinicId).eq("is_deleted", false).maybeSingle();
   if (error) {
     console.error("getBot error:", error);
     return null;
@@ -606,6 +654,29 @@ async function executeNode(params) {
         }
       });
     }
+    if (options.length === 0) {
+      await finishSession({
+        supabase,
+        sessionId: session.id,
+        status: SESSION_STATUS_COMPLETED,
+        endedReason: "flow_end"
+      });
+      await insertBotEvent(supabase, {
+        clinicId,
+        conversationId,
+        botId: bot.id,
+        conversationBotSessionId: session.id,
+        nodeId: node.id,
+        eventType: "session_completed",
+        payload: {
+          reason: "flow_end",
+          cause: "node_without_options"
+        }
+      });
+      return {
+        sessionFinished: true
+      };
+    }
     return;
   }
   if (node.message?.trim()) {
@@ -774,7 +845,7 @@ async function processSelectedOption(params) {
   if (option.next_node_id) {
     const nextNode = await getNodeById(supabase, clinicId, option.next_node_id);
     if (nextNode) {
-      await executeNode({
+      const nodeResult = await executeNode({
         supabase,
         clinicId,
         conversationId,
@@ -785,6 +856,7 @@ async function processSelectedOption(params) {
         session,
         node: nextNode
       });
+      if (nodeResult?.sessionFinished) return;
     }
   }
   if (option.end_session) {
@@ -864,38 +936,25 @@ async function executeOptionAction(params) {
     endSession: option.end_session,
     hasMessageToSend: !!option.message_to_send?.trim()
   });
-  if (option.action_type === "go_to_node") {
-    return null;
+  const optionMessage = option.message_to_send?.trim();
+  if (optionMessage) {
+    await sendBotText({
+      supabase,
+      clinicId,
+      channelConnectionId,
+      conversationId,
+      channelConnection,
+      bot,
+      text: optionMessage,
+      session,
+      nodeContext: {
+        nodeId: currentNode.id,
+        nodeKey: currentNode.node_key,
+        nodeType: "option_message"
+      }
+    });
   }
-  if (option.action_type === "send_message") {
-    const text = option.message_to_send?.trim();
-    logStep("send_message_action_start", {
-      optionId: option.id,
-      optionValue: option.option_value,
-      optionLabel: option.label,
-      text
-    });
-    if (text) {
-      await sendBotText({
-        supabase,
-        clinicId,
-        channelConnectionId,
-        conversationId,
-        channelConnection,
-        bot,
-        text,
-        session,
-        nodeContext: {
-          nodeId: currentNode.id,
-          nodeKey: currentNode.node_key,
-          nodeType: "option_message"
-        }
-      });
-    }
-    logStep("send_message_action_done", {
-      optionId: option.id,
-      textSent: text ?? null
-    });
+  if (option.action_type === "go_to_node" || option.action_type === "send_message") {
     return null;
   }
   if (option.action_type === "transfer_to_department") {
@@ -929,7 +988,10 @@ async function executeOptionAction(params) {
         target_department_id: option.target_department_id
       }
     });
-    return null;
+    return {
+      shouldFinishSession: true,
+      endedReason: "handoff"
+    };
   }
   if (option.action_type === "add_tag") {
     if (option.tag_id) {
@@ -1026,7 +1088,6 @@ async function sendBotText(params) {
     clinicId,
     channelConnectionId,
     conversationId,
-    text,
     nodeContext
   });
   const senderResult = await callBotSenderWhatsApp({
@@ -1046,7 +1107,7 @@ async function sendBotText(params) {
     sender: channelConnection.meta_phone_number_id,
     text,
     payload: {
-      provider: "meta",
+      provider: channelConnection.provider ?? "meta",
       source: "bot-engine",
       author_type: "bot",
       author_name: bot.name,
@@ -1090,8 +1151,7 @@ async function sendBotText(params) {
   await touchSession(supabase, session.id);
   logStep("send_bot_text_done", {
     conversationId,
-    providerMessageId,
-    text
+    providerMessageId
   });
 }
 async function sendBotInteractive(params) {
@@ -1108,7 +1168,8 @@ async function sendBotInteractive(params) {
     channelConnectionId,
     conversationId,
     type: "interactive",
-    interactive
+    interactive,
+    text: fallbackText
   });
   const providerMessageId = senderResult.providerMessageId ?? senderResult.data?.providerMessageId ?? null;
   const sentAt = new Date().toISOString();
@@ -1120,7 +1181,7 @@ async function sendBotInteractive(params) {
     sender: channelConnection.meta_phone_number_id,
     text: fallbackText,
     payload: {
-      provider: "meta",
+      provider: channelConnection.provider ?? "meta",
       source: "bot-engine",
       author_type: "bot",
       author_name: bot.name,
@@ -1177,7 +1238,8 @@ async function callBotSenderWhatsApp(params) {
     channelConnectionId: params.channelConnectionId,
     conversationId: params.conversationId,
     type: "interactive",
-    interactive: params.interactive
+    interactive: params.interactive,
+    text: params.text
   } : {
     clinicId: params.clinicId,
     channelConnectionId: params.channelConnectionId,
@@ -1205,8 +1267,7 @@ async function callBotSenderWhatsApp(params) {
   const rawText = await resp.text();
   logStep("bot_sender_whatsapp_response", {
     status: resp.status,
-    ok: resp.ok,
-    rawText
+    ok: resp.ok
   });
   if (!resp.ok) {
     throw new Error(`bot-sender-whatsapp failed: ${resp.status} ${rawText}`);
