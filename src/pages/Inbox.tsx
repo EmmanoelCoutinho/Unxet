@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useMatch, useNavigate } from "react-router-dom";
 import { MessageSquareIcon, SlidersHorizontalIcon } from "lucide-react";
 
 import { Input } from "../components/ui/Input";
@@ -27,14 +27,15 @@ export const Inbox: React.FC = () => {
   // Abaixo de lg mostramos um painel por vez: a lista em /inbox e as demais telas no lugar dela
   const isInboxRoot = location.pathname.replace(/\/+$/, "") === "/inbox";
 
+  const activeConversationId = useMatch("/inbox/chat/:id")?.params.id ?? null;
+
   const {
     conversations,
     loading: isLoading,
-    markAsRead,
     totalUnreadCount,
     totalUnreadOpen,
     totalUnreadPending,
-  } = useConversations();
+  } = useConversations({ activeConversationId });
 
   const { authUser } = useAuth();
   const { clinicId, membership } = useClinic();
@@ -254,10 +255,7 @@ export const Inbox: React.FC = () => {
                         )
                       : undefined
                   }
-                  onClick={() => {
-                    markAsRead(conversation.id);
-                    navigate(`/inbox/chat/${conversation.id}`);
-                  }}
+                  onClick={() => navigate(`/inbox/chat/${conversation.id}`)}
                 />
               ))}
             </div>
