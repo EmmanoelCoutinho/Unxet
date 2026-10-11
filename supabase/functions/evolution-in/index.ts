@@ -16,6 +16,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
 import { applyMessageStatus } from "../_shared/messageStatus.ts";
+import { redactWebhookSecrets, stripWebhookEventSuffix } from "../_shared/evolutionWebhook.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -135,7 +136,10 @@ async function handleMessagesUpdate(body) {
   const items = Array.isArray(body?.data) ? body.data : [
     body?.data
   ];
-  const atIso = body?.date_time ? new Date(body.date_time).toISOString() : new Date().toISOString();
+  // Não usamos body.date_time: vem no fuso do servidor da Evolution sem offset
+  // (ex.: horário de Brasília lido como UTC = 3h de diferença). O webhook chega
+  // na hora, então o relógio daqui é a melhor referência.
+  const atIso = new Date().toISOString();
   const results = [];
   for (const item of items){
     if (!item) continue;
@@ -179,7 +183,8 @@ serve(async (req)=>{
     // (ou envie o header x-webhook-secret). Sem o secret configurado, apenas avisa.
     if (EVOLUTION_WEBHOOK_SECRET) {
       const provided = new URL(req.url).searchParams.get("token") ?? req.headers.get("x-webhook-secret") ?? "";
-      if (!timingSafeEqual(provided, EVOLUTION_WEBHOOK_SECRET)) {
+      // "Webhook by Events" cola o nome do evento depois do token (.../evolution-in?token=<secret>/messages-upsert)
+      if (!timingSafeEqual(stripWebhookEventSuffix(provided, EVOLUTION_WEBHOOK_SECRET), EVOLUTION_WEBHOOK_SECRET)) {
         console.warn("[SECURITY] evolution-in: token do webhook inválido, requisição rejeitada");
         return new Response("Unauthorized", {
           status: 401
@@ -189,7 +194,7 @@ serve(async (req)=>{
       console.warn("[SECURITY] evolution-in: EVOLUTION_WEBHOOK_SECRET não configurado — webhook aceita qualquer origem");
     }
     const body = await req.json();
-    console.log("[EVOLUTION_WEBHOOK_FULL]", JSON.stringify(body, null, 2));
+    console.log("[EVOLUTION_WEBHOOK_FULL]", JSON.stringify(redactWebhookSecrets(body), null, 2));
     // ── Status de entrega/leitura das mensagens enviadas (ticks) ──────────
     if (body?.event === "messages.update" || body?.event === "MESSAGES_UPDATE") {
       return await handleMessagesUpdate(body);
