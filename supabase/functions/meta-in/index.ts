@@ -1227,6 +1227,12 @@ serve(async (req)=>{
             conversationUpdates.status = STATUS_PENDING;
             conversationUpdates.status_changed_at = new Date().toISOString();
             conversationUpdates.reopened_count = (conversation.reopened_count ?? 0) + 1;
+            // Volta para a fila do setor (mesma regra do WhatsApp): mantendo o
+            // antigo responsável, só ele e os admins enxergavam a conversa
+            conversationUpdates.assigned_user_id = null;
+            conversationUpdates.closed_at = null;
+            conversationUpdates.first_unanswered_inbound_at = timestampIso;
+            conversationUpdates.sla_breached_at = null;
           } else if (conversation.status !== STATUS_PENDING && conversation.status !== STATUS_CLOSED) {
             conversationUpdates.status = STATUS_PENDING;
             conversationUpdates.status_changed_at = new Date().toISOString();

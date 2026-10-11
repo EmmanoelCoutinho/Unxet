@@ -240,7 +240,10 @@ serve(async (req)=>{
           const safeFilename = (media.filename ?? "").trim();
           const fileName = safeFilename || `${media.mediaId ?? providerMessageId ?? Date.now()}.${ext}`;
           const folder = isImageMessage ? "inbound-images" : isAudioMessage ? "inbound-audios" : "inbound-documents";
-          const path = `${clinicId}/${waId}/${folder}/${fileName}`;
+          // Uma pasta por mensagem: dois "comprovante.pdf" do mesmo contato
+          // não podem cair no mesmo caminho (o upsert trocava o arquivo antigo)
+          const messageFolder = String(providerMessageId).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120);
+          const path = `${clinicId}/${waId}/${folder}/${messageFolder}/${fileName}`;
           const { error: uploadError } = await supabase.storage.from(WHATSAPP_MEDIA_BUCKET).upload(path, fileBytes, {
             contentType: resolvedContentType,
             upsert: true
@@ -319,6 +322,12 @@ serve(async (req)=>{
     if (shouldReopen) {
       conversationUpdates.status = STATUS_PENDING;
       conversationUpdates.status_changed_at = new Date().toISOString();
+      // Volta para a fila do setor: mantendo o antigo responsável, só ele (e os
+      // admins) enxergava a conversa e o cliente ficava sem resposta na ausência dele
+      conversationUpdates.assigned_user_id = null;
+      conversationUpdates.closed_at = null;
+      conversationUpdates.first_unanswered_inbound_at = timestampIso;
+      conversationUpdates.sla_breached_at = null;
       conversationUpdates.reopened_count = (conversation.reopened_count ?? 0) + 1;
     }
     const { error: convUpdErr } = await supabase.from("conversations").update(conversationUpdates).eq("id", conversation.id);
