@@ -33,6 +33,7 @@ export const TransferModal: React.FC<{
         .from("departments")
         .select("id,name")
         .eq("clinic_id", clinicId)
+        .eq("is_active", true)
         .order("name");
 
       if (!error) setDepartments((data ?? []) as DepartmentRow[]);

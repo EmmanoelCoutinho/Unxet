@@ -772,6 +772,14 @@ export const Chat: React.FC = () => {
 
     if (error) {
       console.error("Erro ao aceitar conversa:", error);
+      const response = (error as { context?: Response }).context;
+      // 409: outro atendente aceitou primeiro (a função já devolve o texto)
+      const payload =
+        response?.status === 409
+          ? await response.json().catch(() => null)
+          : null;
+      toast.error(payload?.error ?? "Não foi possível aceitar a conversa.");
+      await loadConversation({ silent: true });
       setAcceptingConversation(false);
       return;
     }
@@ -854,12 +862,20 @@ export const Chat: React.FC = () => {
 
       if (error) {
         console.error("Erro ao transferir conversa:", error);
+        const response = (error as { context?: Response }).context;
+        // As recusas da função (400/403/409) já vêm com o motivo
+        const payload =
+          response && response.status < 500
+            ? await response.json().catch(() => null)
+            : null;
+        toast.error(payload?.error ?? "Não foi possível transferir a conversa.");
         setTransferringConversation(false);
         return;
       }
 
       setIsTransferOpen(false);
       setTransferringConversation(false);
+      toast.success("Conversa transferida.");
 
       navigate("/inbox");
     },
@@ -911,6 +927,10 @@ export const Chat: React.FC = () => {
       setConversation((prev) =>
         prev ? ({ ...prev, tag: nextFirst as any } as any) : prev,
       );
+    } catch (error) {
+      console.error("Erro ao atualizar etiqueta da conversa:", error);
+      toast.error("Não foi possível atualizar a etiqueta desta conversa.");
+      void reloadConversationTags(conversation.id);
     } finally {
       setTagsSavingId(null);
     }

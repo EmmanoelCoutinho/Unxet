@@ -88,27 +88,59 @@ serve(async (req)=>{
         }
       });
     }
-    // 3) valida se dept destino é da mesma clínica
-    const { data: destDept, error: deptErr } = await admin.from("departments").select("id, clinic_id, name").eq("id", toDepartmentId).maybeSingle();
-    if (deptErr || !destDept || destDept.clinic_id !== conv.clinic_id) {
-      return new Response(JSON.stringify({
-        error: "Invalid target department"
+    const reject = (status, error, code)=>new Response(JSON.stringify({
+        error,
+        ...code ? {
+          code
+        } : {}
       }), {
-        status: 400,
+        status,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json"
         }
       });
+    // 3) quem pode transferir: admin, o responsável pela conversa ou, se ela
+    // está na fila (sem responsável), um membro do setor atual
+    const isAdmin = String(membership.role ?? "").toLowerCase() === "admin";
+    let allowed = isAdmin || conv.assigned_user_id === user.id;
+    if (!allowed && !conv.assigned_user_id) {
+      allowed = membership.department_id === conv.department_id;
+      if (!allowed) {
+        const { data: deptMember } = await admin.from("department_members").select("department_id").eq("department_id", conv.department_id).eq("clinic_user_id", user.id).maybeSingle();
+        allowed = !!deptMember;
+      }
     }
-    // regra: ao transferir por setor -> zera responsável e volta pra pending
+    if (!allowed) {
+      return reject(403, "Apenas o responsável pela conversa ou um administrador pode transferi-la.");
+    }
+    if (conv.status === "closed") {
+      return reject(409, "Esta conversa já foi finalizada e não pode ser transferida.", "conversation_closed");
+    }
+    if (toDepartmentId === conv.department_id) {
+      return reject(400, "A conversa já está neste setor.");
+    }
+    // 4) valida se dept destino é da mesma clínica e está ativo
+    const { data: destDept, error: deptErr } = await admin.from("departments").select("id, clinic_id, name, is_active").eq("id", toDepartmentId).maybeSingle();
+    if (deptErr || !destDept || destDept.clinic_id !== conv.clinic_id) {
+      return reject(400, "Setor de destino inválido.");
+    }
+    if (!destDept.is_active) {
+      return reject(400, "O setor de destino está inativo.");
+    }
+    const { data: fromDept } = await admin.from("departments").select("name").eq("id", conv.department_id).maybeSingle();
+    // regra: ao transferir por setor -> zera responsável e volta pra pending.
+    // O status vai na condição do UPDATE para não reabrir uma conversa que foi
+    // finalizada entre a leitura e a gravação.
     const nextStatus = "pending";
+    const nowIso = new Date().toISOString();
     const { data: updated, error: updErr } = await admin.from("conversations").update({
       department_id: toDepartmentId,
       assigned_user_id: null,
       status: nextStatus,
-      updated_at: new Date().toISOString()
-    }).eq("id", conversationId).select("id, status, assigned_user_id, department_id, clinic_id").maybeSingle();
+      status_changed_at: nowIso,
+      updated_at: nowIso
+    }).eq("id", conversationId).neq("status", "closed").select("id, status, assigned_user_id, department_id, clinic_id").maybeSingle();
     if (updErr || !updated) {
       return new Response(JSON.stringify({
         error: "Failed to transfer"
@@ -128,7 +160,9 @@ serve(async (req)=>{
       metadata: {
         performed_by_name: actorName,
         from_department_id: conv.department_id,
+        from_department_name: fromDept?.name ?? null,
         to_department_id: toDepartmentId,
+        to_department_name: destDept.name,
         assigned_user_id: null,
         status: nextStatus
       }
