@@ -9,6 +9,8 @@ import { useClinic } from "../contexts/ClinicContext";
 type UseConversationsOptions = {
   status?: string;
   channel?: string;
+  /** Conversa aberta na tela agora (rota do chat), se houver. */
+  activeConversationId?: string | null;
 };
 
 type DbMessage = {
@@ -39,6 +41,23 @@ export function useConversations(options: UseConversationsOptions = {}) {
   const lastRefetchAtRef = useRef(0);
   const refetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didInitialLoadRef = useRef(false);
+  const fetchSeqRef = useRef(0);
+
+  const activeConversationId = options.activeConversationId ?? null;
+  const activeConversationIdRef = useRef(activeConversationId);
+  activeConversationIdRef.current = activeConversationId;
+
+  // Leituras feitas neste aparelho. Enquanto o servidor não confirma (pending)
+  // ou se confirmou depois que uma contagem foi pedida (confirmedAt), essa
+  // contagem ainda não enxergava a leitura e não pode sobrescrever o estado local.
+  const readMarksRef = useRef(
+    new Map<string, { pending: number; confirmedAt: number }>(),
+  );
+
+  // O atendente está com esta conversa aberta e com o app na tela
+  const isViewing = (conversationId: string) =>
+    activeConversationIdRef.current === conversationId &&
+    document.visibilityState === "visible";
 
   const parsePayload = (raw: any) => {
     if (!raw) return {};
@@ -159,6 +178,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
     async (opts?: { reason?: "initial" | "refetch" }) => {
       const reason =
         opts?.reason ?? (didInitialLoadRef.current ? "refetch" : "initial");
+      const fetchSeq = ++fetchSeqRef.current;
 
       if (!authUser || !clinicId) {
         setConversations([]);
@@ -331,6 +351,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
           }) ?? [];
 
         const ids = mapped.map((c) => c.id).filter(Boolean);
+        const countsRequestedAt = Date.now();
 
         if (ids.length > 0) {
           const { data: counts, error: countsError } = await supabase.rpc(
@@ -357,15 +378,35 @@ export function useConversations(options: UseConversationsOptions = {}) {
           }));
         }
 
-        setConversations(mapped);
+        // Uma busca mais nova já foi disparada: este resultado está defasado
+        if (fetchSeq !== fetchSeqRef.current) return;
+
+        setConversations((prev) => {
+          const prevById = new Map(prev.map((c) => [c.id, c]));
+
+          return mapped.map((c) => {
+            const mark = readMarksRef.current.get(c.id);
+            if (!mark) return c;
+
+            if (mark.pending === 0 && mark.confirmedAt < countsRequestedAt) {
+              readMarksRef.current.delete(c.id);
+              return c;
+            }
+
+            return { ...c, unreadCount: prevById.get(c.id)?.unreadCount ?? 0 };
+          });
+        });
       } catch (err: any) {
         console.error("Erro ao buscar conversas (mantendo estado anterior):", err);
         setError(err);
         // Proteção essencial: não limpamos mais as conversas da tela se houver um erro de infraestrutura temporário.
       } finally {
-        didInitialLoadRef.current = true;
-        setLoading(false);
-        setRefreshing(false);
+        // Busca defasada não mexe no loading: a mais nova ainda está em curso
+        if (fetchSeq === fetchSeqRef.current) {
+          didInitialLoadRef.current = true;
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
     [
@@ -587,6 +628,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
           if (!msg) return;
 
           const isInbound = msg.direction === "inbound";
+          // Mensagem chegando na conversa que está aberta na tela já nasce lida
+          const viewing = isInbound && isViewing(msg.conversation_id);
 
           setConversations((current) => {
             const idx = current.findIndex((c) => c.id === msg.conversation_id);
@@ -605,8 +648,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
               lastMessageType: preview.type ?? old.lastMessageType,
               lastTimestamp: msg.sent_at ?? msg.created_at ?? old.lastTimestamp,
               unreadCount:
-                isInbound && !isAssignedToOther(old, authUser.id)
-                ? (old.unreadCount ?? 0) + 1
+                isInbound && !viewing && !isAssignedToOther(old, authUser.id)
+                  ? (old.unreadCount ?? 0) + 1
                 : (old.unreadCount ?? 0),
             };
 
@@ -625,6 +668,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
           // 🚀 SEGUNDA PROTEÇÃO: Só agenda refetch no banco se a mensagem for de entrada.
           // Mensagens enviadas pelo disparo (outbound) já atualizaram o estado local acima.
           if (isInbound) {
+            if (viewing) markAsReadRef.current(msg.conversation_id);
             scheduleRefetchRef.current();
           }
         },
@@ -640,10 +684,17 @@ export function useConversations(options: UseConversationsOptions = {}) {
     async (conversationId: string) => {
       if (!authUser) return;
 
+      const marks = readMarksRef.current;
+      const mark = marks.get(conversationId) ?? { pending: 0, confirmedAt: 0 };
+      mark.pending += 1;
+      marks.set(conversationId, mark);
+
       setConversations((current) =>
-        current.map((c) =>
-          c.id === conversationId ? { ...c, unreadCount: 0 } : c,
-        ),
+        current.some((c) => c.id === conversationId && c.unreadCount > 0)
+          ? current.map((c) =>
+              c.id === conversationId ? { ...c, unreadCount: 0 } : c,
+            )
+          : current,
       );
 
       const { error } = await supabase.rpc("mark_conversation_read", {
@@ -651,13 +702,46 @@ export function useConversations(options: UseConversationsOptions = {}) {
         p_user_id: authUser.id,
       });
 
+      mark.pending -= 1;
+
       if (error) {
         console.warn("mark_conversation_read falhou:", error);
+        // Sem confirmação, a contagem do servidor volta a valer
+        if (mark.pending === 0 && mark.confirmedAt === 0) {
+          marks.delete(conversationId);
+        }
         scheduleRefetchRef.current();
+        return;
       }
+
+      mark.confirmedAt = Date.now();
     },
     [authUser],
   );
+
+  const markAsReadRef = useRef(markAsRead);
+  useEffect(() => {
+    markAsReadRef.current = markAsRead;
+  }, [markAsRead]);
+
+  // Abrir a conversa por qualquer caminho (lista, link direto, notificação)
+  // marca como lida; voltar para o app com ela aberta, também.
+  useEffect(() => {
+    if (activeConversationId && document.visibilityState === "visible") {
+      markAsRead(activeConversationId);
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      if (activeConversationId) markAsRead(activeConversationId);
+      // O realtime pode ter perdido eventos com o app em segundo plano
+      scheduleRefetchRef.current();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [activeConversationId, markAsRead]);
 
   const totalUnreadCount = useMemo(() => {
     return conversations.reduce(
