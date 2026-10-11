@@ -1375,7 +1375,20 @@ export const Chat: React.FC = () => {
             conversation.status !== "pending"
           }
           closeDisabled={
-            closingConversation || !authUser || conversation.status === "closed"
+            closingConversation ||
+            !authUser ||
+            conversation.status === "closed" ||
+            // mesma regra da função: só o responsável ou um admin finaliza
+            (!isAdmin && conversation.assignedTo !== authUser.id)
+          }
+          transferDisabled={
+            transferringConversation ||
+            !authUser ||
+            conversation.status === "closed" ||
+            // conversa de outro atendente: só ele ou um admin transfere
+            (!isAdmin &&
+              !!conversation.assignedTo &&
+              conversation.assignedTo !== authUser.id)
           }
         />
       ) : null}

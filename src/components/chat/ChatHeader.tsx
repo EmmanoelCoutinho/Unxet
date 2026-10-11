@@ -104,6 +104,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
   const handleClose = async () => {
     if (!onClose || closeDisabled || isClosing) return;
+    // Um toque no ícone encerrava o atendimento (e disparava a pesquisa de
+    // satisfação para o cliente) sem chance de voltar atrás
+    if (!window.confirm("Finalizar esta conversa?")) return;
 
     try {
       setIsClosing(true);

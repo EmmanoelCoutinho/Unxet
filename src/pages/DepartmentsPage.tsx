@@ -64,6 +64,20 @@ const isPermissionError = (
   return error.status === 401 || error.status === 403 || error.code === "42501";
 };
 
+// Traduz os erros do banco que o usuário consegue provocar por esta tela
+const getDepartmentErrorMessage = (error: {
+  code?: string;
+  message: string;
+}) => {
+  if (error.code === "23503") {
+    return "Este departamento tem conversas vinculadas e não pode ser excluído. Desative-o para tirá-lo de uso.";
+  }
+  if (error.code === "23505") {
+    return "Já existe um departamento com este nome.";
+  }
+  return error.message;
+};
+
 const mapRowToDepartment = (row: Department): Department => ({
   id: row.id,
   clinic_id: row.clinic_id,
@@ -217,24 +231,11 @@ export const DepartmentsPage: React.FC = () => {
     async (values: DepartmentFormValues) => {
       if (!clinicId) return null;
 
-      if (values.is_default) {
-        const { error: defaultError } = await supabase
-          .from("departments")
-          .update({ is_default: false })
-          .eq("clinic_id", clinicId);
-
-        if (defaultError) {
-          throw {
-            message: defaultError.message,
-            isPermission: isPermissionError(defaultError),
-          } as DepartmentActionError;
-        }
-      }
-
       const payload = buildDepartmentPayload(values, clinicId);
       const { data, error } = await supabase
         .from("departments")
-        .insert({ ...payload, is_default: values.is_default })
+        // O padrão é definido depois, por setDefaultDepartment (troca atômica)
+        .insert({ ...payload, is_default: false })
         .select(
           "id, clinic_id, name, slug, description, is_default, is_active, created_at, updated_at",
         )
@@ -242,7 +243,7 @@ export const DepartmentsPage: React.FC = () => {
 
       if (error) {
         throw {
-          message: error.message,
+          message: getDepartmentErrorMessage(error),
           isPermission: isPermissionError(error),
         } as DepartmentActionError;
       }
@@ -270,7 +271,7 @@ export const DepartmentsPage: React.FC = () => {
 
       if (error) {
         throw {
-          message: error.message,
+          message: getDepartmentErrorMessage(error),
           isPermission: isPermissionError(error),
         } as DepartmentActionError;
       }
@@ -292,7 +293,7 @@ export const DepartmentsPage: React.FC = () => {
 
       if (error) {
         throw {
-          message: error.message,
+          message: getDepartmentErrorMessage(error),
           isPermission: isPermissionError(error),
         } as DepartmentActionError;
       }
@@ -304,31 +305,15 @@ export const DepartmentsPage: React.FC = () => {
     async (departmentId: string) => {
       if (!clinicId) return;
 
-      const { error: resetError } = await supabase
-        .from("departments")
-        .update({ is_default: false })
-        .eq("clinic_id", clinicId);
-
-      if (resetError) {
-        throw {
-          message: resetError.message,
-          isPermission: isPermissionError(resetError),
-        } as DepartmentActionError;
-      }
-
-      const { data, error } = await supabase
-        .from("departments")
-        .update({ is_default: true })
-        .eq("id", departmentId)
-        .eq("clinic_id", clinicId)
-        .select(
-          "id, clinic_id, name, slug, description, is_default, is_active, created_at, updated_at",
-        )
-        .single();
+      // Uma transação só no banco: em duas chamadas, uma falha no meio
+      // deixava a clínica sem departamento padrão
+      const { data, error } = await supabase.rpc("set_default_department", {
+        p_department_id: departmentId,
+      });
 
       if (error) {
         throw {
-          message: error.message,
+          message: getDepartmentErrorMessage(error),
           isPermission: isPermissionError(error),
         } as DepartmentActionError;
       }
@@ -354,7 +339,7 @@ export const DepartmentsPage: React.FC = () => {
 
       if (error) {
         throw {
-          message: error.message,
+          message: getDepartmentErrorMessage(error),
           isPermission: isPermissionError(error),
         } as DepartmentActionError;
       }

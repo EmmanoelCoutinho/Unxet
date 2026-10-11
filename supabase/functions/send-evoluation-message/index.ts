@@ -102,7 +102,9 @@ serve(async (req)=>{
      * =========================================================
      */ const body = await req.json();
     console.log("[EVOLUTION_SEND_FULL]", JSON.stringify(body, null, 2));
-    const { conversationId, text, mediaUrl, fileName, mimeType, mediaMimeType, nonce, type } = body;
+    const { conversationId, text, mediaUrl, mimeType, mediaMimeType, nonce, type } = body;
+    // O app envia "filename" / "mediaMimeType"; os nomes antigos continuam aceitos
+    const fileName = body.fileName || body.filename || null;
     const finalMimeType = mimeType || mediaMimeType || "";
     if (!conversationId) {
       return new Response(JSON.stringify({
@@ -143,6 +145,28 @@ serve(async (req)=>{
     if (!allowed) {
       return new Response(JSON.stringify({
         error: "Not allowed"
+      }), {
+        status: 403,
+        headers: corsHeaders
+      });
+    }
+    /*
+     * =========================================================
+     * NONCE (uso único, igual aos envios pela Meta): evita reenvio do mesmo
+     * pedido e envios que não passaram pelo create-send-nonce
+     * =========================================================
+     */ const nonceId = typeof nonce === "string" ? nonce.trim() : "";
+    const nowMs = Date.now();
+    const { data: consumedNonce, error: nonceError } = nonceId ? await adminSupabase.from("send_nonces").update({
+      used_at: new Date(nowMs).toISOString()
+    }).eq("id", nonceId).eq("user_id", user.id).eq("conversation_id", conversationId).is("used_at", null).gt("expires_at", new Date(nowMs).toISOString()).select("id").maybeSingle() : {
+      data: null,
+      error: null
+    };
+    if (nonceError || !consumedNonce) {
+      return new Response(JSON.stringify({
+        error: "Invalid nonce",
+        reason: "nonce_invalid"
       }), {
         status: 403,
         headers: corsHeaders
@@ -376,7 +400,7 @@ serve(async (req)=>{
       receiver: number,
       text: text ?? "",
       media_url: mediaUrl ?? null,
-      media_mime_type: mimeType ?? null,
+      media_mime_type: finalMimeType || null,
       filename: fileName ?? null,
       payload: evolutionResponse,
       sent_at: now,
@@ -397,11 +421,17 @@ serve(async (req)=>{
      * =========================================================
      * UPDATE CONVERSATION
      * =========================================================
-     */ await adminSupabase.from("conversations").update({
+     */ const conversationUpdates = {
       updated_at: now,
       last_message_at: now,
-      last_outbound_at: now
-    }).eq("id", conversation.id);
+      last_outbound_at: now,
+      // respondido: zera a contagem do SLA de 1ª resposta
+      first_unanswered_inbound_at: null
+    };
+    if (!conversation.first_outbound_at) {
+      conversationUpdates.first_outbound_at = now;
+    }
+    await adminSupabase.from("conversations").update(conversationUpdates).eq("id", conversation.id);
     // Atualiza o phone do contato para o número resolvido,
     // evitando nova resolução nas próximas mensagens
     if (rawNumber !== number) {

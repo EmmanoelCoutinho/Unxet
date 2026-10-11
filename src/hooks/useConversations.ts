@@ -211,7 +211,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
           id,
           status,
           channel,
-          channel_connections!inner (
+          channel_connections (
             provider
           ),
           last_message_at,

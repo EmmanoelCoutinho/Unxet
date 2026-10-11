@@ -186,7 +186,7 @@ export const Inbox: React.FC = () => {
                   ({openConversations.length})
                 </span>
                 {totalUnreadOpen > 0 && (
-                  <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-xs">
+                  <span className="ml-1 rounded-full bg-[#0A84FF] px-2 py-0.5 text-xs font-semibold text-white">
                     {totalUnreadOpen}
                   </span>
                 )}
@@ -209,7 +209,7 @@ export const Inbox: React.FC = () => {
                   ({pendingConversations.length})
                 </span>
                 {totalUnreadPending > 0 && (
-                  <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-xs">
+                  <span className="ml-1 rounded-full bg-[#0A84FF] px-2 py-0.5 text-xs font-semibold text-white">
                     {totalUnreadPending}
                   </span>
                 )}
@@ -237,7 +237,7 @@ export const Inbox: React.FC = () => {
                   : "Nenhuma conversa pendente"}
               </p>
               <p className="text-sm text-gray-500">
-                Ajuste os filtros ou inicie um chat.
+                Novas conversas aparecem aqui automaticamente.
               </p>
             </div>
           ) : (
