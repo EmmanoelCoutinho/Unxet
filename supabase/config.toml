@@ -437,3 +437,6 @@ verify_jwt = true
 
 [functions.media-urls]
 verify_jwt = true
+
+[functions.internal-chat-push]
+verify_jwt = true

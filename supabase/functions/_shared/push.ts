@@ -84,7 +84,25 @@ async function sendInboundPush(supabase, { conversationId, messageType }) {
   if (!conversation?.clinic_id) return;
 
   const userIds = await resolveRecipients(supabase, conversation);
-  if (userIds.length === 0) return;
+
+  await sendPushToUsers(supabase, userIds, {
+    title: conversation.contact?.name || conversation.contact?.phone || "Novo contato",
+    body: buildBody(messageType),
+    conversationId,
+    url: `/inbox/chat/${conversationId}`,
+  });
+}
+
+/**
+ * Envia a mesma notificação para todos os aparelhos inscritos dos usuários.
+ * `conversationId` agrupa as notificações no aparelho (ver public/sw.js).
+ */
+export async function sendPushToUsers(
+  supabase,
+  userIds: string[],
+  notification: { title: string; body: string; conversationId: string; url: string },
+) {
+  if (!PUSH_ENABLED || userIds.length === 0) return;
 
   const { data: subscriptions, error: subsErr } = await supabase
     .from("push_subscriptions")
@@ -93,12 +111,7 @@ async function sendInboundPush(supabase, { conversationId, messageType }) {
   if (subsErr) throw subsErr;
   if (!subscriptions?.length) return;
 
-  const payload = JSON.stringify({
-    title: conversation.contact?.name || conversation.contact?.phone || "Novo contato",
-    body: buildBody(messageType),
-    conversationId,
-    url: `/inbox/chat/${conversationId}`,
-  });
+  const payload = JSON.stringify(notification);
 
   const expired: string[] = [];
   await Promise.all(

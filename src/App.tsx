@@ -13,6 +13,7 @@ import { Inbox } from "./pages/Inbox";
 import { Chat } from "./pages/Chat";
 import { Header } from "./components/layout/Header";
 import { PushNotificationsBridge } from "./components/PushNotificationsBridge";
+import { InternalChatBridge } from "./components/InternalChatBridge";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { InboxEmpty } from "./pages/InboxEmpty";
@@ -75,6 +76,11 @@ const MarketingCampaignsPage = lazy(() =>
 );
 const ContactsPage = lazy(() =>
   import("./pages/Contacts").then((m) => ({ default: m.ContactsPage })),
+);
+const InternalChatPage = lazy(() =>
+  import("./pages/InternalChat").then((m) => ({
+    default: m.InternalChatPage,
+  })),
 );
 const MassMessagesPage = lazy(() =>
   import("./pages/MassMessages").then((m) => ({
@@ -163,6 +169,7 @@ function RoutedApp() {
   return (
     <>
       <PushNotificationsBridge />
+      <InternalChatBridge />
       {showHeader && <Header />}
       <main
         className={
@@ -198,6 +205,8 @@ function RoutedApp() {
               }
             />
             <Route path="chat/:id" element={<Chat />} />
+            <Route path="team" element={<InternalChatPage />} />
+            <Route path="team/:threadId" element={<InternalChatPage />} />
             <Route path="tags" element={<Tags />} />
             <Route path="departments" element={<AdminOnly><DepartmentsPage /></AdminOnly>} />
             <Route path="attendants" element={<AdminOnly><AttendantsPage /></AdminOnly>} />

@@ -3,10 +3,12 @@ import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { XIcon } from "lucide-react";
 import {
+  formatUnreadBadge,
   isSidebarItemActive,
   useSidebarNavigation,
   type SidebarItem,
 } from "./AppSidebar";
+import { useInternalUnreadTotal } from "../../modules/internalChat/hooks/useInternalChat";
 
 type MobileNavProps = {
   open: boolean;
@@ -23,6 +25,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const { items, settings } = useSidebarNavigation();
+  const internalUnread = useInternalUnreadTotal();
 
   // Fecha ao trocar de rota
   useEffect(() => {
@@ -62,6 +65,11 @@ export const MobileNav: React.FC<MobileNavProps> = ({
       >
         <Icon className="h-5 w-5 flex-shrink-0" />
         <span className="truncate">{item.label}</span>
+        {item.showsInternalUnread && internalUnread > 0 && (
+          <span className="ml-auto flex-shrink-0 rounded-full bg-[#0A84FF] px-2 py-0.5 text-xs font-semibold text-white">
+            {formatUnreadBadge(internalUnread)}
+          </span>
+        )}
       </button>
     );
   };
