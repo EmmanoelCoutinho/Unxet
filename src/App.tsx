@@ -88,6 +88,11 @@ const MassMessagesPage = lazy(() =>
   })),
 );
 
+// Painel da Unxet: login e sessão próprios, fora do app das empresas
+const AdminApp = lazy(() =>
+  import("./modules/admin/AdminApp").then((m) => ({ default: m.AdminApp })),
+);
+
 type RequireAuthProps = {
   children: ReactNode;
 };
@@ -298,12 +303,27 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
-        <AuthProvider>
-          <ClinicProvider>
-            <ToastContainer position="top-right" autoClose={3000} />
-            <RoutedApp />
-          </ClinicProvider>
-        </AuthProvider>
+        <ToastContainer position="top-right" autoClose={3000} />
+        <Routes>
+          <Route
+            path="/admin/*"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <AdminApp />
+              </Suspense>
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <AuthProvider>
+                <ClinicProvider>
+                  <RoutedApp />
+                </ClinicProvider>
+              </AuthProvider>
+            }
+          />
+        </Routes>
       </BrowserRouter>
     </QueryClientProvider>
   );
