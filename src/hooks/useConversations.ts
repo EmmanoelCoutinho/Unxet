@@ -252,6 +252,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
           if (!isAdmin) q = q.in("department_id", accessibleDepartmentIds);
           return q
             .neq("status", "closed")
+            // Conversa que o bot ainda está conduzindo não entra na fila
+            .eq("in_bot_flow", false)
             .order("last_message_at", { ascending: false })
             // Só a última mensagem de cada conversa (prévia na lista)
             .order("sent_at", { referencedTable: "messages", ascending: false })
@@ -546,7 +548,10 @@ export function useConversations(options: UseConversationsOptions = {}) {
             setConversations((current) => {
               const idx = current.findIndex((c) => c.id === conversationId);
 
-              if (String(nextRow?.status) === "closed") {
+              if (
+                String(nextRow?.status) === "closed" ||
+                nextRow?.in_bot_flow === true
+              ) {
                 if (idx === -1) return current;
                 const clone = [...current];
                 clone.splice(idx, 1);

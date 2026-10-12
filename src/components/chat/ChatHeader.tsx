@@ -145,6 +145,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             onSelect: () => onTransfer?.(),
             disabled: transferDisabled || !onTransfer,
           },
+        ]
+      : []),
+    {
+      label: "Gerenciar Etiquetas",
+      icon: <TagIcon className="h-4 w-4" />,
+      onSelect: () => onManageTags?.(),
+    },
+    // Ação destrutiva sempre por último
+    ...(isMobile
+      ? [
           {
             label: isClosing ? "Finalizando..." : "Finalizar conversa",
             icon: <TbMessageOff className="h-4 w-4" />,
@@ -154,11 +164,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           },
         ]
       : []),
-    {
-      label: "Gerenciar Etiquetas",
-      icon: <TagIcon className="h-4 w-4" />,
-      onSelect: () => onManageTags?.(),
-    },
   ];
 
   return (
@@ -277,20 +282,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             )
           ) : (
             <>
-              <CustomTooltip
-                text={isClosing ? "Finalizando..." : "Finalizar conversa"}
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClose}
-                  disabled={closeIsDisabled || !onClose}
-                  aria-disabled={closeIsDisabled || !onClose}
-                >
-                  <TbMessageOff className="h-5 w-5" />
-                </Button>
-              </CustomTooltip>
-
               <CustomTooltip text="Transferir conversa">
                 <Button
                   variant="ghost"
@@ -314,6 +305,20 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                   aria-disabled={acceptIsDisabled || !onAccept}
                 >
                   <TbMessageCheck className="h-5 w-5" />
+                </Button>
+              </CustomTooltip>
+
+              <CustomTooltip
+                text={isClosing ? "Finalizando..." : "Finalizar conversa"}
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClose}
+                  disabled={closeIsDisabled || !onClose}
+                  aria-disabled={closeIsDisabled || !onClose}
+                >
+                  <TbMessageOff className="h-5 w-5" />
                 </Button>
               </CustomTooltip>
             </>

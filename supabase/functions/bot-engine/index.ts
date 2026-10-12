@@ -86,6 +86,7 @@ serve(async (req)=>{
     }
     const binding = await getActiveBinding(supabase, body.clinicId, body.channelConnectionId);
     if (!binding) {
+      await revealConversation(supabase, body.conversationId);
       return json(200, {
         ok: true,
         skipped: "no_active_binding"
@@ -93,12 +94,14 @@ serve(async (req)=>{
     }
     const bot = await getBot(supabase, body.clinicId, binding.bot_id);
     if (!bot) {
+      await revealConversation(supabase, body.conversationId);
       return json(200, {
         ok: true,
         skipped: "bot_not_found"
       });
     }
     if (bot.status !== "active") {
+      await revealConversation(supabase, body.conversationId);
       return json(200, {
         ok: true,
         skipped: "bot_not_active"
@@ -164,6 +167,7 @@ serve(async (req)=>{
           endedReason: "human_reply"
         });
       }
+      await revealConversation(supabase, body.conversationId);
       return json(200, {
         ok: true,
         skipped: "human_attending"
@@ -212,6 +216,7 @@ serve(async (req)=>{
     if (shouldStart) {
       const rootNode = await getRootNode(supabase, body.clinicId, bot.id);
       if (!rootNode) {
+        await revealConversation(supabase, body.conversationId);
         return json(200, {
           ok: true,
           skipped: "root_node_not_found"
@@ -225,6 +230,7 @@ serve(async (req)=>{
         channelConnectionId: body.channelConnectionId,
         currentNodeId: rootNode.id
       });
+      await hideConversationWhileBotAnswers(supabase, body.conversationId);
       await insertBotEvent(supabase, {
         clinicId: body.clinicId,
         conversationId: body.conversationId,
@@ -271,6 +277,7 @@ serve(async (req)=>{
       });
     }
     if (!activeSession) {
+      await revealConversation(supabase, body.conversationId);
       return json(200, {
         ok: true,
         skipped: "no_active_session"
@@ -278,6 +285,7 @@ serve(async (req)=>{
     }
     const currentNode = activeSession.current_node_id ? await getNodeById(supabase, body.clinicId, activeSession.current_node_id) : null;
     if (!currentNode) {
+      await revealConversation(supabase, body.conversationId);
       return json(200, {
         ok: true,
         skipped: "session_current_node_not_found"
@@ -285,6 +293,7 @@ serve(async (req)=>{
     }
     await touchSession(supabase, activeSession.id);
     if (currentNode.node_type !== "menu") {
+      await revealConversation(supabase, body.conversationId);
       return json(200, {
         ok: true,
         skipped: "current_node_not_menu"
@@ -786,6 +795,7 @@ async function handleInvalidOption(params) {
       status: SESSION_STATUS_COMPLETED,
       endedReason: "invalid_limit"
     });
+    await revealConversation(supabase, conversationId);
     return;
   }
   const options = await getOptionsByNodeId(supabase, node.id);
@@ -961,6 +971,7 @@ async function executeOptionAction(params) {
     const payload = {
       status: STATUS_PENDING,
       assigned_user_id: null,
+      ...humanQueueFields(),
       updated_at: new Date().toISOString()
     };
     if (option.target_department_id) {
@@ -1057,10 +1068,45 @@ async function executeOptionAction(params) {
   }
   return null;
 }
+// ---------------------------------------------------------------------------
+// Fila dos atendentes
+// ---------------------------------------------------------------------------
+// Enquanto o bot conduz a conversa ela fica fora da lista "Pendentes"
+// (conversations.in_bot_flow). Entra na fila quando o bot passa para uma
+// pessoa, desiste, ou quando o cliente escreve e o bot não vai responder.
+function humanQueueFields() {
+  return {
+    in_bot_flow: false,
+    // o prazo de 1ª resposta conta a partir do momento em que cai na fila
+    first_unanswered_inbound_at: new Date().toISOString(),
+    sla_breached_at: null
+  };
+}
+async function hideConversationWhileBotAnswers(supabase, conversationId) {
+  const { error } = await supabase.from("conversations").update({
+    in_bot_flow: true,
+    updated_at: new Date().toISOString()
+  }).eq("id", conversationId).eq("status", STATUS_PENDING);
+  if (error) {
+    console.error("hideConversationWhileBotAnswers error:", error);
+  }
+}
+// Só altera quando a conversa estava com o bot (não gera evento à toa)
+async function revealConversation(supabase, conversationId) {
+  if (!conversationId) return;
+  const { error } = await supabase.from("conversations").update({
+    ...humanQueueFields(),
+    updated_at: new Date().toISOString()
+  }).eq("id", conversationId).eq("in_bot_flow", true);
+  if (error) {
+    console.error("revealConversation error:", error);
+  }
+}
 async function handoffConversation(supabase, conversationId, departmentId) {
   const payload = {
     status: STATUS_PENDING,
     assigned_user_id: null,
+    ...humanQueueFields(),
     updated_at: new Date().toISOString()
   };
   if (departmentId) {
