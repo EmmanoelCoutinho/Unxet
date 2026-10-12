@@ -10,6 +10,7 @@ import {
 } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { useClinic } from "../contexts/ClinicContext";
+import { DELETED_MESSAGE_TEXT } from "./useMessages";
 
 type UseConversationsOptions = {
   status?: string;
@@ -27,6 +28,7 @@ type DbMessage = {
   type?: string | null;
   payload?: any;
   created_at?: string | null;
+  deleted_at?: string | null;
 };
 
 const isAssignedToOther = (conversation: Conversation, userId: string) =>
@@ -105,9 +107,18 @@ export function useConversations(options: UseConversationsOptions = {}) {
     text: string | null;
     type?: string | null;
     payload?: any;
+    deleted_at?: string | null;
   }) => {
     if (!msg) {
       return { text: "", type: "text" as Conversation["lastMessageType"] };
+    }
+
+    // Mensagem apagada não expõe o conteúdo na prévia
+    if (msg.deleted_at) {
+      return {
+        text: DELETED_MESSAGE_TEXT,
+        type: "text" as Conversation["lastMessageType"],
+      };
     }
 
     const payload = parsePayload(msg.payload);
@@ -232,7 +243,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
             created_at,
             direction,
             type,
-            payload
+            payload,
+            deleted_at
           ),
           conversation_tags (
             tag_id,
@@ -349,6 +361,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
               lastMessage: preview.text,
               lastMessageType: preview.type,
+              lastMessageId: last?.id ?? undefined,
               lastTimestamp:
                 last?.sent_at ?? row.last_message_at ?? row.created_at ?? "",
 
@@ -660,6 +673,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
               ...old,
               lastMessage: preview.text || old.lastMessage,
               lastMessageType: preview.type ?? old.lastMessageType,
+              lastMessageId: msg.id,
               lastTimestamp: msg.sent_at ?? msg.created_at ?? old.lastTimestamp,
               unreadCount:
                 isInbound && !viewing && !isAssignedToOther(old, authUser.id)
@@ -685,6 +699,37 @@ export function useConversations(options: UseConversationsOptions = {}) {
             if (viewing) markAsReadRef.current(msg.conversation_id);
             scheduleRefetchRef.current();
           }
+        },
+      )
+      // Mensagem apagada: se era a última da conversa, a prévia deixa de mostrar o texto
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+        },
+        (payload) => {
+          const msg = payload.new as DbMessage;
+          if (!msg?.deleted_at) return;
+
+          setConversations((current) => {
+            const idx = current.findIndex(
+              (c) => c.id === msg.conversation_id && c.lastMessageId === msg.id,
+            );
+            if (idx === -1) return current;
+
+            const preview = getPreview(msg);
+            if (current[idx].lastMessage === preview.text) return current;
+
+            const clone = [...current];
+            clone[idx] = {
+              ...clone[idx],
+              lastMessage: preview.text,
+              lastMessageType: preview.type,
+            };
+            return clone;
+          });
         },
       )
       .subscribe();

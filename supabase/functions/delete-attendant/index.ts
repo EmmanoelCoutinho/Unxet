@@ -129,6 +129,26 @@ serve(async (req) => {
       });
     }
 
+    // Avisa os aparelhos em que a pessoa ainda está logada: o app confere a
+    // sessão na hora e desloga (sem o aviso, só na próxima conferência periódica).
+    try {
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const resp = await fetch(`${Deno.env.get("SUPABASE_URL")}/realtime/v1/api/broadcast`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`
+        },
+        body: JSON.stringify({
+          messages: [{ topic: `user-session:${userId}`, event: "revoked", payload: {} }]
+        })
+      });
+      if (!resp.ok) log("session_revoked_broadcast_failed", { status: resp.status });
+    } catch (broadcastErr) {
+      log("session_revoked_broadcast_failed", { error: String(broadcastErr?.message ?? broadcastErr) });
+    }
+
     log("delete_ok", { userId });
     return json(200, { ok: true, user_id: userId });
   } catch (error) {
