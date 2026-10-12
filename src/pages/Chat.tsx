@@ -1088,6 +1088,12 @@ export const Chat: React.FC = () => {
       }
 
       const inserted = (data as any)?.message;
+      if ((data as any)?.persisted === false) {
+        toast.warn(
+          "A mensagem foi enviada ao cliente, mas não foi salva no histórico. Não é preciso reenviar.",
+          { autoClose: 8000 },
+        );
+      }
       if (!inserted) {
         console.warn(
           `Envio concluído sem mensagem persistida imediata (${functionName}). Aguardando sincronização pelo realtime.`,

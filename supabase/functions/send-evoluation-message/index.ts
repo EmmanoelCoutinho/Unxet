@@ -285,7 +285,7 @@ serve(async (req)=>{
           encoding: true
         })
       });
-      evolutionResponse = await resp.json();
+      evolutionResponse = await resp.json().catch(()=>null);
       if (!resp.ok) {
         console.error("[EVOLUTION_AUDIO_ERROR]", evolutionResponse);
         return new Response(JSON.stringify({
@@ -314,7 +314,7 @@ serve(async (req)=>{
           caption: text ?? ""
         })
       });
-      evolutionResponse = await resp.json();
+      evolutionResponse = await resp.json().catch(()=>null);
       if (!resp.ok) {
         console.error("[EVOLUTION_IMAGE_ERROR]", evolutionResponse);
         return new Response(JSON.stringify({
@@ -345,7 +345,7 @@ serve(async (req)=>{
           fileName: fileName ?? `file-${Date.now()}`
         })
       });
-      evolutionResponse = await resp.json();
+      evolutionResponse = await resp.json().catch(()=>null);
       if (!resp.ok) {
         console.error("[EVOLUTION_DOCUMENT_ERROR]", evolutionResponse);
         return new Response(JSON.stringify({
@@ -372,7 +372,7 @@ serve(async (req)=>{
           text
         })
       });
-      evolutionResponse = await resp.json();
+      evolutionResponse = await resp.json().catch(()=>null);
       if (!resp.ok) {
         console.error("[EVOLUTION_TEXT_ERROR]", evolutionResponse);
         return new Response(JSON.stringify({
@@ -390,7 +390,7 @@ serve(async (req)=>{
      * =========================================================
      */ const providerMessageId = evolutionResponse?.key?.id ?? crypto.randomUUID();
     const now = new Date().toISOString();
-    const { data: savedMessage, error: messageError } = await adminSupabase.from("messages").insert({
+    const messageRow = {
       conversation_id: conversation.id,
       direction: "outbound",
       type: outboundType,
@@ -405,9 +405,22 @@ serve(async (req)=>{
       payload: evolutionResponse,
       sent_at: now,
       created_at: now
-    }).select("id").maybeSingle();
-    if (messageError) {
-      console.error("[SAVE_MESSAGE_ERROR]", messageError);
+    };
+    // A mensagem já saiu para o cliente: devolver erro aqui faria o atendente
+    // reenviar e o cliente receber em dobro. Tenta gravar de novo e, se não
+    // der, responde sucesso avisando que o histórico não foi salvo.
+    let savedMessage = null;
+    let messageError = null;
+    for(let attempt = 1; attempt <= 2 && !savedMessage; attempt++){
+      const result = await adminSupabase.from("messages").insert(messageRow).select("*").maybeSingle();
+      savedMessage = result.data ?? null;
+      messageError = result.error ?? null;
+      if (messageError) {
+        console.error("[SAVE_MESSAGE_ERROR]", {
+          attempt,
+          error: messageError
+        });
+      }
     }
     // Transcrição do áudio enviado (antes não era criada: ficava "carregando")
     if (outboundType === "audio" && savedMessage?.id) {
@@ -451,6 +464,9 @@ serve(async (req)=>{
      */ return new Response(JSON.stringify({
       success: true,
       providerMessageId,
+      // a tela troca a mensagem "enviando" por esta sem depender do realtime
+      message: savedMessage,
+      persisted: !!savedMessage,
       response: evolutionResponse
     }), {
       status: 200,

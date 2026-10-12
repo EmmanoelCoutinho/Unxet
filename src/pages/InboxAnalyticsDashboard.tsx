@@ -317,7 +317,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
   );
 
   const [departments, setDepartments] = useState<
-    Array<{ id: string; name: string }>
+    Array<{ id: string; name: string; is_active?: boolean }>
   >([]);
   
   // Atualizado: Definição do estado incluindo name e email para tratamento seguro
@@ -374,8 +374,10 @@ export const InboxAnalyticsDashboard: React.FC = () => {
     Promise.all([
       supabase
         .from("departments")
-        .select("id,name")
+        // Inativos continuam no filtro (têm histórico), mas identificados
+        .select("id,name,is_active")
         .eq("clinic_id", clinicId)
+        .order("is_active", { ascending: false })
         .order("name"),
       supabase
         .from("clinic_users")
@@ -547,6 +549,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
               {departments.map((department) => (
                 <option key={department.id} value={department.id}>
                   {department.name}
+                  {department.is_active === false ? " (inativo)" : ""}
                 </option>
               ))}
             </select>

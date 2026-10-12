@@ -341,6 +341,7 @@ serve(async (req)=>{
     // Mensagens interativas NUNCA devem sinalizar reopenedFromClosed=true:
     // isso faria o engine cancelar a sessão em curso e reiniciar o fluxo,
     // ignorando a opção selecionada pelo usuário.
+    let botFailed = false;
     try {
       const reopenedFromClosed = wasClosed && !isInteractiveMessage;
       const botResp = await fetch(`${SUPABASE_URL}/functions/v1/bot-engine`, {
@@ -366,14 +367,27 @@ serve(async (req)=>{
       });
       if (!botResp.ok) {
         console.error("bot-engine retornou erro:", botResp.status, await botResp.text());
+        botFailed = true;
       }
     } catch (err) {
       console.error("Erro chamando bot-engine:", err);
+      botFailed = true;
     }
-    queueInboundPush(supabase, {
-      conversationId: conversation.id,
-      messageType
-    });
+    // O bot falhou: a conversa não pode ficar escondida da equipe
+    if (botFailed) {
+      await supabase.from("conversations").update({
+        in_bot_flow: false,
+        updated_at: new Date().toISOString()
+      }).eq("id", conversation.id).eq("in_bot_flow", true);
+    }
+    // Enquanto o bot conduz a conversa ela não está na fila: sem notificação
+    const { data: botState } = await supabase.from("conversations").select("in_bot_flow").eq("id", conversation.id).maybeSingle();
+    if (botState?.in_bot_flow !== true) {
+      queueInboundPush(supabase, {
+        conversationId: conversation.id,
+        messageType
+      });
+    }
     // ── 11. Evento de reabertura ──────────────────────────────────────────
     if (shouldReopen) {
       const { error: evErr } = await supabase.from("conversation_events").insert({

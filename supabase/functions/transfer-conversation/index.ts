@@ -137,6 +137,7 @@ serve(async (req)=>{
     const { data: updated, error: updErr } = await admin.from("conversations").update({
       department_id: toDepartmentId,
       assigned_user_id: null,
+      in_bot_flow: false,
       status: nextStatus,
       status_changed_at: nowIso,
       updated_at: nowIso

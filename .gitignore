@@ -28,3 +28,4 @@ dist-ssr
 
 # Supabase CLI (estado local)
 supabase/.temp
+supabase/.branches
