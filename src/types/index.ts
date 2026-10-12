@@ -41,6 +41,8 @@ export type Conversation = {
     | "video"
     | "document"
     | "other";
+  // Mensagem exibida na prévia (para atualizá-la se for apagada)
+  lastMessageId?: string;
   lastTimestamp: string;
   unreadCount: number;
   tags?: Tag[];

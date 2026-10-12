@@ -9,7 +9,13 @@ import {
   useState,
   ReactNode,
 } from "react";
-import { User } from "@supabase/supabase-js";
+import {
+  AuthError,
+  User,
+  isAuthApiError,
+  isAuthSessionMissingError,
+} from "@supabase/supabase-js";
+import { toast } from "react-toastify";
 import { supabase } from "../lib/supabaseClient";
 import { disablePush } from "../lib/pushNotifications";
 import { getAuthCallbackUrl } from "../lib/appUrl";
@@ -49,7 +55,16 @@ type StoredProfile = {
 // TTL opcional (se quiser sempre usar cache “fresco”)
 const PROFILE_TTL_MS = 10 * 60 * 1000; // 10 min (ajuste ou coloque 0 para “infinito”)
 
-const readStorage = <T,>(key: string): T | null => {
+// Conferência periódica da sessão com o servidor (ver verifySession)
+const SESSION_CHECK_INTERVAL_MS = 60 * 1000;
+const SESSION_CHECK_MIN_GAP_MS = 10 * 1000;
+
+// Erro de rede não conta: só desloga quando o servidor recusa a sessão/usuário
+const isSessionRevokedError = (error: AuthError) =>
+  isAuthSessionMissingError(error) ||
+  (isAuthApiError(error) && (error.status === 401 || error.status === 403));
+
+const readStorage =<T,>(key: string): T | null => {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(key);
@@ -179,6 +194,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  // Conta excluída com a pessoa logada: o token salvo no aparelho segue válido
+  // até expirar, mas a sessão já não existe no servidor. Confere com o servidor
+  // e, se a sessão foi encerrada, desloga este aparelho.
+  const authUserId = authUser?.id ?? null;
+  useEffect(() => {
+    if (!authUserId) return;
+
+    let active = true;
+    let checking = false;
+    let lastCheckAt = 0;
+
+    const verifySession = async (force = false) => {
+      if (checking) return;
+      if (!force && Date.now() - lastCheckAt < SESSION_CHECK_MIN_GAP_MS) return;
+      checking = true;
+      lastCheckAt = Date.now();
+
+      try {
+        const { error } = await supabase.auth.getUser();
+        if (!active || !error || !isSessionRevokedError(error)) return;
+
+        // A sessão não existe mais no servidor: limpa só este aparelho
+        await supabase.auth.signOut({ scope: "local" });
+        if (!mountedRef.current) return;
+        setAuthUser(null);
+        setProfile(null);
+        writeStorage(STORAGE_PROFILE_KEY, null);
+        toast.error("Sua conta foi removida. Fale com o administrador.", {
+          toastId: "session-revoked",
+        });
+      } finally {
+        checking = false;
+      }
+    };
+
+    verifySession(true);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") verifySession();
+    };
+    const onFocus = () => verifySession();
+    const interval = setInterval(onVisible, SESSION_CHECK_INTERVAL_MS);
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onFocus);
+
+    // Aviso imediato da edge function delete-attendant. O aviso só dispara a
+    // conferência: quem decide o logout é o servidor de autenticação.
+    const channel = supabase
+      .channel(`user-session:${authUserId}`)
+      .on("broadcast", { event: "revoked" }, () => verifySession(true))
+      .subscribe();
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onFocus);
+      supabase.removeChannel(channel);
+    };
+  }, [authUserId]);
 
   const signInWithEmail = async (email: string, password: string) => {
     setLoading(true);
