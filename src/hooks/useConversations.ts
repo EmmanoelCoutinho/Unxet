@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import type { Conversation, Channel, Tag } from "../types";
+import {
+  isSlaBreached,
+  type Conversation,
+  type Channel,
+  type Tag,
+} from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { useClinic } from "../contexts/ClinicContext";
 
@@ -217,6 +222,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
           last_message_at,
           created_at,
           assigned_user_id,
+          sla_breached_at,
+          first_unanswered_inbound_at,
           contacts:contact_id (*),
           messages (
             id,
@@ -347,6 +354,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
               tags,
               assignedTo: row.assigned_user_id ?? undefined,
+              slaBreached: isSlaBreached(row),
             };
           }) ?? [];
 
@@ -556,6 +564,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
                 ...old,
                 status: nextRow?.status ?? old.status,
                 assignedTo: nextRow?.assigned_user_id ?? undefined,
+                slaBreached: isSlaBreached(nextRow ?? {}),
                 lastTimestamp:
                   nextRow?.last_message_at ?? old.lastTimestamp ?? undefined,
               };

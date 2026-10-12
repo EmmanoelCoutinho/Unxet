@@ -5,6 +5,7 @@ import {
   FacebookIcon,
   ImageIcon,
   UserIcon,
+  ClockIcon,
 } from "lucide-react";
 import { Conversation } from "../../types";
 import { CustomTooltip } from "../ui/CustomTooltip";
@@ -147,6 +148,15 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
               {channelInfo.icon}
               {channelInfo.name}
             </span>
+            {conversation.slaBreached && (
+              <span
+                title="O cliente aguarda a primeira resposta há mais tempo que o prazo definido"
+                className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700"
+              >
+                <ClockIcon className="h-3.5 w-3.5" />
+                SLA estourado
+              </span>
+            )}
             {visibleTag ? renderTagPill(visibleTag) : null}
             {hiddenTagsCount > 0 ? (
               <CustomTooltip

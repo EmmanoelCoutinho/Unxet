@@ -204,6 +204,15 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 {STATUS_BADGE[conversation.status].label}
               </span>
 
+              {conversation.slaBreached && (
+                <span
+                  title="O cliente aguarda a primeira resposta há mais tempo que o prazo definido"
+                  className="flex-shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
+                >
+                  SLA estourado
+                </span>
+              )}
+
               {departmentName && (
                 <span
                   title={`Setor: ${departmentName}`}
