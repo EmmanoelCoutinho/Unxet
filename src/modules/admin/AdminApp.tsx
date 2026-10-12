@@ -4,10 +4,14 @@ import { LogOut } from "lucide-react";
 import logo from "../../assets/logo-unxet.png";
 import { AdminAuthProvider, useAdminAuth } from "./contexts/AdminAuthContext";
 import { AdminLogin } from "./pages/AdminLogin";
+import { MetricsPage } from "./pages/MetricsPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 
 // Novas abas do painel (planos etc.) entram aqui e nas rotas abaixo
-const ADMIN_TABS = [{ to: "/admin/onboarding", label: "Onboarding" }];
+const ADMIN_TABS = [
+  { to: "/admin/overview", label: "Visão geral" },
+  { to: "/admin/onboarding", label: "Onboarding" },
+];
 
 const AdminLoadingScreen = () => (
   <div className="min-h-dvh w-full flex items-center justify-center bg-white">
@@ -77,9 +81,10 @@ const AdminRoutes: React.FC = () => {
     <Routes>
       <Route path="login" element={<AdminLogin />} />
       <Route element={<AdminLayout />}>
+        <Route path="overview" element={<MetricsPage />} />
         <Route path="onboarding" element={<OnboardingPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/admin/onboarding" replace />} />
+      <Route path="*" element={<Navigate to="/admin/overview" replace />} />
     </Routes>
   );
 };

@@ -14,7 +14,7 @@ export const AdminLogin: React.FC = () => {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  if (adminUser) return <Navigate to="/admin/onboarding" replace />;
+  if (adminUser) return <Navigate to="/admin/overview" replace />;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
