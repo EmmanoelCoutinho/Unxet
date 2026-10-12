@@ -59,7 +59,11 @@ const resolveDateRange = (
     : { start: safeEnd, end: safeStart };
 };
 
-const EMPTY_BACKLOG: BacklogResult = { items: [], total: 0 };
+const EMPTY_BACKLOG: BacklogResult = {
+  items: [],
+  total: 0,
+  slaBreachedTotal: 0,
+};
 
 const defaultDateRange = () => {
   const end = new Date();
@@ -605,7 +609,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
               <>
                 <KpiCard label="Conversas ativas agora"value={analytics.kpis.activeConversations} />
                 <KpiCard
-                  label="Tempo típico de 1ª resposta"
+                  label="Metade responde em até"
                   value={formatSeconds(analytics.kpis.p50FirstResponseSec)}
                 />
                 <KpiCard
@@ -817,7 +821,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
               <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
                 <SectionHeader
                   title="Tempo de 1ª resposta por canal"
-                  subtitle="Comparativo por canal (tempo alto = 90% respondem em até)."
+                  subtitle="Quanto tempo o cliente espera pela primeira resposta de um atendente (mensagens do bot não contam)."
                 />
                 <HorizontalBars
                   rows={analytics.slaByChannel.map((item) => ({
@@ -829,16 +833,18 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                   color="#14b8a6"
                 />
                 <p className="mt-3 text-xs text-slate-500">
-                  A barra usa o tempo “alto” (90%). O tempo “típico” (50%) fica disponível no detalhe.
+                  “Metade em até” é a espera típica: metade das conversas foi respondida nesse tempo ou menos.
+                  “90% em até” mostra as esperas mais longas: só 1 em cada 10 conversas demorou mais que isso.
+                  A barra usa o “90% em até”, em segundos.
                 </p>
                 <div className="mt-3 overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="whitespace-nowrap border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                         <th className="px-2 py-2">Canal</th>
-                        <th className="px-2 py-2">Tempo típico</th>
-                        <th className="px-2 py-2">Tempo alto</th>
-                        <th className="px-2 py-2">Dentro SLA</th>
+                        <th className="px-2 py-2">Metade em até</th>
+                        <th className="px-2 py-2">90% em até</th>
+                        <th className="px-2 py-2">Dentro da meta</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -882,6 +888,11 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                 <span className="font-semibold text-slate-900">
                   {error ? "-" : backlogTotal}
                 </span>
+                {!error && backlog.slaBreachedTotal > 0 ? (
+                  <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">
+                    {backlog.slaBreachedTotal} com SLA estourado
+                  </span>
+                ) : null}
               </div>
             </div>
 
@@ -937,7 +948,14 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                             {new Date(item.lastMessageAt).toLocaleString()}
                           </p>
                         </td>
-                        <td className="px-2 py-2 font-semibold text-slate-700">{item.minutesWaiting}</td>
+                        <td className="px-2 py-2 font-semibold text-slate-700">
+                          {item.minutesWaiting}
+                          {item.slaBreached ? (
+                            <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">
+                              SLA estourado
+                            </span>
+                          ) : null}
+                        </td>
                       </tr>
                     ))
                   )}

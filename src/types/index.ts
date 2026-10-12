@@ -49,6 +49,27 @@ export type Conversation = {
   provider?: "meta" | "evolution";
   // Última mensagem do cliente (janela de 24h do WhatsApp oficial)
   lastInboundAt?: string;
+  // Cliente ainda aguarda a 1ª resposta e o prazo de SLA da clínica já passou
+  slaBreached?: boolean;
+};
+
+/**
+ * O SLA de 1ª resposta está estourado enquanto o cliente segue sem resposta
+ * desde a mensagem que gerou a violação. Depois que alguém responde (o banco
+ * zera first_unanswered_inbound_at) o alerta some; uma mensagem nova do
+ * cliente não o traz de volta, porque o prazo vale só para a 1ª resposta.
+ */
+export const isSlaBreached = (row: {
+  sla_breached_at?: string | null;
+  first_unanswered_inbound_at?: string | null;
+  status?: string | null;
+}) => {
+  if (!row.sla_breached_at || !row.first_unanswered_inbound_at) return false;
+  if (row.status === "closed") return false;
+  return (
+    new Date(row.sla_breached_at).getTime() >=
+    new Date(row.first_unanswered_inbound_at).getTime()
+  );
 };
 export type Message = {
   id: string;

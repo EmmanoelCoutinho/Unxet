@@ -56,6 +56,8 @@ type BacklogRpcRow = {
   last_message_at: string;
   last_message_text: string | null;
   total_count: number;
+  sla_breached?: boolean | null;
+  sla_breached_count?: number | null;
 };
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -148,12 +150,16 @@ export type BacklogItem = {
   lastMessageAt: string;
   lastMessageText: string;
   minutesWaiting: number;
+  // Passou do prazo de 1ª resposta definido pela clínica
+  slaBreached: boolean;
 };
 
 export type BacklogResult = {
   items: BacklogItem[];
   // Total de conversas aguardando resposta (a lista traz no máximo 500)
   total: number;
+  // Quantas delas já passaram do prazo de 1ª resposta
+  slaBreachedTotal: number;
 };
 
 /**
@@ -175,6 +181,7 @@ export const fetchBacklog = async (
 
   return {
     total: Number(rows[0]?.total_count ?? 0),
+    slaBreachedTotal: Number(rows[0]?.sla_breached_count ?? 0),
     items: rows.map((row) => ({
       conversationId: row.conversation_id,
       contact: row.contact,
@@ -183,6 +190,7 @@ export const fetchBacklog = async (
       assignedTo: row.assigned_to,
       lastMessageAt: row.last_message_at,
       lastMessageText: row.last_message_text?.trim() || "Mensagem recebida",
+      slaBreached: row.sla_breached === true,
       minutesWaiting: round2(
         (now - new Date(row.last_message_at).getTime()) / 1000 / 60,
       ),

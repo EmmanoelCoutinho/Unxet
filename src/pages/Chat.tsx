@@ -10,7 +10,12 @@ import { toast } from "react-toastify";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { useClinic } from "../contexts/ClinicContext";
-import type { Conversation, Message, Channel } from "../types";
+import {
+  isSlaBreached,
+  type Conversation,
+  type Message,
+  type Channel,
+} from "../types";
 import {
   useMessages,
   mapDbMessage,
@@ -523,6 +528,8 @@ export const Chat: React.FC = () => {
         contacts:contact_id (*),
         departments:department_id (name),
         last_inbound_at,
+        sla_breached_at,
+        first_unanswered_inbound_at,
         messages (
           id,
           text,
@@ -634,6 +641,7 @@ export const Chat: React.FC = () => {
         tags: tagsFromConv,
         assignedTo: (data as any).assigned_user_id ?? undefined,
         lastInboundAt: (data as any).last_inbound_at ?? undefined,
+        slaBreached: isSlaBreached(data as any),
       };
 
       setSelectedTags(tagsFromConv);
