@@ -87,6 +87,16 @@ const formatSeconds = (seconds: number | null) => {
   return `${h}h ${m}m`;
 };
 
+// "2 min", "1h 30 min": para metas e textos corridos
+const formatDuration = (seconds: number) => {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const totalMinutes = Math.round(seconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes ? `${hours}h ${minutes} min` : `${hours}h`;
+};
+
 const KpiSkeleton = () => (
   <div className="h-24 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
 );
@@ -609,15 +619,15 @@ export const InboxAnalyticsDashboard: React.FC = () => {
               <>
                 <KpiCard label="Conversas ativas agora"value={analytics.kpis.activeConversations} />
                 <KpiCard
-                  label="Metade responde em até"
+                  label="Espera comum pela 1ª resposta"
                   value={formatSeconds(analytics.kpis.p50FirstResponseSec)}
                 />
                 <KpiCard
-                  label="90% respondem em até"
+                  label="Espera longa pela 1ª resposta"
                   value={formatSeconds(analytics.kpis.p90FirstResponseSec)}
                 />
                 <KpiCard
-                  label={`1ª resposta em até ${formatSeconds(analytics.slaThresholdSec)}`}
+                  label={`Respondidas em até ${formatDuration(analytics.slaThresholdSec)}`}
                   value={
                     analytics.kpis.withinSlaPct !== null
                       ? `${analytics.kpis.withinSlaPct}%`
@@ -820,30 +830,35 @@ export const InboxAnalyticsDashboard: React.FC = () => {
 
               <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
                 <SectionHeader
-                  title="Tempo de 1ª resposta por canal"
-                  subtitle="Quanto tempo o cliente espera pela primeira resposta de um atendente (mensagens do bot não contam)."
+                  title="Tempo até a primeira resposta"
+                  subtitle="Quanto tempo o cliente espera, depois da primeira mensagem dele, até um atendente responder. Respostas automáticas do bot não contam."
                 />
-                <HorizontalBars
-                  rows={analytics.slaByChannel.map((item) => ({
-                    canal: CHANNEL_LABEL[item.channel] ?? item.channel,
-                    tempo: Math.round(item.p90Sec),
-                  }))}
-                  labelKey="canal"
-                  valueKey="tempo"
-                  color="#14b8a6"
-                />
-                <p className="mt-3 text-xs text-slate-500">
-                  “Metade em até” é a espera típica: metade das conversas foi respondida nesse tempo ou menos.
-                  “90% em até” mostra as esperas mais longas: só 1 em cada 10 conversas demorou mais que isso.
-                  A barra usa o “90% em até”, em segundos.
-                </p>
-                <div className="mt-3 overflow-x-auto">
+                {analytics.slaByChannel.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    Nenhuma conversa do período recebeu resposta de um atendente ainda.
+                  </p>
+                ) : (
+                  <ul className="space-y-1 text-sm text-slate-700">
+                    {analytics.slaByChannel.map((row) => (
+                      <li key={row.channel}>
+                        <span className="font-medium text-slate-900">
+                          {CHANNEL_LABEL[row.channel] ?? row.channel}:
+                        </span>{" "}
+                        metade dos clientes foi respondida em até{" "}
+                        <span className="font-medium">{formatSeconds(row.p50Sec)}</span>
+                        {" "}e 9 em cada 10 em até{" "}
+                        <span className="font-medium">{formatSeconds(row.p90Sec)}</span>.
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-4 overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="whitespace-nowrap border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                         <th className="px-2 py-2">Canal</th>
-                        <th className="px-2 py-2">Metade em até</th>
-                        <th className="px-2 py-2">90% em até</th>
+                        <th className="px-2 py-2">Espera comum</th>
+                        <th className="px-2 py-2">Espera longa</th>
                         <th className="px-2 py-2">Dentro da meta</th>
                       </tr>
                     </thead>
@@ -861,6 +876,28 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+                <dl className="mt-4 space-y-1 text-xs text-slate-500">
+                  <div>
+                    <dt className="inline font-semibold text-slate-600">Espera comum: </dt>
+                    <dd className="inline">
+                      metade dos clientes foi respondida nesse tempo ou antes. É o que a maioria encontra.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="inline font-semibold text-slate-600">Espera longa: </dt>
+                    <dd className="inline">
+                      9 em cada 10 clientes foram respondidos nesse tempo ou antes; 1 em cada 10 esperou mais.
+                      Se ela for muito maior que a espera comum, há conversas ficando para trás.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="inline font-semibold text-slate-600">Dentro da meta: </dt>
+                    <dd className="inline">
+                      conversas respondidas em até {formatDuration(analytics.slaThresholdSec)}
+                      {" "}(prazo de SLA definido em Configurações, ou 2 min quando não há).
+                    </dd>
+                  </div>
+                </dl>
               </article>
             </section>
           </section>
