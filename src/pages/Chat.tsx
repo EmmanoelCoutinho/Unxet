@@ -521,6 +521,7 @@ export const Chat: React.FC = () => {
         created_at,
         assigned_user_id,
         contacts:contact_id (*),
+        departments:department_id (name),
         last_inbound_at,
         messages (
           id,
@@ -615,6 +616,7 @@ export const Chat: React.FC = () => {
         id: (data as any).id,
         clinicId: (data as any).clinic_id ?? undefined,
         departmentId: (data as any).department_id ?? undefined,
+        departmentName: (data as any).departments?.name ?? undefined,
         channel: (data as any).channel as Channel,
         status: ((data as any).status as Conversation["status"]) ?? "pending",
         provider: (data as any).channel_connections?.provider ?? undefined,
@@ -1363,6 +1365,7 @@ export const Chat: React.FC = () => {
               ? getAssigneeLabel(conversation.assignedTo, authUser?.id, userNames)
               : undefined
           }
+          departmentName={conversation.departmentName}
           onBack={() => navigate("/inbox")}
           onManageTags={() => setIsManageTagsOpen(true)}
           onAccept={handleAcceptConversation}

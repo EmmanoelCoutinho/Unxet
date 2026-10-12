@@ -27,6 +27,7 @@ export type Conversation = {
   id: string;
   clinicId?: string;
   departmentId?: string;
+  departmentName?: string;
   channel: Channel;
   contactName: string;
   contactNumber?: string;

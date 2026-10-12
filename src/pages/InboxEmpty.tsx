@@ -1,12 +1,12 @@
-import React from 'react';
-import { MessageSquareIcon } from 'lucide-react';
+import React from "react";
+import { MessageSquareIcon } from "lucide-react";
 
 export const InboxEmpty: React.FC = () => (
-  <div className="flex-1 flex items-center justify-center text-center h-full">
-    <MessageSquareIcon className="w-16 h-16 text-gray-300 mb-3" />
-    <div>
-      <h3 className="text-lg font-medium">Selecione uma conversa</h3>
-      <p className="text-gray-500">Ou inicie um novo chat</p>
-    </div>
+  <div className="flex h-full flex-1 flex-col items-center justify-center bg-gray-50 p-6 text-center">
+    <MessageSquareIcon className="mb-3 h-16 w-16 text-gray-300" />
+    <h3 className="text-lg font-medium text-gray-900">Selecione uma conversa</h3>
+    <p className="text-sm text-gray-500">
+      Escolha um atendimento na lista ao lado para começar.
+    </p>
   </div>
 );

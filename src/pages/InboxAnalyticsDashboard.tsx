@@ -494,7 +494,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 2xl:grid-cols-5">
             <input
               type="date"
               value={draftStart}
@@ -510,7 +510,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
               className="w-full min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
 
-            <div className="col-span-2 rounded-md border border-slate-300 p-2 lg:col-span-1">
+            <div className="col-span-2 rounded-md border border-slate-300 p-2 2xl:col-span-1">
               <p className="mb-2 text-xs text-slate-500">Canal</p>
               <div className="flex flex-wrap gap-2">
                 {CHANNEL_OPTIONS.map((channel) => (

@@ -4,8 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { XIcon } from "lucide-react";
 import {
   isSidebarItemActive,
-  settingsItem,
-  sidebarItems,
+  useSidebarNavigation,
   type SidebarItem,
 } from "./AppSidebar";
 
@@ -23,6 +22,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { items, settings } = useSidebarNavigation();
 
   // Fecha ao trocar de rota
   useEffect(() => {
@@ -115,12 +115,14 @@ export const MobileNav: React.FC<MobileNavProps> = ({
         </div>
 
         <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
-          {sidebarItems.map(renderItem)}
+          {items.map(renderItem)}
         </nav>
 
-        <div className="shrink-0 border-t p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-          {renderItem(settingsItem)}
-        </div>
+        {settings && (
+          <div className="shrink-0 border-t p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            {renderItem(settings)}
+          </div>
+        )}
       </aside>
     </div>,
     document.body,

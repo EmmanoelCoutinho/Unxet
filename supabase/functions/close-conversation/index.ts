@@ -106,19 +106,9 @@ serve(async (req)=>{
         }
       });
     }
-    // mesma regra do accept: se user tem dept fixo, precisa bater com o dept da conversa
-    if (membership.department_id && membership.department_id !== conv.department_id) {
-      return new Response(JSON.stringify({
-        error: "Not allowed for this department"
-      }), {
-        status: 403,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json"
-        }
-      });
-    }
-    // 3) permissão: admin fecha qualquer, agent só se for assigned
+    // 3) permissão: admin fecha qualquer, agent só se for assigned.
+    // (Havia antes uma checagem de setor que barrava o admin com setor
+    // principal definido de finalizar conversas dos outros setores.)
     const role = String(membership.role ?? "agent").toLowerCase();
     const isAdmin = role === "admin";
     const isAssigned = conv.assigned_user_id === user.id;
