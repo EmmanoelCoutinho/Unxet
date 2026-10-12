@@ -440,3 +440,6 @@ verify_jwt = true
 
 [functions.internal-chat-push]
 verify_jwt = true
+
+[functions.admin-onboard-clinic]
+verify_jwt = true
