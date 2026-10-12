@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { FiBookOpen } from "react-icons/fi";
 import { FEATURES, type FeatureKey } from "../../constants/features";
+import { useClinic } from "../../contexts/ClinicContext";
 
 export type SidebarItem = {
   label: string;
@@ -23,6 +24,8 @@ export type SidebarItem = {
   feature?: FeatureKey;
   // Só aparece no menu do celular (no desktop o painel já fica ao lado da lista)
   mobileOnly?: boolean;
+  // Atendente não vê: só administradores da empresa
+  adminOnly?: boolean;
 };
 
 const allSidebarItems: SidebarItem[] = [
@@ -37,12 +40,28 @@ const allSidebarItems: SidebarItem[] = [
     icon: BarChart3Icon,
     path: "/inbox/dashboard",
     mobileOnly: true,
+    adminOnly: true,
   },
-  { label: "Carteira de Clientes", icon: FiBookOpen, path: "/contacts" },
-  { label: "Atendentes", icon: UsersIcon, path: "/inbox/attendants" },
-  { label: "Departamentos", icon: Building2Icon, path: "/inbox/departments" },
+  {
+    label: "Carteira de Clientes",
+    icon: FiBookOpen,
+    path: "/contacts",
+    adminOnly: true,
+  },
+  {
+    label: "Atendentes",
+    icon: UsersIcon,
+    path: "/inbox/attendants",
+    adminOnly: true,
+  },
+  {
+    label: "Departamentos",
+    icon: Building2Icon,
+    path: "/inbox/departments",
+    adminOnly: true,
+  },
   { label: "Etiquetas", icon: TagIcon, path: "/inbox/tags" },
-  { label: "Bots", icon: BotIcon, path: "/inbox/bots" },
+  { label: "Bots", icon: BotIcon, path: "/inbox/bots", adminOnly: true },
   {
     label: "Mensagens rápidas",
     icon: MessageSquareTextIcon,
@@ -53,12 +72,14 @@ const allSidebarItems: SidebarItem[] = [
     icon: MegaphoneIcon,
     path: "/inbox/marketing-campaigns",
     feature: "marketingCampaigns",
+    adminOnly: true,
   },
   {
     label: "Mensagens em massa",
     icon: SendToBack,
     path: "/inbox/mass-messages",
     feature: "massMessages",
+    adminOnly: true,
   },
 ];
 
@@ -72,6 +93,21 @@ export const settingsItem: SidebarItem = {
   icon: Settings2Icon,
   path: "/inbox/settings",
   extraPaths: ["/inbox/settings"],
+  adminOnly: true,
+};
+
+/**
+ * Itens do menu para o papel do usuário logado. Enquanto o vínculo com a
+ * empresa carrega, vale a visão de atendente (não pisca item de admin).
+ */
+export const useSidebarNavigation = () => {
+  const { membership } = useClinic();
+  const isAdmin = membership?.role === "admin";
+
+  return {
+    items: sidebarItems.filter((item) => isAdmin || !item.adminOnly),
+    settings: isAdmin ? settingsItem : null,
+  };
 };
 
 export const isSidebarItemActive = (item: SidebarItem, pathname: string) =>
@@ -81,6 +117,7 @@ export const isSidebarItemActive = (item: SidebarItem, pathname: string) =>
 export const AppSidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { items, settings } = useSidebarNavigation();
 
   const renderItem = (item: SidebarItem) => {
     const Icon = item.icon;
@@ -132,12 +169,14 @@ export const AppSidebar: React.FC = () => {
       </div>
 
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
-        {sidebarItems.filter((item) => !item.mobileOnly).map(renderItem)}
+        {items.filter((item) => !item.mobileOnly).map(renderItem)}
       </nav>
 
-      <div className="shrink-0 border-t bg-gray-50 p-2">
-        {renderItem(settingsItem)}
-      </div>
+      {settings && (
+        <div className="shrink-0 border-t bg-gray-50 p-2">
+          {renderItem(settings)}
+        </div>
+      )}
     </aside>
   );
 };

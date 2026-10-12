@@ -19,6 +19,8 @@ interface ChatHeaderProps {
   conversation: Conversation;
   // Responsável pela conversa (exibido só para admin)
   assigneeName?: string;
+  // Setor em que a conversa está
+  departmentName?: string;
   onBack: () => void;
   onManageTags?: () => void;
   onAccept?: () => Promise<void> | void;
@@ -31,9 +33,19 @@ interface ChatHeaderProps {
   closeDisabled?: boolean;
 }
 
+const STATUS_BADGE: Record<
+  Conversation["status"],
+  { label: string; className: string }
+> = {
+  open: { label: "Em atendimento", className: "bg-green-50 text-green-700" },
+  pending: { label: "Na fila", className: "bg-amber-50 text-amber-700" },
+  closed: { label: "Finalizada", className: "bg-gray-100 text-gray-600" },
+};
+
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   conversation,
   assigneeName,
+  departmentName,
   onBack,
   onManageTags,
   onAccept,
@@ -183,6 +195,21 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               {formattedIdentifier && (
                 <span className="min-w-0 truncate text-xs text-gray-500 sm:flex-shrink-0">
                   {formattedIdentifier}
+                </span>
+              )}
+
+              <span
+                className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[conversation.status].className}`}
+              >
+                {STATUS_BADGE[conversation.status].label}
+              </span>
+
+              {departmentName && (
+                <span
+                  title={`Setor: ${departmentName}`}
+                  className="hidden min-w-0 max-w-[10rem] flex-shrink-0 truncate text-xs text-gray-500 sm:inline"
+                >
+                  {departmentName}
                 </span>
               )}
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient"; // Ajuste o caminho para o seu cliente do Supabase
 import { toast } from "react-toastify";
+import { useClinic } from "../contexts/ClinicContext";
 
 export interface AvailableTag {
   id: string;
@@ -12,14 +13,17 @@ export interface AvailableTag {
 export const useTags = () => {
   const [tags, setTags] = useState<AvailableTag[]>([]);
   const [loading, setLoading] = useState(false);
+  const { clinicId } = useClinic();
 
   // Buscar etiquetas do banco
   const fetchTags = async () => {
+    if (!clinicId) return;
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("tags")
         .select("id, name, color, clinic_id")
+        .eq("clinic_id", clinicId)
         .order("name", { ascending: true });
 
       if (error) throw error;
@@ -37,7 +41,8 @@ export const useTags = () => {
     try {
       const { data, error } = await supabase
         .from("tags")
-        .insert([{ name, color }]) // O Supabase gera o id e o created_at automaticamente
+        // Sem clinic_id o banco recusa a etiqueta (RLS)
+        .insert([{ name, color, clinic_id: clinicId }])
         .select()
         .single();
 
@@ -84,7 +89,8 @@ export const useTags = () => {
 
   useEffect(() => {
     fetchTags();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinicId]);
 
   return { tags, loading, refreshTags: fetchTags, createTag, updateTag, deleteTag };
 };

@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react";
+import React, { ReactNode, Suspense, lazy } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -15,26 +15,72 @@ import { Header } from "./components/layout/Header";
 import { PushNotificationsBridge } from "./components/PushNotificationsBridge";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { InboxAnalyticsDashboard } from "./pages/InboxAnalyticsDashboard";
-import { Tags } from "./pages/Tags";
-import { ClinicProvider } from "./contexts/ClinicContext";
-import { DepartmentsPage } from "./pages/DepartmentsPage";
-import { AttendantsPage } from "./pages/AttendantsPage";
+import { InboxEmpty } from "./pages/InboxEmpty";
+import { ClinicProvider, useClinic } from "./contexts/ClinicContext";
 import { AuthCallback } from "./pages/Callback";
 import { SetPassword } from "./pages/SetPassword";
-import { MetaIntegrationsPage } from "./pages/IntegrationsMetaPage";
-import { MetaCallbackPage } from "./pages/IntegrationCallbackPage";
-import { ConversationAutomationSettingsPage } from "./pages/ConversationAutomationSettingsPage";
-import { BotsSettingsPage } from "./pages/BotsSettingsPage";
-import { BotEditorPage } from "./pages/BotEditorPage";
-import { QuickMessagesPage } from "./pages/QuickMessagesPage";
-import { MarketingCampaignsPage } from "./pages/MarketingCampaignsPage";
-import { ContactsPage } from "./pages/Contacts";
-// 1. IMPORTAR A NOVA PÁGINA DE MENSAGENS EM MASSA
-import { MassMessagesPage } from "./pages/MassMessages"; 
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { FEATURES, type FeatureKey } from "./constants/features";
+
+// Telas fora do atendimento do dia a dia são baixadas só quando abertas
+const InboxAnalyticsDashboard = lazy(() =>
+  import("./pages/InboxAnalyticsDashboard").then((m) => ({
+    default: m.InboxAnalyticsDashboard,
+  })),
+);
+const Tags = lazy(() =>
+  import("./pages/Tags").then((m) => ({ default: m.Tags })),
+);
+const DepartmentsPage = lazy(() =>
+  import("./pages/DepartmentsPage").then((m) => ({
+    default: m.DepartmentsPage,
+  })),
+);
+const AttendantsPage = lazy(() =>
+  import("./pages/AttendantsPage").then((m) => ({ default: m.AttendantsPage })),
+);
+const MetaIntegrationsPage = lazy(() =>
+  import("./pages/IntegrationsMetaPage").then((m) => ({
+    default: m.MetaIntegrationsPage,
+  })),
+);
+const MetaCallbackPage = lazy(() =>
+  import("./pages/IntegrationCallbackPage").then((m) => ({
+    default: m.MetaCallbackPage,
+  })),
+);
+const ConversationAutomationSettingsPage = lazy(() =>
+  import("./pages/ConversationAutomationSettingsPage").then((m) => ({
+    default: m.ConversationAutomationSettingsPage,
+  })),
+);
+const BotsSettingsPage = lazy(() =>
+  import("./pages/BotsSettingsPage").then((m) => ({
+    default: m.BotsSettingsPage,
+  })),
+);
+const BotEditorPage = lazy(() =>
+  import("./pages/BotEditorPage").then((m) => ({ default: m.BotEditorPage })),
+);
+const QuickMessagesPage = lazy(() =>
+  import("./pages/QuickMessagesPage").then((m) => ({
+    default: m.QuickMessagesPage,
+  })),
+);
+const MarketingCampaignsPage = lazy(() =>
+  import("./pages/MarketingCampaignsPage").then((m) => ({
+    default: m.MarketingCampaignsPage,
+  })),
+);
+const ContactsPage = lazy(() =>
+  import("./pages/Contacts").then((m) => ({ default: m.ContactsPage })),
+);
+const MassMessagesPage = lazy(() =>
+  import("./pages/MassMessages").then((m) => ({
+    default: m.MassMessagesPage,
+  })),
+);
 
 type RequireAuthProps = {
   children: ReactNode;
@@ -62,6 +108,34 @@ const RequireAuth = ({ children }: RequireAuthProps) => {
   }
 
   return <>{children}</>;
+};
+
+const PageLoading = () => (
+  <div className="flex h-full min-h-[40dvh] w-full items-center justify-center">
+    <div className="h-7 w-7 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+  </div>
+);
+
+// Telas de gestão: atendente é mandado de volta para os atendimentos
+const AdminOnly = ({ children }: { children: ReactNode }) => {
+  const { membership, loading } = useClinic();
+
+  if (loading) return <PageLoading />;
+  if (membership?.role !== "admin") return <Navigate to="/inbox" replace />;
+
+  return <>{children}</>;
+};
+
+// Ao lado da lista de conversas: painel para o admin, tela neutra para o atendente
+const InboxHome = () => {
+  const { membership, loading } = useClinic();
+
+  if (loading) return <PageLoading />;
+  return membership?.role === "admin" ? (
+    <InboxAnalyticsDashboard />
+  ) : (
+    <InboxEmpty />
+  );
 };
 
 // Módulos desligados em FEATURES redirecionam para o início do inbox
@@ -98,6 +172,7 @@ function RoutedApp() {
         }
       >
         <AppErrorBoundary resetKey={location.pathname}>
+        <Suspense fallback={<PageLoading />}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -112,19 +187,28 @@ function RoutedApp() {
               </RequireAuth>
             }
           >
-            <Route index element={<InboxAnalyticsDashboard />} />
+            <Route index element={<InboxHome />} />
             {/* No celular o índice mostra a lista de conversas; o painel fica aqui */}
-            <Route path="dashboard" element={<InboxAnalyticsDashboard />} />
+            <Route
+              path="dashboard"
+              element={
+                <AdminOnly>
+                  <InboxAnalyticsDashboard />
+                </AdminOnly>
+              }
+            />
             <Route path="chat/:id" element={<Chat />} />
             <Route path="tags" element={<Tags />} />
-            <Route path="departments" element={<DepartmentsPage />} />
-            <Route path="attendants" element={<AttendantsPage />} />
+            <Route path="departments" element={<AdminOnly><DepartmentsPage /></AdminOnly>} />
+            <Route path="attendants" element={<AdminOnly><AttendantsPage /></AdminOnly>} />
             <Route path="quick-messages" element={<QuickMessagesPage />} />
             <Route
               path="marketing-campaigns"
               element={
                 <FeatureGate feature="marketingCampaigns">
-                  <MarketingCampaignsPage />
+                  <AdminOnly>
+                    <MarketingCampaignsPage />
+                  </AdminOnly>
                 </FeatureGate>
               }
             />
@@ -133,28 +217,30 @@ function RoutedApp() {
               path="mass-messages"
               element={
                 <FeatureGate feature="massMessages">
-                  <MassMessagesPage />
+                  <AdminOnly>
+                    <MassMessagesPage />
+                  </AdminOnly>
                 </FeatureGate>
               }
             />
 
             <Route
               path="settings/integrations/meta"
-              element={<MetaIntegrationsPage />}
+              element={<AdminOnly><MetaIntegrationsPage /></AdminOnly>}
             />
             <Route
               path="settings/integrations/meta/callback"
-              element={<MetaCallbackPage />}
+              element={<AdminOnly><MetaCallbackPage /></AdminOnly>}
             />
             <Route
               path="settings/automations/conversations"
-              element={<ConversationAutomationSettingsPage />}
+              element={<AdminOnly><ConversationAutomationSettingsPage /></AdminOnly>}
             />
-            <Route path="bots" element={<BotsSettingsPage />} />
-            <Route path="bots/new" element={<BotEditorPage mode="new" />} />
+            <Route path="bots" element={<AdminOnly><BotsSettingsPage /></AdminOnly>} />
+            <Route path="bots/new" element={<AdminOnly><BotEditorPage mode="new" /></AdminOnly>} />
             <Route
               path="bots/edit/:botId?"
-              element={<BotEditorPage mode="edit" />}
+              element={<AdminOnly><BotEditorPage mode="edit" /></AdminOnly>}
             />
             <Route
               path="settings"
@@ -170,7 +256,9 @@ function RoutedApp() {
             path="/contacts"
             element={
               <RequireAuth>
-                <ContactsPage />
+                <AdminOnly>
+                  <ContactsPage />
+                </AdminOnly>
               </RequireAuth>
             }
           />
@@ -178,6 +266,7 @@ function RoutedApp() {
           {/* Endereço desconhecido: volta para o início (o login cuida de quem não está logado) */}
           <Route path="*" element={<Navigate to="/inbox" replace />} />
         </Routes>
+        </Suspense>
         </AppErrorBoundary>
       </main>
     </>
