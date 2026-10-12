@@ -169,6 +169,39 @@ async function handleMessagesUpdate(body) {
   });
 }
 // ---------------------------------------------------------------------------
+// Mensagens que não são conteúdo novo
+// ---------------------------------------------------------------------------
+// Campos de controle que acompanham qualquer mensagem
+const ENVELOPE_KEYS = [
+  "messageContextInfo",
+  "senderKeyDistributionMessage"
+];
+const PROTOCOL_KEYS = [
+  "protocolMessage",
+  "pollUpdateMessage",
+  "keepInChatMessage",
+  "pinInChatMessage",
+  "encReactionMessage"
+];
+/**
+ * Edição de uma mensagem já enviada pelo cliente. O WhatsApp manda em dois
+ * formatos, conforme a versão: editedMessage.message.protocolMessage ou
+ * protocolMessage com type MESSAGE_EDIT.
+ */ function extractMessageEdit(message) {
+  const protocol = message?.editedMessage?.message?.protocolMessage ?? (message?.protocolMessage?.editedMessage ? message.protocolMessage : null);
+  if (!protocol) return null;
+  const edited = protocol.editedMessage ?? {};
+  return {
+    originalId: String(protocol.key?.id ?? "").trim(),
+    text: String(edited.conversation ?? edited.extendedTextMessage?.text ?? "").trim()
+  };
+}
+/** Evento sem conteúdo para o atendente (apagar mensagem, voto em enquete...). */ function isProtocolOnlyMessage(message) {
+  const keys = Object.keys(message ?? {}).filter((key)=>!ENVELOPE_KEYS.includes(key));
+  if (keys.length === 0) return true;
+  return keys.every((key)=>PROTOCOL_KEYS.includes(key));
+}
+// ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 serve(async (req)=>{
@@ -280,6 +313,34 @@ serve(async (req)=>{
     }
     // ── Supabase client ───────────────────────────────────────────────────
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // ── Edição de mensagem: corrige o texto da original ───────────────────
+    // (antes virava uma mensagem vazia e o bot respondia "não entendi")
+    // (só para mensagens: eventos de conexão e QR Code não têm data.message)
+    const isMessageEvent = body?.event === "messages.upsert";
+    const edit = isMessageEvent ? extractMessageEdit(body?.data?.message) : null;
+    if (edit) {
+      if (edit.originalId && edit.text) {
+        const { error: editError } = await supabase.from("messages").update({
+          text: edit.text
+        }).eq("meta_message_id", edit.originalId).eq("direction", "inbound");
+        if (editError) console.error("[MESSAGE_EDIT_ERROR]", editError);
+      }
+      return new Response(JSON.stringify({
+        ignored: true,
+        reason: "message_edit"
+      }), {
+        status: 200
+      });
+    }
+    // ── Eventos de protocolo (mensagem apagada, voto em enquete, fixar etc.) ─
+    if (isMessageEvent && isProtocolOnlyMessage(body?.data?.message)) {
+      return new Response(JSON.stringify({
+        ignored: true,
+        reason: "protocol_message"
+      }), {
+        status: 200
+      });
+    }
     // ── Resolve connection pelo instanceName ──────────────────────────────
     const instanceName = String(body?.instance ?? "").trim();
     if (!instanceName) {
@@ -420,6 +481,8 @@ serve(async (req)=>{
     let media;
     let interactive;
     let needsMediaFetch = false;
+    let fallbackFilename;
+    let fallbackMimeType;
     if (msgData.conversation || msgData.extendedTextMessage) {
       messageType = "text";
       text = msgData.conversation ?? msgData.extendedTextMessage?.text ?? "";
@@ -459,6 +522,39 @@ serve(async (req)=>{
         selectedTitle: msgData.templateButtonReplyMessage.selectedDisplayText ?? null
       };
       text = interactive.selectedTitle ?? interactive.selectedId ?? "";
+    } else if (msgData.videoMessage) {
+      // Vídeo chega como anexo (o chat exibe/baixa pelo tipo do arquivo)
+      messageType = "document";
+      text = msgData.videoMessage.caption ?? "";
+      needsMediaFetch = true;
+      fallbackFilename = `video-${providerMessageId}.mp4`;
+      fallbackMimeType = msgData.videoMessage.mimetype ?? "video/mp4";
+    } else if (msgData.locationMessage || msgData.liveLocationMessage) {
+      const loc = msgData.locationMessage ?? msgData.liveLocationMessage;
+      const place = [
+        loc.name,
+        loc.address
+      ].filter(Boolean).join(" - ");
+      const hasCoords = Number.isFinite(Number(loc.degreesLatitude)) && Number.isFinite(Number(loc.degreesLongitude));
+      text = [
+        "📍 Localização" + (place ? `: ${place}` : ""),
+        hasCoords ? `https://maps.google.com/?q=${loc.degreesLatitude},${loc.degreesLongitude}` : ""
+      ].filter(Boolean).join("\n");
+    } else if (msgData.contactMessage || msgData.contactsArrayMessage) {
+      const contacts = msgData.contactMessage ? [
+        msgData.contactMessage
+      ] : msgData.contactsArrayMessage?.contacts ?? [];
+      text = contacts.map((c)=>{
+        const phone = String(c?.vcard ?? "").match(/TEL[^:]*:([+\d\s().-]+)/i)?.[1]?.trim();
+        return `👤 Contato: ${c?.displayName ?? "sem nome"}` + (phone ? ` - ${phone}` : "");
+      }).join("\n") || "👤 Contato compartilhado";
+    } else if (msgData.pollCreationMessage || msgData.pollCreationMessageV2 || msgData.pollCreationMessageV3) {
+      const poll = msgData.pollCreationMessage ?? msgData.pollCreationMessageV2 ?? msgData.pollCreationMessageV3;
+      text = `📊 Enquete: ${poll?.name ?? ""}`.trim();
+    } else {
+      // Tipo que ainda não tratamos: o atendente precisa saber que chegou algo
+      console.warn("[UNSUPPORTED_MESSAGE_TYPE]", Object.keys(msgData));
+      text = "[Mensagem em um formato que o Unxet ainda não exibe. Peça ao cliente para reenviar como texto, foto ou documento.]";
     }
     // ── Busca mídia via Evolution API (base64) ────────────────────────────
     if (needsMediaFetch && connection.evolution_api_url && connection.evolution_api_key) {
@@ -480,13 +576,13 @@ serve(async (req)=>{
         if (base64Resp.ok) {
           const base64Json = await base64Resp.json();
           const base64Data = base64Json?.base64 ?? null;
-          const mimeType = base64Json?.mimeType ?? base64Json?.mimetype ?? msgData.imageMessage?.mimetype ?? msgData.audioMessage?.mimetype ?? msgData.pttMessage?.mimetype ?? msgData.documentMessage?.mimetype ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.mimetype ?? "application/octet-stream";
+          const mimeType = base64Json?.mimeType ?? base64Json?.mimetype ?? msgData.imageMessage?.mimetype ?? msgData.audioMessage?.mimetype ?? msgData.pttMessage?.mimetype ?? msgData.documentMessage?.mimetype ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.mimetype ?? fallbackMimeType ?? "application/octet-stream";
           console.log("[MEDIA_MIME_RESOLVED]", {
             mimeType,
             providerMessageId
           });
           if (base64Data) {
-            const filename = msgData.documentMessage?.fileName ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.fileName ?? undefined;
+            const filename = msgData.documentMessage?.fileName ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.fileName ?? fallbackFilename ?? undefined;
             media = {
               base64: base64Data,
               mimeType,
@@ -523,7 +619,12 @@ serve(async (req)=>{
       } : {},
       rawPayload: body
     };
-    console.log(JSON.stringify(sharedPayload));
+    console.log("[SHARED_PAYLOAD]", JSON.stringify({
+      providerMessageId,
+      messageType,
+      hasMedia: !!media,
+      hasText: !!text
+    }));
     // ── Encaminha para shared-in-config ───────────────────────────────────
     const sharedResp = await fetch(SHARED_IN_CONFIG_URL, {
       method: "POST",
