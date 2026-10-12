@@ -48,6 +48,8 @@ export type Conversation = {
   tags?: Tag[];
   assignedTo?: string;
   status: "open" | "pending" | "closed";
+  // O bot ainda conduz a conversa: fica na aba "No bot", fora da fila
+  inBotFlow?: boolean;
   provider?: "meta" | "evolution";
   // Última mensagem do cliente (janela de 24h do WhatsApp oficial)
   lastInboundAt?: string;

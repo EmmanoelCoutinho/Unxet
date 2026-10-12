@@ -525,6 +525,7 @@ export const Chat: React.FC = () => {
         last_message_at,
         created_at,
         assigned_user_id,
+        in_bot_flow,
         contacts:contact_id (*),
         departments:department_id (name),
         last_inbound_at,
@@ -640,6 +641,7 @@ export const Chat: React.FC = () => {
         unreadCount: 0,
         tags: tagsFromConv,
         assignedTo: (data as any).assigned_user_id ?? undefined,
+        inBotFlow: (data as any).in_bot_flow === true,
         lastInboundAt: (data as any).last_inbound_at ?? undefined,
         slaBreached: isSlaBreached(data as any),
       };
