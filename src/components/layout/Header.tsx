@@ -6,6 +6,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useClinic } from "../../contexts/ClinicContext";
 import { ProfileModal } from "./ProfileModal";
 import { MobileNav } from "./MobileNav";
+import { useInternalUnreadTotal } from "../../modules/internalChat/hooks/useInternalChat";
 
 function getInitials(name: string) {
   return name
@@ -31,6 +32,7 @@ export const Header = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+  const internalUnread = useInternalUnreadTotal();
   const isAdmin = profile?.role === "admin";
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -66,11 +68,15 @@ export const Header = () => {
           <button
             type="button"
             onClick={() => setMobileNavOpen(true)}
-            className="-ml-1 rounded-lg p-2 text-gray-700 hover:bg-gray-100 md:hidden"
+            className="relative -ml-1 rounded-lg p-2 text-gray-700 hover:bg-gray-100 md:hidden"
             aria-label="Abrir menu"
             aria-expanded={mobileNavOpen}
           >
             <MenuIcon className="h-6 w-6" />
+            {/* O menu fica fechado no celular: sinaliza mensagem interna não lida */}
+            {internalUnread > 0 && (
+              <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-[#0A84FF] ring-2 ring-white" />
+            )}
           </button>
           <Link to="/inbox" className="flex items-center gap-2 select-none">
             <img src={logo} alt="Unxet logo" className="w-28 sm:w-36" />

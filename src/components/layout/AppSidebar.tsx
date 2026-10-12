@@ -7,6 +7,7 @@ import {
   MegaphoneIcon,
   MessageCircleIcon,
   MessageSquareTextIcon,
+  MessagesSquareIcon,
   SendToBack,
   Settings2Icon,
   TagIcon,
@@ -15,6 +16,7 @@ import {
 import { FiBookOpen } from "react-icons/fi";
 import { FEATURES, type FeatureKey } from "../../constants/features";
 import { useClinic } from "../../contexts/ClinicContext";
+import { useInternalUnreadTotal } from "../../modules/internalChat/hooks/useInternalChat";
 
 export type SidebarItem = {
   label: string;
@@ -26,7 +28,12 @@ export type SidebarItem = {
   mobileOnly?: boolean;
   // Atendente não vê: só administradores da empresa
   adminOnly?: boolean;
+  // Mostra o total de mensagens internas não lidas ao lado do item
+  showsInternalUnread?: boolean;
 };
+
+export const formatUnreadBadge = (count: number) =>
+  count > 99 ? "99+" : String(count);
 
 const allSidebarItems: SidebarItem[] = [
   {
@@ -34,6 +41,13 @@ const allSidebarItems: SidebarItem[] = [
     icon: MessageCircleIcon,
     path: "/inbox",
     extraPaths: ["/inbox/chat"],
+  },
+  {
+    label: "Chat interno",
+    icon: MessagesSquareIcon,
+    path: "/inbox/team",
+    extraPaths: ["/inbox/team"],
+    showsInternalUnread: true,
   },
   {
     label: "Painel",
@@ -118,10 +132,12 @@ export const AppSidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { items, settings } = useSidebarNavigation();
+  const internalUnread = useInternalUnreadTotal();
 
   const renderItem = (item: SidebarItem) => {
     const Icon = item.icon;
     const active = isSidebarItemActive(item, location.pathname);
+    const unread = item.showsInternalUnread ? internalUnread : 0;
 
     return (
       <button
@@ -137,7 +153,17 @@ export const AppSidebar: React.FC = () => {
         ].join(" ")}
         title={item.label}
       >
-        <Icon className="h-5 w-5 flex-shrink-0" />
+        <span className="relative flex-shrink-0">
+          <Icon className="h-5 w-5" />
+          {unread > 0 && (
+            <span
+              className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#0A84FF] px-1 text-[10px] font-semibold leading-none text-white"
+              aria-label={`${unread} mensagens internas não lidas`}
+            >
+              {formatUnreadBadge(unread)}
+            </span>
+          )}
+        </span>
         <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 group-hover:max-w-[220px] group-hover:opacity-100">
           {item.label}
         </span>
