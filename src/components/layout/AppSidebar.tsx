@@ -4,6 +4,7 @@ import {
   BarChart3Icon,
   BotIcon,
   Building2Icon,
+  CalendarClockIcon,
   MegaphoneIcon,
   MessageCircleIcon,
   MessageSquareTextIcon,
@@ -80,6 +81,12 @@ const allSidebarItems: SidebarItem[] = [
     label: "Mensagens rápidas",
     icon: MessageSquareTextIcon,
     path: "/inbox/quick-messages",
+  },
+  {
+    label: "Mensagens programadas",
+    icon: CalendarClockIcon,
+    path: "/inbox/scheduled-messages",
+    extraPaths: ["/inbox/scheduled-messages"],
   },
   {
     label: "Marketing / Campanhas",
