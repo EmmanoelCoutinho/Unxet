@@ -148,7 +148,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       ? [
           {
             label: "Transferir conversa",
-            icon: <HiOutlineSwitchHorizontal className="h-4 w-4" />,
+            icon: <HiOutlineSwitchHorizontal className="h-4 w-4 text-blue-600" />,
             onSelect: () => onTransfer?.(),
             disabled: transferDisabled || !onTransfer,
           },
@@ -297,7 +297,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                   disabled={transferDisabled || !onTransfer}
                   aria-disabled={transferDisabled || !onTransfer}
                 >
-                  <HiOutlineSwitchHorizontal className="h-5 w-5" />
+                  <HiOutlineSwitchHorizontal className="h-5 w-5 text-blue-600" />
                 </Button>
               </CustomTooltip>
 
@@ -311,7 +311,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                   disabled={acceptIsDisabled || !onAccept}
                   aria-disabled={acceptIsDisabled || !onAccept}
                 >
-                  <TbMessageCheck className="h-5 w-5" />
+                  <TbMessageCheck className="h-5 w-5 text-green-600" />
                 </Button>
               </CustomTooltip>
 
@@ -325,7 +325,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                   disabled={closeIsDisabled || !onClose}
                   aria-disabled={closeIsDisabled || !onClose}
                 >
-                  <TbMessageOff className="h-5 w-5" />
+                  <TbMessageOff className="h-5 w-5 text-red-600" />
                 </Button>
               </CustomTooltip>
             </>
