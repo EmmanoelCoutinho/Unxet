@@ -5,8 +5,12 @@
  * aceitou (ex.: o link expirou).
  *
  * - Somente administradores da clínica podem reenviar.
- * - Só funciona para quem ainda não confirmou o e-mail; para quem já aceitou,
- *   o caminho é o "Esqueci minha senha".
+ * - Só funciona para quem ainda não definiu a senha (accepted_at nulo, mantido
+ *   por trigger em auth.users); para quem já aceitou, o caminho é o
+ *   "Esqueci minha senha".
+ * - Quem nunca abriu o link recebe um novo convite. Quem abriu (e-mail já
+ *   confirmado) mas não definiu a senha recebe um link de definição de senha,
+ *   pois o Supabase não reenvia convite para e-mail confirmado.
  * - Mantém nome, cargo e setor atuais do vínculo e atualiza invited_at.
  */
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -78,6 +82,12 @@ serve(async (req) => {
       return json(404, { error: "Atendente não encontrado nesta empresa." });
     }
 
+    if (target.accepted_at) {
+      return json(409, {
+        error: "Este atendente já aceitou o convite. Se esqueceu a senha, ele pode usar \"Esqueci minha senha\" na tela de login."
+      });
+    }
+
     const { data: authData, error: authErr } = await admin.auth.admin.getUserById(userId);
     if (authErr || !authData?.user) {
       log("auth_user_lookup_failed", { userId, error: authErr?.message });
@@ -85,38 +95,28 @@ serve(async (req) => {
     }
 
     const authUser = authData.user;
-    const acceptedAt = authUser.email_confirmed_at ?? authUser.last_sign_in_at ?? null;
-    if (acceptedAt) {
-      if (!target.accepted_at) {
-        await admin
-          .from("clinic_users")
-          .update({ accepted_at: acceptedAt })
-          .eq("clinic_id", clinicId)
-          .eq("user_id", userId);
-      }
-      return json(409, {
-        error: "Este atendente já aceitou o convite. Se esqueceu a senha, ele pode usar \"Esqueci minha senha\" na tela de login."
-      });
-    }
 
     const email = (authUser.email ?? target.email ?? "").trim().toLowerCase();
     if (!email) {
       return json(400, { error: "Atendente sem e-mail cadastrado." });
     }
 
-    log("resend_start", { requesterId: requester.id, clinicId, userId, redirectTo });
+    const linkType = authUser.email_confirmed_at ? "recovery" : "invite";
+    log("resend_start", { requesterId: requester.id, clinicId, userId, linkType, redirectTo });
 
-    const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo,
-      data: {
-        clinic_id: clinicId,
-        name: target.name ?? null,
-        role: target.role
-      }
-    });
-    if (inviteErr) {
-      log("invite_call_failed", { error: inviteErr.message });
-      return json(400, { error: inviteErr.message });
+    const { error: sendErr } = linkType === "invite"
+      ? await admin.auth.admin.inviteUserByEmail(email, {
+        redirectTo,
+        data: {
+          clinic_id: clinicId,
+          name: target.name ?? null,
+          role: target.role
+        }
+      })
+      : await admin.auth.resetPasswordForEmail(email, { redirectTo });
+    if (sendErr) {
+      log("send_failed", { linkType, error: sendErr.message });
+      return json(400, { error: sendErr.message });
     }
 
     const invitedAt = new Date().toISOString();
@@ -128,7 +128,7 @@ serve(async (req) => {
     if (updErr) log("invited_at_update_failed", { error: updErr.message });
 
     log("resend_ok", { userId });
-    return json(200, { ok: true, user_id: userId, email, invited_at: invitedAt });
+    return json(200, { ok: true, user_id: userId, email, invited_at: invitedAt, link_type: linkType });
   } catch (error) {
     log("unexpected_error", { error: String(error?.message ?? error) });
     return json(500, { error: "Erro inesperado ao reenviar convite" });

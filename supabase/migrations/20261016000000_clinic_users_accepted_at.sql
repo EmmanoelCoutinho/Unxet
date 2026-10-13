@@ -5,8 +5,9 @@
 -- não aceitou o convite (necessário para exibir "Convite pendente" e permitir
 -- reenviar o e-mail quando o link expira).
 --
--- O convite é considerado aceito quando o Supabase Auth confirma o e-mail do
--- usuário (clique no link do convite) ou quando ele faz login pela primeira vez.
+-- O convite só é considerado aceito quando o usuário define a senha. Clicar no
+-- link já confirma o e-mail no Supabase Auth, mas quem fecha a página sem
+-- definir a senha continua sem conseguir entrar — e deve seguir como pendente.
 -- =============================================================================
 
 begin;
@@ -18,12 +19,12 @@ security definer
 set search_path = public
 as $$
 begin
-  if new.email_confirmed_at is null and new.last_sign_in_at is null then
+  if coalesce(new.encrypted_password, '') = '' then
     return new;
   end if;
 
   update public.clinic_users
-     set accepted_at = coalesce(new.email_confirmed_at, new.last_sign_in_at, now())
+     set accepted_at = now()
    where user_id = new.id
      and accepted_at is null;
 
@@ -36,15 +37,16 @@ revoke execute on function public.mark_clinic_user_invite_accepted()
 
 drop trigger if exists trg_mark_clinic_user_invite_accepted on auth.users;
 create trigger trg_mark_clinic_user_invite_accepted
-  after update of email_confirmed_at, last_sign_in_at on auth.users
+  after update of encrypted_password on auth.users
   for each row execute function public.mark_clinic_user_invite_accepted();
 
--- Backfill: quem já confirmou o e-mail ou já entrou no sistema aceitou o convite.
+-- Backfill: quem já tem senha definida aceitou o convite. A data exata não é
+-- conhecida; usa o primeiro indicador disponível.
 update public.clinic_users cu
-   set accepted_at = coalesce(u.email_confirmed_at, u.last_sign_in_at)
+   set accepted_at = coalesce(u.last_sign_in_at, u.email_confirmed_at, u.updated_at, now())
   from auth.users u
  where u.id = cu.user_id
    and cu.accepted_at is null
-   and (u.email_confirmed_at is not null or u.last_sign_in_at is not null);
+   and coalesce(u.encrypted_password, '') <> '';
 
 commit;
