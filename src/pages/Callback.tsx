@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useSearchParams,
+  useLocation,
+} from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { translateAuthError } from "../lib/authErrors";
 import {
@@ -138,6 +143,13 @@ export const AuthCallback: React.FC = () => {
         {error && (
           <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error}
+            <p className="mt-2 text-rose-600">
+              Recebeu um convite? Peça ao administrador da sua empresa para
+              reenviá-lo. Já tinha acesso?{" "}
+              <Link to="/forgot-password" className="font-medium underline">
+                Receber novo link por e-mail
+              </Link>
+            </p>
           </div>
         )}
       </div>
