@@ -87,6 +87,12 @@ const translateBackendErrorToPtBr = (message: string) => {
   if (lower.includes("error sending invite email")) {
     return "Erro ao enviar convite, tente novamente mais tarde.";
   }
+  if (
+    lower.includes("for security purposes, you can only request this after") ||
+    lower.includes("email rate limit exceeded")
+  ) {
+    return "Um convite acabou de ser enviado. Aguarde um pouco antes de reenviar.";
+  }
 
   return normalized;
 };
@@ -186,11 +192,24 @@ const RoleBadge: React.FC<{ role: Role }> = ({ role }) => (
   </Badge>
 );
 
-const StatusBadge: React.FC<{ status: "active" | "inactive" }> = ({
+const isInvitePending = (user: ClinicUser) => !user.accepted_at;
+
+const formatInviteDate = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
+const StatusBadge: React.FC<{ status: "active" | "pending" }> = ({
   status,
 }) => (
   <Badge variant={status === "active" ? "success" : "warning"}>
-    {status === "active" ? "Ativo" : "Inativo"}
+    {status === "active" ? "Ativo" : "Convite pendente"}
   </Badge>
 );
 
@@ -298,6 +317,7 @@ export const AttendantsPage: React.FC = () => {
     null,
   );
   const [isInviting, setIsInviting] = useState(false);
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null);
 
   const departmentsById = useMemo(() => {
     return departments.reduce<Record<string, Department>>((acc, dept) => {
@@ -758,6 +778,43 @@ export const AttendantsPage: React.FC = () => {
     }
   };
 
+  const handleResendInvite = async (user: ClinicUser) => {
+    if (!clinicId || resendingUserId) return;
+
+    setResendingUserId(user.user_id);
+    try {
+      const { error: resendError } = await supabase.functions.invoke(
+        "resend-invite",
+        {
+          body: {
+            clinic_id: clinicId,
+            user_id: user.user_id,
+            redirect_to: getAuthCallbackUrl(),
+          },
+        },
+      );
+
+      if (resendError) {
+        throw resendError;
+      }
+
+      toast.success("Convite reenviado com sucesso");
+      await refreshData();
+    } catch (resendErr: any) {
+      const functionMessage = await getFunctionResponseMessage(resendErr);
+
+      handleActionError({
+        error: functionMessage ? { message: functionMessage } : resendErr,
+        fallbackMessage: "Erro ao reenviar convite, tente novamente mais tarde",
+        isPermission: isPermissionError(resendErr),
+      });
+      // Se o atendente já tinha aceitado, a lista é atualizada para refletir isso.
+      await refreshData();
+    } finally {
+      setResendingUserId(null);
+    }
+  };
+
   return (
     <div className="flex h-full flex-1 flex-col bg-gray-50">
       <div className="border-b bg-white px-4 sm:px-8 py-6">
@@ -893,6 +950,8 @@ export const AttendantsPage: React.FC = () => {
               const department = user.department_id
                 ? departmentsById[user.department_id]
                 : null;
+              const pending = isInvitePending(user);
+              const invitedOn = formatInviteDate(user.invited_at);
               return (
                 <div
                   key={user.user_id}
@@ -927,10 +986,27 @@ export const AttendantsPage: React.FC = () => {
                       )}
                     </div>
                     <div className="xl:col-span-1">
-                      <StatusBadge status="active" />
+                      <StatusBadge status={pending ? "pending" : "active"} />
+                      {pending && invitedOn && (
+                        <p className="mt-1 text-xs text-gray-400">
+                          Enviado em {invitedOn}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <div className="flex justify-end gap-2 border-t border-gray-100 pt-3 xl:col-span-1 xl:border-0 xl:pt-0">
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-3 xl:col-span-1 xl:flex-col xl:items-end xl:border-0 xl:pt-0">
+                    {pending && isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleResendInvite(user)}
+                        className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:border-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={resendingUserId !== null}
+                      >
+                        {resendingUserId === user.user_id
+                          ? "Reenviando..."
+                          : "Reenviar convite"}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleOpenEdit(user)}
