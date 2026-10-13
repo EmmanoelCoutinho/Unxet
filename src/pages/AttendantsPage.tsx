@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangleIcon,
   ChevronDownIcon,
+  ClockIcon,
   FilterIcon,
+  Loader2Icon,
+  SendIcon,
   Trash2Icon,
   UserXIcon,
   UsersIcon,
@@ -209,9 +212,16 @@ const StatusBadge: React.FC<{ status: "active" | "pending" }> = ({
   status,
 }) => (
   <Badge variant={status === "active" ? "success" : "warning"}>
-    {status === "active" ? "Ativo" : "Convite pendente"}
+    {status === "pending" && <ClockIcon className="mr-1 h-3 w-3 shrink-0" />}
+    <span className="whitespace-nowrap">
+      {status === "active" ? "Ativo" : "Convite pendente"}
+    </span>
   </Badge>
 );
+
+// Colunas da lista no desktop, compartilhadas entre o cabeçalho e as linhas.
+const LIST_GRID_COLS =
+  "xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_7.5rem_minmax(0,1fr)_9.5rem_12rem]";
 
 const Divider: React.FC = () => <div className="h-px w-full bg-gray-100" />;
 
@@ -271,12 +281,15 @@ const EmptyState: React.FC<{ onAction: () => void }> = ({ onAction }) => (
 );
 
 const SkeletonRow: React.FC = () => (
-  <div className="grid grid-cols-12 gap-4 rounded-xl border border-gray-100 bg-white px-5 py-4">
-    <div className="col-span-3 h-4 w-full animate-pulse rounded bg-gray-100" />
-    <div className="col-span-3 h-4 w-full animate-pulse rounded bg-gray-100" />
-    <div className="col-span-2 h-4 w-full animate-pulse rounded bg-gray-100" />
-    <div className="col-span-2 h-4 w-full animate-pulse rounded bg-gray-100" />
-    <div className="col-span-2 h-4 w-full animate-pulse rounded bg-gray-100" />
+  <div
+    className={`grid grid-cols-2 gap-4 rounded-xl border border-gray-100 bg-white px-5 py-4 ${LIST_GRID_COLS}`}
+  >
+    {[...Array(6)].map((_, index) => (
+      <div
+        key={index}
+        className="h-4 w-full animate-pulse rounded bg-gray-100"
+      />
+    ))}
   </div>
 );
 
@@ -935,13 +948,15 @@ export const AttendantsPage: React.FC = () => {
           />
         ) : (
           <div className="space-y-3">
-            <div className="hidden grid-cols-12 gap-4 px-5 text-xs font-semibold uppercase tracking-wide text-gray-400 xl:grid">
-              <span className="col-span-3">Nome</span>
-              <span className="col-span-3">E-mail</span>
-              <span className="col-span-2">Cargo</span>
-              <span className="col-span-2">Setor principal</span>
-              <span className="col-span-1">Status</span>
-              <span className="col-span-1 text-right">Ações</span>
+            <div
+              className={`hidden gap-4 px-5 text-xs font-semibold uppercase tracking-wide text-gray-400 xl:grid ${LIST_GRID_COLS}`}
+            >
+              <span>Nome</span>
+              <span>E-mail</span>
+              <span>Cargo</span>
+              <span>Setor principal</span>
+              <span>Status</span>
+              <span className="text-right">Ações</span>
             </div>
             <div className="hidden xl:block">
               <Divider />
@@ -952,17 +967,18 @@ export const AttendantsPage: React.FC = () => {
                 : null;
               const pending = isInvitePending(user);
               const invitedOn = formatInviteDate(user.invited_at);
+              const isResending = resendingUserId === user.user_id;
               return (
                 <div
                   key={user.user_id}
-                  className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm xl:grid xl:grid-cols-12 xl:items-center xl:gap-4 xl:px-5"
+                  className={`flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm xl:grid xl:items-center xl:gap-4 xl:px-5 ${LIST_GRID_COLS}`}
                 >
-                  <div className="min-w-0 xl:col-span-3">
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold text-gray-800">
                       {user.name?.trim() || "Sem nome"}
                     </p>
                   </div>
-                  <div className="-mt-2 min-w-0 xl:col-span-3 xl:mt-0">
+                  <div className="-mt-2 min-w-0 xl:mt-0">
                     <p className="break-all text-sm text-gray-700">
                       {user.email || "---"}
                     </p>
@@ -973,10 +989,10 @@ export const AttendantsPage: React.FC = () => {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 xl:contents">
-                    <div className="xl:col-span-2">
+                    <div>
                       <RoleBadge role={user.role} />
                     </div>
-                    <div className="flex items-center gap-2 xl:col-span-2 xl:block">
+                    <div className="flex min-w-0 items-center gap-2 xl:block">
                       <div className="text-sm text-gray-700">
                         <span className="text-gray-400 xl:hidden">Setor: </span>
                         {department?.name || "Sem setor"}
@@ -985,26 +1001,37 @@ export const AttendantsPage: React.FC = () => {
                         <Badge variant="warning">Inativo</Badge>
                       )}
                     </div>
-                    <div className="xl:col-span-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 xl:flex-col xl:items-start">
                       <StatusBadge status={pending ? "pending" : "active"} />
                       {pending && invitedOn && (
-                        <p className="mt-1 text-xs text-gray-400">
+                        <span className="whitespace-nowrap text-xs text-gray-400">
                           Enviado em {invitedOn}
-                        </p>
+                        </span>
                       )}
                     </div>
                   </div>
-                  <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-3 xl:col-span-1 xl:flex-col xl:items-end xl:border-0 xl:pt-0">
+                  <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3 xl:border-0 xl:pt-0">
                     {pending && isAdmin && (
                       <button
                         type="button"
                         onClick={() => handleResendInvite(user)}
-                        className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:border-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Reenviar o e-mail de convite"
+                        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-600 hover:border-blue-300 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                         disabled={resendingUserId !== null}
                       >
-                        {resendingUserId === user.user_id
-                          ? "Reenviando..."
-                          : "Reenviar convite"}
+                        {isResending ? (
+                          <Loader2Icon className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <SendIcon className="h-3.5 w-3.5" />
+                        )}
+                        {isResending ? (
+                          "Reenviando..."
+                        ) : (
+                          <span>
+                            Reenviar
+                            <span className="xl:hidden"> convite</span>
+                          </span>
+                        )}
                       </button>
                     )}
                     <button
