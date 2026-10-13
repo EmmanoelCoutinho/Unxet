@@ -88,6 +88,17 @@ const MassMessagesPage = lazy(() =>
   })),
 );
 
+const ScheduledMessagesPage = lazy(() =>
+  import("./pages/ScheduledMessages").then((m) => ({
+    default: m.ScheduledMessagesPage,
+  })),
+);
+const ScheduledMessageEditorPage = lazy(() =>
+  import("./pages/ScheduledMessageEditor").then((m) => ({
+    default: m.ScheduledMessageEditorPage,
+  })),
+);
+
 // Painel da Unxet: login e sessão próprios, fora do app das empresas
 const AdminApp = lazy(() =>
   import("./modules/admin/AdminApp").then((m) => ({ default: m.AdminApp })),
@@ -216,6 +227,9 @@ function RoutedApp() {
             <Route path="departments" element={<AdminOnly><DepartmentsPage /></AdminOnly>} />
             <Route path="attendants" element={<AdminOnly><AttendantsPage /></AdminOnly>} />
             <Route path="quick-messages" element={<QuickMessagesPage />} />
+            <Route path="scheduled-messages" element={<ScheduledMessagesPage />} />
+            <Route path="scheduled-messages/new" element={<ScheduledMessageEditorPage />} />
+            <Route path="scheduled-messages/:id" element={<ScheduledMessageEditorPage />} />
             <Route
               path="marketing-campaigns"
               element={
