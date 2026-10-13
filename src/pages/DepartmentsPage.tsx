@@ -4,6 +4,7 @@ import {
   CheckIcon,
   Edit3Icon,
   PlusIcon,
+  StarIcon,
   Trash2Icon,
 } from "lucide-react";
 import { Input } from "../components/ui/Input";
@@ -21,6 +22,51 @@ type Department = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+};
+
+// Pesquisa de satisfação (notas de 1 a 5) respondida pelos clientes do setor
+type DepartmentRating = {
+  average: number;
+  answered: number;
+};
+
+const RATINGS_PAGE_SIZE = 1000;
+
+const fetchDepartmentRatings = async (clinicId: string) => {
+  const totals = new Map<string, { sum: number; answered: number }>();
+
+  // A API devolve no máximo 1000 linhas por chamada
+  for (let from = 0; ; from += RATINGS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("satisfaction_surveys")
+      .select("department_id, score")
+      .eq("clinic_id", clinicId)
+      .eq("status", "answered")
+      .not("department_id", "is", null)
+      .order("id", { ascending: true })
+      .range(from, from + RATINGS_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    for (const row of data ?? []) {
+      if (!row.department_id || typeof row.score !== "number") continue;
+      const total = totals.get(row.department_id) ?? { sum: 0, answered: 0 };
+      total.sum += row.score;
+      total.answered += 1;
+      totals.set(row.department_id, total);
+    }
+
+    if ((data?.length ?? 0) < RATINGS_PAGE_SIZE) break;
+  }
+
+  const ratings: Record<string, DepartmentRating> = {};
+  totals.forEach((total, departmentId) => {
+    ratings[departmentId] = {
+      average: total.sum / total.answered,
+      answered: total.answered,
+    };
+  });
+  return ratings;
 };
 
 type DepartmentFormValues = {
@@ -138,6 +184,11 @@ export const DepartmentsPage: React.FC = () => {
   const isAdmin = membership?.role === "admin";
 
   const [departments, setDepartments] = useState<Department[]>([]);
+  // null: ainda carregando ou não foi possível carregar
+  const [ratings, setRatings] = useState<Record<
+    string,
+    DepartmentRating
+  > | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -352,6 +403,26 @@ export const DepartmentsPage: React.FC = () => {
   useEffect(() => {
     fetchDepartments();
   }, [fetchDepartments]);
+
+  useEffect(() => {
+    setRatings(null);
+    // Só admin enxerga as avaliações da empresa toda; para os demais a
+    // média sairia só das próprias notas
+    if (!clinicId || !isAdmin) return;
+
+    let active = true;
+    fetchDepartmentRatings(clinicId)
+      .then((result) => {
+        if (active) setRatings(result);
+      })
+      .catch((ratingsError) => {
+        console.error("Erro ao carregar avaliações dos departamentos:", ratingsError);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [clinicId, isAdmin]);
 
   const openCreateModal = () => {
     resetForm();
@@ -622,13 +693,17 @@ export const DepartmentsPage: React.FC = () => {
                 <thead className="hidden bg-slate-50 text-left md:table-header-group text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-4 sm:px-6 py-4">Nome</th>
+                    <th className="px-4 sm:px-6 py-4">Avaliação</th>
                     <th className="px-4 sm:px-6 py-4">Status</th>
                     <th className="px-4 sm:px-6 py-4">Default</th>
                     <th className="px-4 sm:px-6 py-4">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="block divide-y divide-slate-100 md:table-row-group">
-                  {sortedDepartments.map((department) => (
+                  {sortedDepartments.map((department) => {
+                    const rating = ratings?.[department.id];
+
+                    return (
                     <tr
                       key={department.id}
                       className="flex flex-wrap items-center gap-2 p-4 md:table-row md:p-0"
@@ -641,6 +716,26 @@ export const DepartmentsPage: React.FC = () => {
                           <p className="text-xs text-slate-500">
                             {department.description}
                           </p>
+                        )}
+                      </td>
+                      <td className="block basis-full md:basis-auto md:table-cell md:px-6 md:py-4">
+                        {rating ? (
+                          <span
+                            title={`Média de ${rating.answered} ${rating.answered === 1 ? "avaliação" : "avaliações"} (notas de 1 a 5)`}
+                            className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-slate-700"
+                          >
+                            <StarIcon className="h-4 w-4 fill-amber-400 text-amber-400" />
+                            <span className="font-semibold">
+                              {rating.average.toFixed(1)}
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              ({rating.answered})
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">
+                            {ratings ? "Sem avaliações" : "—"}
+                          </span>
                         )}
                       </td>
                       <td className="block md:table-cell md:px-6 md:py-4">
@@ -713,7 +808,8 @@ export const DepartmentsPage: React.FC = () => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

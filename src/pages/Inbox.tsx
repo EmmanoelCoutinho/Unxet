@@ -19,7 +19,7 @@ import { setAppBadge } from "../lib/pushNotifications";
 import { PushNotificationsPrompt } from "../components/inbox/PushNotificationsPrompt";
 import type { Channel } from "../types";
 
-type InboxTab = "open" | "pending";
+type InboxTab = "open" | "pending" | "bot";
 
 export const Inbox: React.FC = () => {
   const navigate = useNavigate();
@@ -102,10 +102,26 @@ export const Inbox: React.FC = () => {
   }, [filtered]);
 
   const pendingConversations = useMemo(() => {
-    return filtered.filter((conversation) => conversation.status === "pending");
+    return filtered.filter(
+      (conversation) =>
+        conversation.status === "pending" && !conversation.inBotFlow,
+    );
   }, [filtered]);
 
-  const currentList = tab === "open" ? openConversations : pendingConversations;
+  // Clientes que o bot ainda conduz (não escolheram uma opção, não chegaram a um setor)
+  const botConversations = useMemo(() => {
+    return filtered.filter(
+      (conversation) =>
+        conversation.status === "pending" && conversation.inBotFlow,
+    );
+  }, [filtered]);
+
+  const currentList =
+    tab === "open"
+      ? openConversations
+      : tab === "pending"
+        ? pendingConversations
+        : botConversations;
 
   return (
     <div className="flex h-full w-full overflow-x-hidden bg-white">
@@ -215,6 +231,25 @@ export const Inbox: React.FC = () => {
                 )}
               </span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setTab("bot")}
+              title="Clientes que ainda estão no atendimento automático"
+              className={[
+                "h-10 flex-1 text-sm font-medium transition",
+                tab === "bot"
+                  ? "border-b-4 border-blue-500 text-blue-500"
+                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+              ].join(" ")}
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                No bot
+                <span className="text-xs opacity-90">
+                  ({botConversations.length})
+                </span>
+              </span>
+            </button>
           </div>
         </div>
 
@@ -234,10 +269,14 @@ export const Inbox: React.FC = () => {
               <p className="font-medium">
                 {tab === "open"
                   ? "Nenhuma conversa aberta"
-                  : "Nenhuma conversa pendente"}
+                  : tab === "pending"
+                    ? "Nenhuma conversa pendente"
+                    : "Nenhum cliente no bot"}
               </p>
               <p className="text-sm text-gray-500">
-                Novas conversas aparecem aqui automaticamente.
+                {tab === "bot"
+                  ? "Quem não concluir o atendimento automático aparece aqui."
+                  : "Novas conversas aparecem aqui automaticamente."}
               </p>
             </div>
           ) : (

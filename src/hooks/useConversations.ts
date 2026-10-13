@@ -233,6 +233,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
           last_message_at,
           created_at,
           assigned_user_id,
+          in_bot_flow,
           sla_breached_at,
           first_unanswered_inbound_at,
           contacts:contact_id (*),
@@ -264,8 +265,6 @@ export function useConversations(options: UseConversationsOptions = {}) {
           if (!isAdmin) q = q.in("department_id", accessibleDepartmentIds);
           return q
             .neq("status", "closed")
-            // Conversa que o bot ainda está conduzindo não entra na fila
-            .eq("in_bot_flow", false)
             .order("last_message_at", { ascending: false })
             // Só a última mensagem de cada conversa (prévia na lista)
             .order("sent_at", { referencedTable: "messages", ascending: false })
@@ -369,6 +368,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
               tags,
               assignedTo: row.assigned_user_id ?? undefined,
+              inBotFlow: row.in_bot_flow === true,
               slaBreached: isSlaBreached(row),
             };
           }) ?? [];
@@ -394,10 +394,12 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
           mapped = mapped.map((c) => ({
             ...c,
-            // Conversa de outro atendente não conta como não lida para o admin
-            unreadCount: isAssignedToOther(c, authUser.id)
-              ? 0
-              : (countMap.get(c.id) ?? 0),
+            // Conversa de outro atendente não conta como não lida para o admin;
+            // a que está com o bot ainda não entrou na fila
+            unreadCount:
+              c.inBotFlow || isAssignedToOther(c, authUser.id)
+                ? 0
+                : (countMap.get(c.id) ?? 0),
           }));
         }
 
@@ -561,10 +563,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
             setConversations((current) => {
               const idx = current.findIndex((c) => c.id === conversationId);
 
-              if (
-                String(nextRow?.status) === "closed" ||
-                nextRow?.in_bot_flow === true
-              ) {
+              if (String(nextRow?.status) === "closed") {
                 if (idx === -1) return current;
                 const clone = [...current];
                 clone.splice(idx, 1);
@@ -577,11 +576,17 @@ export function useConversations(options: UseConversationsOptions = {}) {
               }
 
               const old = current[idx];
+              const inBotFlow = nextRow?.in_bot_flow === true;
+
+              // Saiu do bot: a contagem de não lidas passa a valer
+              if (old.inBotFlow && !inBotFlow) scheduleRefetchRef.current();
 
               const updated: Conversation = {
                 ...old,
                 status: nextRow?.status ?? old.status,
                 assignedTo: nextRow?.assigned_user_id ?? undefined,
+                inBotFlow,
+                unreadCount: inBotFlow ? 0 : old.unreadCount,
                 slaBreached: isSlaBreached(nextRow ?? {}),
                 lastTimestamp:
                   nextRow?.last_message_at ?? old.lastTimestamp ?? undefined,
@@ -676,7 +681,10 @@ export function useConversations(options: UseConversationsOptions = {}) {
               lastMessageId: msg.id,
               lastTimestamp: msg.sent_at ?? msg.created_at ?? old.lastTimestamp,
               unreadCount:
-                isInbound && !viewing && !isAssignedToOther(old, authUser.id)
+                isInbound &&
+                !viewing &&
+                !old.inBotFlow &&
+                !isAssignedToOther(old, authUser.id)
                   ? (old.unreadCount ?? 0) + 1
                 : (old.unreadCount ?? 0),
             };
@@ -817,7 +825,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
   const totalUnreadPending = useMemo(() => {
     return conversations
-      .filter((conv) => conv.status === "pending")
+      .filter((conv) => conv.status === "pending" && !conv.inBotFlow)
       .reduce((sum, conv) => sum + (conv.unreadCount || 0), 0);
   }, [conversations]);
 

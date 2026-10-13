@@ -42,6 +42,8 @@ const STATUS_BADGE: Record<
   closed: { label: "Finalizada", className: "bg-gray-100 text-gray-600" },
 };
 
+const BOT_BADGE = { label: "No bot", className: "bg-violet-50 text-violet-700" };
+
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   conversation,
   assigneeName,
@@ -132,6 +134,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const acceptIsDisabled = acceptDisabled || isAccepting;
   const closeIsDisabled = closeDisabled || isClosing;
 
+  const statusBadge =
+    conversation.status === "pending" && conversation.inBotFlow
+      ? BOT_BADGE
+      : STATUS_BADGE[conversation.status];
+
   const visibleTags = conversation.tags ?? [];
   const canAccept = !acceptIsDisabled && !!onAccept;
 
@@ -204,9 +211,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               )}
 
               <span
-                className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[conversation.status].className}`}
+                className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadge.className}`}
               >
-                {STATUS_BADGE[conversation.status].label}
+                {statusBadge.label}
               </span>
 
               {conversation.slaBreached && (
