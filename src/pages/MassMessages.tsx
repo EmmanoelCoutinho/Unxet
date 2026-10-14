@@ -18,6 +18,7 @@ import {
   PencilIcon
 } from "lucide-react";
 import { toast } from "react-toastify";
+import { useConfirm } from "../components/ui/ConfirmDialog";
 import { useMassMessages } from "../hooks/useMassMessages";
 import { useCampaignStatus, Campaign, QueueItem } from "../hooks/useCampaignStatus";
 import { useTags, AvailableTag } from "../hooks/useTags"; // Importando o novo hook
@@ -25,6 +26,7 @@ import { useTags, AvailableTag } from "../hooks/useTags"; // Importando o novo h
 type TargetType = "all" | "tags";
 
 export const MassMessagesPage: React.FC = () => {
+  const confirm = useConfirm();
   const [targetType, setTargetType] = useState<TargetType>("all");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [message, setMessage] = useState("");
@@ -98,7 +100,14 @@ export const MassMessagesPage: React.FC = () => {
   // Handler para Deletar no Supabase
   const handleDeleteTag = async (tagId: string, e: React.MouseEvent) => {
     e.stopPropagation(); 
-    if (!window.confirm("Deseja realmente deletar esta etiqueta do banco de dados?")) return;
+    const ok = await confirm({
+      title: "Excluir etiqueta?",
+      description:
+        "A etiqueta será removida permanentemente. Essa ação não pode ser desfeita.",
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!ok) return;
 
     try {
       await deleteTag(tagId);
@@ -434,6 +443,7 @@ interface CampaignHistoryProps {
 
 const CampaignHistory: React.FC<CampaignHistoryProps> = () => {
   const { campaigns, loading, refresh, getCampaignDetails, cancelCampaign, deleteCampaign } = useCampaignStatus();
+  const confirm = useConfirm();
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [details, setDetails] = useState<QueueItem[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -453,7 +463,14 @@ const CampaignHistory: React.FC<CampaignHistoryProps> = () => {
   };
 
   const handleCancel = async (campaignId: string) => {
-    if (!window.confirm("Tens a certeza que desejas cancelar esta campanha?")) return;
+    const ok = await confirm({
+      title: "Cancelar esta campanha?",
+      description: "As mensagens que ainda não foram enviadas não serão disparadas.",
+      confirmLabel: "Cancelar campanha",
+      cancelLabel: "Voltar",
+      tone: "warning",
+    });
+    if (!ok) return;
     setActionLoading(campaignId);
     try {
       await cancelCampaign(campaignId);
@@ -467,7 +484,13 @@ const CampaignHistory: React.FC<CampaignHistoryProps> = () => {
   };
 
   const handleDelete = async (campaignId: string) => {
-    if (!window.confirm("Tens a certeza que desejas apagar o histórico?")) return;
+    const ok = await confirm({
+      title: "Apagar o histórico desta campanha?",
+      description: "Essa ação não pode ser desfeita.",
+      confirmLabel: "Apagar",
+      tone: "danger",
+    });
+    if (!ok) return;
     setActionLoading(campaignId);
     try {
       await deleteCampaign(campaignId);

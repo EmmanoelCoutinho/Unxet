@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button } from "../components/ui/Button";
+import { useConfirm } from "../components/ui/ConfirmDialog";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Badge } from "../components/ui/Badge";
@@ -40,6 +41,7 @@ const getActiveBotConflictMessage = (activeBotName: string) =>
 
 export const BotsSettingsPage: React.FC = () => {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const { clinicId, membership } = useClinic();
   const isAdmin = membership?.role === "admin";
 
@@ -185,9 +187,13 @@ export const BotsSettingsPage: React.FC = () => {
 
   const handleDelete = async (bot: BotRow) => {
     if (!clinicId) return;
-    const ok = window.confirm(
-      `Excluir o bot "${bot.name}"? Ele deixa de responder e os canais vinculados ficam livres.`,
-    );
+    const ok = await confirm({
+      title: `Excluir o bot "${bot.name}"?`,
+      description:
+        "Ele deixa de responder e os canais vinculados ficam livres.",
+      confirmLabel: "Excluir bot",
+      tone: "danger",
+    });
     if (!ok) return;
 
     setActionLoadingId(bot.id);

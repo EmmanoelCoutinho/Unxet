@@ -5,6 +5,7 @@ import { MessageCircleIcon } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
+import { useConfirm } from "../components/ui/ConfirmDialog";
 import { botsService } from "../services/bots";
 import type {
   BotChannelBindingRow,
@@ -56,6 +57,7 @@ export const BotBindingsEditor = ({
   botStatus: BotRow["status"];
   isAdmin: boolean;
 }) => {
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -131,9 +133,12 @@ export const BotBindingsEditor = ({
 
     const conflict = conflicts[conn.id];
     if (next && conflict) {
-      const ok = window.confirm(
-        `Este canal está sendo usado pelo bot "${conflict.botName}". Deseja passar o canal para este bot?`,
-      );
+      const ok = await confirm({
+        title: "Canal em uso por outro bot",
+        description: `Este canal está sendo usado pelo bot "${conflict.botName}". Deseja passar o canal para este bot?`,
+        confirmLabel: "Passar canal",
+        tone: "warning",
+      });
       if (!ok) return;
     }
 
