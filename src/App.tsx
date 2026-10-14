@@ -16,6 +16,7 @@ import { PushNotificationsBridge } from "./components/PushNotificationsBridge";
 import { PresenceHeartbeat } from "./components/PresenceHeartbeat";
 import { InternalChatBridge } from "./components/InternalChatBridge";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { ConfirmDialogProvider } from "./components/ui/ConfirmDialog";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { InboxEmpty } from "./pages/InboxEmpty";
 import { ClinicProvider, useClinic } from "./contexts/ClinicContext";
@@ -318,29 +319,31 @@ export function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
-        <ToastContainer position="top-right" autoClose={3000} />
-        <Routes>
-          <Route
-            path="/admin/*"
-            element={
-              <Suspense fallback={<PageLoading />}>
-                <AdminApp />
-              </Suspense>
-            }
-          />
-          <Route
-            path="*"
-            element={
-              <AuthProvider>
-                <ClinicProvider>
-                  <RoutedApp />
-                </ClinicProvider>
-              </AuthProvider>
-            }
-          />
-        </Routes>
-      </BrowserRouter>
+      <ConfirmDialogProvider>
+        <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+          <ToastContainer position="top-right" autoClose={3000} />
+          <Routes>
+            <Route
+              path="/admin/*"
+              element={
+                <Suspense fallback={<PageLoading />}>
+                  <AdminApp />
+                </Suspense>
+              }
+            />
+            <Route
+              path="*"
+              element={
+                <AuthProvider>
+                  <ClinicProvider>
+                    <RoutedApp />
+                  </ClinicProvider>
+                </AuthProvider>
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+      </ConfirmDialogProvider>
     </QueryClientProvider>
   );
 }

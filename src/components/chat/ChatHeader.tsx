@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Conversation } from "../../types";
 import { Button } from "../ui/Button";
+import { useConfirm } from "../ui/ConfirmDialog";
 import { TbMessageCheck, TbMessageOff } from "react-icons/tb";
 import { HiOutlineSwitchHorizontal } from "react-icons/hi";
 import { FiSearch } from "react-icons/fi";
@@ -62,6 +63,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const [isAccepting, setIsAccepting] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const isMobile = useIsMobile();
+  const confirm = useConfirm();
 
   const initials = useMemo(() => {
     const name = (conversation.contactName ?? "").trim();
@@ -120,7 +122,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     if (!onClose || closeDisabled || isClosing) return;
     // Um toque no ícone encerrava o atendimento (e disparava a pesquisa de
     // satisfação para o cliente) sem chance de voltar atrás
-    if (!window.confirm("Finalizar esta conversa?")) return;
+    const ok = await confirm({
+      title: "Finalizar esta conversa?",
+      description:
+        "O atendimento será encerrado e o cliente poderá receber a pesquisa de satisfação.",
+      confirmLabel: "Finalizar",
+      tone: "warning",
+    });
+    if (!ok) return;
 
     try {
       setIsClosing(true);

@@ -16,6 +16,7 @@ import { toast } from "react-toastify";
 import { useClinic } from "../contexts/ClinicContext";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
+import { useConfirm } from "../components/ui/ConfirmDialog";
 import {
   MessageStatusBadge,
   RecipientStatusBadge,
@@ -639,13 +640,22 @@ const ScheduledMessageDetails: React.FC<{
   scheduledMessage: ScheduledMessage;
 }> = ({ scheduledMessage }) => {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const { cancel, acting } = useScheduledMessageActions();
   const { total, sent, failed, waiting } = summarizeRecipients(
     scheduledMessage.recipients,
   );
 
   const handleCancel = async () => {
-    if (!window.confirm("Cancelar os envios que ainda não saíram?")) return;
+    const ok = await confirm({
+      title: "Cancelar programação?",
+      description:
+        "Os envios que ainda não saíram serão cancelados. Os que já foram enviados não são afetados.",
+      confirmLabel: "Cancelar envios",
+      cancelLabel: "Voltar",
+      tone: "warning",
+    });
+    if (!ok) return;
     try {
       await cancel(scheduledMessage.id);
       toast.success("Programação cancelada.");

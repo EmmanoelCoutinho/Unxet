@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
+import { useConfirm } from "../components/ui/ConfirmDialog";
 import { Input } from "../components/ui/Input";
 import { Textarea } from "../components/ui/Textarea";
 import { Toggle } from "../components/ui/Toggle";
@@ -183,6 +184,7 @@ export const BotNodesEditor = ({
   botId: string;
   isAdmin: boolean;
 }) => {
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [nodes, setNodes] = useState<BotNodeRow[]>([]);
   // Último estado gravado no banco, para sinalizar o que ainda não foi salvo
@@ -375,9 +377,13 @@ export const BotNodesEditor = ({
     if (node.node_key === BOT_ROOT_NODE_KEY) {
       return toast.error("A etapa inicial não pode ser removida.");
     }
-    const ok = window.confirm(
-      `Remover a etapa "${node.title}"? As opções dela são apagadas e as opções de outras etapas que levam até ela ficam sem destino.`,
-    );
+    const ok = await confirm({
+      title: `Remover a etapa "${node.title}"?`,
+      description:
+        "As opções dela são apagadas e as opções de outras etapas que levam até ela ficam sem destino.",
+      confirmLabel: "Remover etapa",
+      tone: "danger",
+    });
     if (!ok) return;
 
     setDeletingNodeId(node.id);
@@ -579,7 +585,11 @@ export const BotNodesEditor = ({
   ) => {
     if (!isAdmin) return toast.error("Você não tem permissão para esta ação.");
     const label = opt.label?.trim() ? `"${opt.label.trim()}"` : "esta opção";
-    const ok = window.confirm(`Remover ${label}?`);
+    const ok = await confirm({
+      title: `Remover ${label}?`,
+      confirmLabel: "Remover",
+      tone: "danger",
+    });
     if (!ok) return;
 
     if (!(opt as BotOptionRow).id) {

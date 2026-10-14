@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Button } from "../components/ui/Button";
+import { useConfirm } from "../components/ui/ConfirmDialog";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Textarea } from "../components/ui/Textarea";
@@ -67,6 +68,7 @@ type BotEditorPageProps = {
 
 export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const location = useLocation();
   const { clinicId, membership } = useClinic();
   const isAdmin = membership?.role === "admin";
@@ -279,9 +281,13 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
       toast.error("Você não tem permissão para esta ação.");
       return;
     }
-    const ok = window.confirm(
-      `Excluir o bot "${bot.name}"? Ele deixa de responder e os canais vinculados ficam livres.`,
-    );
+    const ok = await confirm({
+      title: `Excluir o bot "${bot.name}"?`,
+      description:
+        "Ele deixa de responder e os canais vinculados ficam livres.",
+      confirmLabel: "Excluir bot",
+      tone: "danger",
+    });
     if (!ok) return;
 
     setDeleting(true);
