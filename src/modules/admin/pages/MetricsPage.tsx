@@ -68,6 +68,27 @@ type PlatformMetrics = {
   }>;
 };
 
+type OnlineUsers = {
+  generated_at: string;
+  total: number;
+  admins: number;
+  agents: number;
+  clinics: number;
+  per_clinic: Array<{ id: string; name: string; online: number }>;
+  users: Array<{
+    user_id: string;
+    name: string;
+    role: string;
+    clinic_id: string;
+    clinic_name: string;
+    last_seen_at: string;
+  }>;
+};
+
+// Quem deu sinal de vida nos últimos 2 min (o app avisa a cada minuto)
+const ONLINE_WINDOW_SECONDS = 120;
+const ONLINE_REFRESH_MS = 30 * 1000;
+
 const PERIODS = [7, 30, 90];
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -112,6 +133,14 @@ const fetchMetrics = async (days: number) => {
   });
   if (error) throw error;
   return data as PlatformMetrics;
+};
+
+const fetchOnlineUsers = async () => {
+  const { data, error } = await adminSupabase.rpc("platform_online_users", {
+    p_window_seconds: ONLINE_WINDOW_SECONDS,
+  });
+  if (error) throw error;
+  return data as OnlineUsers;
 };
 
 const Section = ({
@@ -248,6 +277,73 @@ const DailyMessagesChart = ({ rows }: { rows: PlatformMetrics["daily"] }) => {
   );
 };
 
+const OnlineNow = () => {
+  const { data, error, isLoading } = useQuery({
+    queryKey: ["platform-online-users"],
+    queryFn: fetchOnlineUsers,
+    refetchInterval: ONLINE_REFRESH_MS,
+  });
+
+  return (
+    <Section
+      title="Online agora"
+      subtitle="Pessoas com o app aberto nos últimos 2 minutos. Atualiza sozinho a cada 30 segundos."
+    >
+      {error ? (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          Não foi possível saber quem está online.
+        </div>
+      ) : isLoading || !data ? (
+        <div className="h-24 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
+      ) : (
+        <div className="grid gap-3 md:grid-cols-3">
+          <StatCard
+            label="Usuários online"
+            value={
+              <span className="inline-flex items-center gap-2">
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${data.total > 0 ? "bg-emerald-500" : "bg-slate-300"}`}
+                />
+                {fmt(data.total)}
+              </span>
+            }
+            hint={`${plural(data.agents, "atendente", "atendentes")}, ${plural(data.admins, "admin", "admins")} · em ${plural(data.clinics, "empresa", "empresas")}`}
+          />
+          <div className="md:col-span-2">
+            <Panel title="Quem está online">
+              {data.users.length === 0 ? (
+                <p className="text-sm text-slate-500">Ninguém online agora.</p>
+              ) : (
+                <ul className="max-h-48 divide-y divide-slate-100 overflow-y-auto text-sm">
+                  {data.users.map((user) => (
+                    <li
+                      key={`${user.user_id}-${user.clinic_id}`}
+                      className="flex items-center justify-between gap-3 py-1.5"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                        <span className="truncate font-medium text-slate-800">
+                          {user.name || "Sem nome"}
+                        </span>
+                        <span className="shrink-0 text-xs text-slate-500">
+                          {user.role === "admin" ? "admin" : "atendente"}
+                        </span>
+                      </span>
+                      <span className="truncate text-xs text-slate-500">
+                        {user.clinic_name}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+};
+
 export const MetricsPage: React.FC = () => {
   const [days, setDays] = useState(30);
   const { data, error, isLoading, isFetching, refetch } = useQuery({
@@ -304,6 +400,8 @@ export const MetricsPage: React.FC = () => {
           Não foi possível carregar os números. Tente atualizar.
         </div>
       ) : null}
+
+      <OnlineNow />
 
       {isLoading ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">

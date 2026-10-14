@@ -13,6 +13,7 @@ import { Inbox } from "./pages/Inbox";
 import { Chat } from "./pages/Chat";
 import { Header } from "./components/layout/Header";
 import { PushNotificationsBridge } from "./components/PushNotificationsBridge";
+import { PresenceHeartbeat } from "./components/PresenceHeartbeat";
 import { InternalChatBridge } from "./components/InternalChatBridge";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -185,6 +186,7 @@ function RoutedApp() {
   return (
     <>
       <PushNotificationsBridge />
+      <PresenceHeartbeat />
       <InternalChatBridge />
       {showHeader && <Header />}
       <main
