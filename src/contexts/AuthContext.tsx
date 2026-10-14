@@ -89,7 +89,14 @@ const writeStorage = (key: string, value: unknown) => {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authUser, setAuthUserState] = useState<User | null>(null);
+
+  // O Supabase reemite a sessão ao voltar para a aba (e ao renovar o token)
+  // com um objeto novo do mesmo usuário. Manter a referência evita que tudo
+  // que depende de authUser recarregue a tela sem necessidade.
+  const setAuthUser = (next: User | null) => {
+    setAuthUserState((prev) => (prev?.id === next?.id ? prev : next));
+  };
 
   const [profile, setProfile] = useState<ClinicUser | null>(() => {
     const cached = readStorage<StoredProfile>(STORAGE_PROFILE_KEY);
