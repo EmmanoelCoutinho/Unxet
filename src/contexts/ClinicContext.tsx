@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { supabase } from "../lib/supabaseClient";
@@ -39,6 +40,7 @@ const ClinicContext = createContext<ClinicContextType | undefined>(undefined);
 
 export function ClinicProvider({ children }: { children: React.ReactNode }) {
   const { authUser, loading: authLoading } = useAuth();
+  const userId = authUser?.id ?? null;
 
   const [clinic, setClinic] = useState<Clinic | null>(null);
   const [membership, setMembership] = useState<ClinicMembership | null>(null);
@@ -47,26 +49,34 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   const clinicId = useMemo(() => membership?.clinic_id ?? null, [membership]);
 
+  // Usuário cujos dados já estão na tela: recarregar para ele acontece em
+  // segundo plano, sem trocar a página pelo loading
+  const loadedUserIdRef = useRef<string | null>(null);
+
   const fetchClinic = useCallback(async () => {
-    if (!authUser) {
+    if (!userId) {
+      loadedUserIdRef.current = null;
       setClinic(null);
       setMembership(null);
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    const isBackground = loadedUserIdRef.current === userId;
+    if (!isBackground) setLoading(true);
     setError(null);
 
     // 1) pega membership do usuário
     const { data: membershipRow, error: memErr } = await supabase
       .from("clinic_users")
       .select("clinic_id, user_id, role, department_id")
-      .eq("user_id", authUser.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (memErr) {
       setError(memErr);
+      // Falha (ex.: rede) ao recarregar em segundo plano: mantém o que está na tela
+      if (isBackground) return;
       setClinic(null);
       setMembership(null);
       setLoading(false);
@@ -91,18 +101,20 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
     if (clinicErr) {
       setError(clinicErr);
+      if (isBackground) return;
       setClinic(null);
       setLoading(false);
       return;
     }
 
     setClinic((clinicRow as Clinic) ?? null);
+    loadedUserIdRef.current = userId;
     setLoading(false);
-  }, [authUser]);
+  }, [userId]);
 
   useEffect(() => {
     if (authLoading) {
-      setLoading(true);
+      if (!loadedUserIdRef.current) setLoading(true);
       return;
     }
     fetchClinic();
