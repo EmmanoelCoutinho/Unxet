@@ -1,12 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../contexts/AuthContext";
 
 type PageItem = { id: string; name: string; access_token?: string };
 type IntegrationFlow = "meta" | "whatsapp";
+
+// A edge function responde { error } com o motivo; o supabase-js só expõe o Response
+const getFunctionErrorMessage = async (error: unknown, fallback: string) => {
+  const response = (error as { context?: unknown })?.context;
+  if (response instanceof Response) {
+    const data = (await response
+      .clone()
+      .json()
+      .catch(() => null)) as { error?: unknown } | null;
+    if (typeof data?.error === "string" && data.error.trim()) return data.error;
+  }
+  return fallback;
+};
 
 const parseIntegrationState = (rawState: string) => {
   const [clinicId = "", flowMarker = "fb"] = rawState.split("|");
@@ -37,9 +50,13 @@ export function MetaCallbackPage() {
   const clinicId = profile?.clinic_id ?? stateClinicId;
 
   const goBack = () => navigate("/inbox/settings/integrations/meta");
+  const exchangedCodeRef = useRef<string | null>(null);
 
   useEffect(() => {
     const run = async () => {
+      // O code da Meta só pode ser trocado uma vez
+      if (code && exchangedCodeRef.current === code) return;
+
       setLoading(true);
       setError(null);
 
@@ -55,16 +72,23 @@ export function MetaCallbackPage() {
         return;
       }
 
+      exchangedCodeRef.current = code;
+
       if (flow === "whatsapp") {
         const { error: fnErr } = await supabase.functions.invoke(
           "whatsapp-connect",
           {
-            body: { clinicId, code },
+            body: { action: "exchange_code", clinicId, code },
           },
         );
 
         if (fnErr) {
-          setError("Erro ao conectar o WhatsApp.");
+          setError(
+            await getFunctionErrorMessage(
+              fnErr,
+              "Erro ao conectar o WhatsApp. Tente novamente.",
+            ),
+          );
           setLoading(false);
           return;
         }
@@ -186,6 +210,15 @@ export function MetaCallbackPage() {
         <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
+      )}
+
+      {!loading && error && (
+        <button
+          onClick={goBack}
+          className="mt-4 rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
+        >
+          Voltar para integrações
+        </button>
       )}
 
       {!loading && flow === "meta" && needsSelection && (
