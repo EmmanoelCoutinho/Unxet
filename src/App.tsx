@@ -12,6 +12,7 @@ import { ForgotPassword } from "./pages/ForgotPassword";
 import { Inbox } from "./pages/Inbox";
 import { Chat } from "./pages/Chat";
 import { Header } from "./components/layout/Header";
+import { MaintenanceBanner } from "./components/layout/MaintenanceBanner";
 import { PushNotificationsBridge } from "./components/PushNotificationsBridge";
 import { PresenceHeartbeat } from "./components/PresenceHeartbeat";
 import { InternalChatBridge } from "./components/InternalChatBridge";
@@ -193,10 +194,12 @@ function RoutedApp() {
       <main
         className={
           showHeader
-            ? "pt-16 h-dvh box-border overflow-hidden"
+            ? "pt-16 h-dvh box-border overflow-hidden flex flex-col"
             : "min-h-screen"
         }
       >
+        {showHeader && <MaintenanceBanner />}
+        <div className={showHeader ? "min-h-0 flex-1" : undefined}>
         <AppErrorBoundary resetKey={location.pathname}>
         <Suspense fallback={<PageLoading />}>
         <Routes>
@@ -299,6 +302,7 @@ function RoutedApp() {
         </Routes>
         </Suspense>
         </AppErrorBoundary>
+        </div>
       </main>
     </>
   );

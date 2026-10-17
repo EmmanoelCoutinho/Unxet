@@ -6,11 +6,13 @@ import { AdminAuthProvider, useAdminAuth } from "./contexts/AdminAuthContext";
 import { AdminLogin } from "./pages/AdminLogin";
 import { MetricsPage } from "./pages/MetricsPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
+import { MaintenancePage } from "./pages/MaintenancePage";
 
 // Novas abas do painel (planos etc.) entram aqui e nas rotas abaixo
 const ADMIN_TABS = [
   { to: "/admin/overview", label: "Visão geral" },
   { to: "/admin/onboarding", label: "Onboarding" },
+  { to: "/admin/maintenance", label: "Manutenção" },
 ];
 
 const AdminLoadingScreen = () => (
@@ -83,6 +85,7 @@ const AdminRoutes: React.FC = () => {
       <Route element={<AdminLayout />}>
         <Route path="overview" element={<MetricsPage />} />
         <Route path="onboarding" element={<OnboardingPage />} />
+        <Route path="maintenance" element={<MaintenancePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/admin/overview" replace />} />
     </Routes>
