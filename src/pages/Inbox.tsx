@@ -26,6 +26,8 @@ export const Inbox: React.FC = () => {
   const location = useLocation();
   // Abaixo de lg mostramos um painel por vez: a lista em /inbox e as demais telas no lugar dela
   const isInboxRoot = location.pathname.replace(/\/+$/, "") === "/inbox";
+  // O chat interno tem a própria lista; a de conversas com clientes some ali
+  const isInternalChat = location.pathname.startsWith("/inbox/team");
 
   const activeConversationId = useMatch("/inbox/chat/:id")?.params.id ?? null;
 
@@ -129,8 +131,9 @@ export const Inbox: React.FC = () => {
 
       <div
         className={[
-          "h-full min-h-0 w-full flex-col border-r lg:flex lg:w-96 lg:flex-shrink-0",
+          "h-full min-h-0 w-full flex-col border-r lg:w-96 lg:flex-shrink-0",
           isInboxRoot ? "flex" : "hidden",
+          isInternalChat ? "lg:hidden" : "lg:flex",
         ].join(" ")}
       >
         <div className="shrink-0 border-b p-3 sm:p-4">

@@ -221,7 +221,7 @@ const StatusBadge: React.FC<{ status: "active" | "pending" }> = ({
 
 // Colunas da lista no desktop, compartilhadas entre o cabeçalho e as linhas.
 const LIST_GRID_COLS =
-  "xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_7.5rem_minmax(0,1fr)_9.5rem_12rem]";
+  "2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_7.5rem_minmax(0,1fr)_9.5rem_12rem]";
 
 const Divider: React.FC = () => <div className="h-px w-full bg-gray-100" />;
 
@@ -949,7 +949,7 @@ export const AttendantsPage: React.FC = () => {
         ) : (
           <div className="space-y-3">
             <div
-              className={`hidden gap-4 px-5 text-xs font-semibold uppercase tracking-wide text-gray-400 xl:grid ${LIST_GRID_COLS}`}
+              className={`hidden gap-4 px-5 text-xs font-semibold uppercase tracking-wide text-gray-400 2xl:grid ${LIST_GRID_COLS}`}
             >
               <span>Nome</span>
               <span>E-mail</span>
@@ -958,7 +958,7 @@ export const AttendantsPage: React.FC = () => {
               <span>Status</span>
               <span className="text-right">Ações</span>
             </div>
-            <div className="hidden xl:block">
+            <div className="hidden 2xl:block">
               <Divider />
             </div>
             {filteredUsers.map((user) => {
@@ -971,15 +971,18 @@ export const AttendantsPage: React.FC = () => {
               return (
                 <div
                   key={user.user_id}
-                  className={`flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm xl:grid xl:items-center xl:gap-4 xl:px-5 ${LIST_GRID_COLS}`}
+                  className={`flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm 2xl:grid 2xl:items-center 2xl:gap-4 2xl:px-5 ${LIST_GRID_COLS}`}
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-gray-800">
                       {user.name?.trim() || "Sem nome"}
                     </p>
                   </div>
-                  <div className="-mt-2 min-w-0 xl:mt-0">
-                    <p className="break-all text-sm text-gray-700">
+                  <div className="-mt-2 min-w-0 2xl:mt-0">
+                    <p
+                      className="break-all text-sm text-gray-700 2xl:truncate 2xl:break-normal"
+                      title={user.email || undefined}
+                    >
                       {user.email || "---"}
                     </p>
                     {!user.email && (
@@ -988,20 +991,20 @@ export const AttendantsPage: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 xl:contents">
+                  <div className="flex flex-wrap items-center gap-2 2xl:contents">
                     <div>
                       <RoleBadge role={user.role} />
                     </div>
-                    <div className="flex min-w-0 items-center gap-2 xl:block">
+                    <div className="flex min-w-0 items-center gap-2 2xl:block">
                       <div className="text-sm text-gray-700">
-                        <span className="text-gray-400 xl:hidden">Setor: </span>
+                        <span className="text-gray-400 2xl:hidden">Setor: </span>
                         {department?.name || "Sem setor"}
                       </div>
                       {department && !department.is_active && (
                         <Badge variant="warning">Inativo</Badge>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 xl:flex-col xl:items-start">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 2xl:flex-col 2xl:items-start">
                       <StatusBadge status={pending ? "pending" : "active"} />
                       {pending && invitedOn && (
                         <span className="whitespace-nowrap text-xs text-gray-400">
@@ -1010,7 +1013,7 @@ export const AttendantsPage: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3 xl:border-0 xl:pt-0">
+                  <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3 2xl:border-0 2xl:pt-0">
                     {pending && isAdmin && (
                       <button
                         type="button"
@@ -1029,7 +1032,7 @@ export const AttendantsPage: React.FC = () => {
                         ) : (
                           <span>
                             Reenviar
-                            <span className="xl:hidden"> convite</span>
+                            <span className="2xl:hidden"> convite</span>
                           </span>
                         )}
                       </button>
