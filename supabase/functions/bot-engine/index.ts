@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
+import { classifyUnmatchedInput } from "../_shared/botInput.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -16,6 +17,12 @@ const SESSION_STATUS_COMPLETED = "completed";
 const SESSION_STATUS_CANCELLED = "cancelled";
 const SESSION_STATUS_EXPIRED = "expired";
 const DEFAULT_SESSION_TIMEOUT_HOURS = 24;
+// Silêncio que o bot espera antes de responder, para juntar mensagens seguidas
+const BATCH_QUIET_MS = 4000;
+// Mensagens do cliente com até esse intervalo contam como uma sequência
+const BURST_WINDOW_MS = 15000;
+const MAX_BATCH_MESSAGES = 20;
+const UNRECOGNIZED_HANDOFF_TEXT = "Certo! Vou encaminhar sua mensagem para um de nossos atendentes. Aguarde um momento, por favor.";
 function logStep(step, meta) {
   console.log(`[bot-engine] ${step}`, meta ? JSON.stringify(meta, null, 2) : "");
 }
@@ -276,6 +283,14 @@ serve(async (req)=>{
         action: "session_started"
       });
     }
+    // Cliente mandou várias mensagens de uma vez no começo da conversa: a
+    // primeira pode estar abrindo a sessão agora mesmo. Espera um pouco antes
+    // de concluir que não há bot.
+    const mayBeStartingSession = inboundCount !== null && inboundCount <= 5;
+    if (!activeSession && !isInteractiveMessage && mayBeStartingSession && await hasRecentInbound(supabase, body.conversationId, inboundMessage)) {
+      await sleep(3000);
+      activeSession = await getActiveSession(supabase, body.conversationId, bot.id, body.channelConnectionId);
+    }
     if (!activeSession) {
       await revealConversation(supabase, body.conversationId);
       return json(200, {
@@ -299,16 +314,83 @@ serve(async (req)=>{
         skipped: "current_node_not_menu"
       });
     }
-    const options = await getOptionsByNodeId(supabase, currentNode.id);
-    const selectedOption = options.find((opt)=>{
-      const optionValueNormalized = normalizeOptionValue(opt.option_value);
-      const labelNormalized = normalizeOptionValue(opt.label);
-      return selectionCandidates.some((candidate)=>{
-        const normalizedCandidate = normalizeOptionValue(candidate);
-        return normalizedCandidate === optionValueNormalized || normalizedCandidate === labelNormalized;
+    // Mensagens do cliente que o bot vai responder agora. Clique em lista/botão
+    // é resposta explícita: segue na hora. Texto e mídia esperam alguns
+    // segundos para juntar as mensagens seguidas numa resposta só.
+    let pendingInputs = [
+      {
+        type: inboundMessage.type ?? body.messageType,
+        text: inboundMessage.text,
+        candidates: selectionCandidates
+      }
+    ];
+    if (isInteractiveMessage) {
+      // Marca como respondida para não voltar a contar no próximo menu
+      await claimInboundForSession(supabase, activeSession.id, inboundMessage.created_at);
+    } else {
+      const batch = await collectCustomerBatch({
+        supabase,
+        conversationId: body.conversationId,
+        session: activeSession,
+        inboundMessage
       });
-    });
+      if (batch.skipped) {
+        logStep("inbound_skipped", {
+          conversationId: body.conversationId,
+          messageId: inboundMessage.id,
+          reason: batch.skipped
+        });
+        return json(200, {
+          ok: true,
+          skipped: batch.skipped
+        });
+      }
+      pendingInputs = batch.messages.map((msg)=>({
+          type: msg.type,
+          text: msg.text,
+          candidates: msg.id === inboundMessage.id ? selectionCandidates : [
+            String(msg.text ?? "").trim()
+          ].filter(Boolean)
+        }));
+    }
+    const options = await getOptionsByNodeId(supabase, currentNode.id);
+    // A mensagem mais recente que bater com uma opção é a escolha do cliente
+    let selectedOption = null;
+    let selectedRawInput = selectedOptionValue;
+    for (const input of [
+      ...pendingInputs
+    ].reverse()){
+      const match = findOptionForCandidates(options, input.candidates);
+      if (match) {
+        selectedOption = match;
+        selectedRawInput = input.candidates[0] ?? selectedOptionValue;
+        break;
+      }
+    }
     if (!selectedOption) {
+      const rawInput = pendingInputs.map((input)=>String(input.text ?? "").trim() || `[${input.type ?? "mensagem"}]`).join(" | ");
+      const unmatchedKind = classifyUnmatchedInput(pendingInputs);
+      // Áudio, foto, documento ou uma frase de verdade: quem resolve é uma
+      // pessoa. Responder "Não entendi" aqui só irrita o cliente.
+      if (unmatchedKind !== "invalid" && bot.human_handoff_enabled !== false) {
+        await handoffUnrecognizedInput({
+          supabase,
+          clinicId: body.clinicId,
+          conversationId: body.conversationId,
+          channelConnectionId: body.channelConnectionId,
+          bot,
+          channelConnection,
+          session: activeSession,
+          node: currentNode,
+          reason: unmatchedKind,
+          rawInput
+        });
+        return json(200, {
+          ok: true,
+          action: "handoff_unrecognized_input",
+          reason: unmatchedKind
+        });
+      }
       await handleInvalidOption({
         supabase,
         clinicId: body.clinicId,
@@ -318,7 +400,7 @@ serve(async (req)=>{
         channelConnection,
         session: activeSession,
         node: currentNode,
-        rawInput: selectedOptionValue
+        rawInput
       });
       return json(200, {
         ok: true,
@@ -336,7 +418,7 @@ serve(async (req)=>{
       payload: {
         option_value: selectedOption.option_value,
         option_label: selectedOption.label,
-        raw_input: selectedOptionValue,
+        raw_input: selectedRawInput,
         interactive: body.interactive ?? null
       }
     });
@@ -374,6 +456,153 @@ function json(status, body) {
 function normalizeOptionValue(value) {
   return String(value ?? "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
 }
+function findOptionForCandidates(options, candidates) {
+  return options.find((opt)=>{
+    const optionValueNormalized = normalizeOptionValue(opt.option_value);
+    const labelNormalized = normalizeOptionValue(opt.label);
+    return candidates.some((candidate)=>{
+      const normalizedCandidate = normalizeOptionValue(candidate);
+      return normalizedCandidate === optionValueNormalized || normalizedCandidate === labelNormalized;
+    });
+  }) ?? null;
+}
+function sleep(ms) {
+  return new Promise((resolve)=>setTimeout(resolve, ms));
+}
+// ---------------------------------------------------------------------------
+// Mensagens seguidas do cliente
+// ---------------------------------------------------------------------------
+async function hasRecentInbound(supabase, conversationId, inboundMessage) {
+  const createdAt = new Date(inboundMessage.created_at).getTime();
+  if (!Number.isFinite(createdAt)) return false;
+  const { data, error } = await supabase.from("messages").select("id").eq("conversation_id", conversationId).eq("direction", DIRECTION_INBOUND).neq("id", inboundMessage.id).lte("created_at", inboundMessage.created_at).gte("created_at", new Date(createdAt - BURST_WINDOW_MS).toISOString()).limit(1);
+  if (error) {
+    console.error("hasRecentInbound error:", error);
+    return false;
+  }
+  return (data?.length ?? 0) > 0;
+}
+/**
+ * Junta as mensagens do cliente que o bot ainda não respondeu nesta sessão.
+ *
+ * - Mensagem escrita antes de o menu sair não é resposta ao menu: ignora.
+ * - Espera BATCH_QUIET_MS; se chegou mensagem mais nova, ela responde por todas.
+ * - A trava (last_handled_inbound_at) impede duas execuções de responderem
+ *   às mesmas mensagens.
+ *
+ * Retorna { messages } com as mensagens a responder, ou { skipped: motivo }.
+ */ async function collectCustomerBatch(params) {
+  const { supabase, conversationId, session, inboundMessage } = params;
+  const current = [
+    {
+      id: inboundMessage.id,
+      type: inboundMessage.type,
+      text: inboundMessage.text,
+      created_at: inboundMessage.created_at
+    }
+  ];
+  const messageAt = inboundMessage.created_at;
+  // 1. O bot já tinha falado nesta sessão quando o cliente escreveu?
+  const { data: firstBotMessage, error: firstBotErr } = await supabase.from("messages").select("created_at").eq("conversation_id", conversationId).eq("direction", DIRECTION_OUTBOUND).gte("created_at", session.started_at).lt("created_at", messageAt).order("created_at", {
+    ascending: true
+  }).limit(1).maybeSingle();
+  if (firstBotErr) {
+    console.error("collectCustomerBatch first bot message error:", firstBotErr);
+    return {
+      messages: current
+    };
+  }
+  if (!firstBotMessage) {
+    return {
+      skipped: "sent_before_menu"
+    };
+  }
+  // 2. Espera o cliente terminar de escrever
+  await sleep(BATCH_QUIET_MS);
+  const { data: newer, error: newerErr } = await supabase.from("messages").select("id").eq("conversation_id", conversationId).eq("direction", DIRECTION_INBOUND).gt("created_at", messageAt).limit(1);
+  if (newerErr) {
+    console.error("collectCustomerBatch newer message error:", newerErr);
+  } else if ((newer?.length ?? 0) > 0) {
+    return {
+      skipped: "newer_message_pending"
+    };
+  }
+  // 3. Trava
+  const claim = await claimInboundForSession(supabase, session.id, messageAt);
+  if (claim.skipped) {
+    return {
+      skipped: claim.skipped
+    };
+  }
+  // 4. Mensagens ainda não respondidas, da mais antiga para a mais nova
+  let query = supabase.from("messages").select("id, type, text, created_at").eq("conversation_id", conversationId).eq("direction", DIRECTION_INBOUND).gt("created_at", firstBotMessage.created_at).lte("created_at", messageAt);
+  if (claim.previous) {
+    query = query.gt("created_at", claim.previous);
+  }
+  const { data: rows, error: rowsErr } = await query.order("created_at", {
+    ascending: true
+  }).limit(MAX_BATCH_MESSAGES);
+  if (rowsErr) {
+    console.error("collectCustomerBatch batch error:", rowsErr);
+    return {
+      messages: current
+    };
+  }
+  const messages = rows?.length ? rows : current;
+  if (!messages.some((msg)=>msg.id === inboundMessage.id)) {
+    messages.push(current[0]);
+  }
+  return {
+    messages
+  };
+}
+/**
+ * Marca a mensagem como respondida (compare-and-swap em
+ * last_handled_inbound_at). Retorna a marca anterior em { previous }, ou
+ * { skipped } se outra execução já cuidou de uma mensagem igual ou mais nova.
+ * Sem a coluna (migration não aplicada), segue sem trava.
+ */ async function claimInboundForSession(supabase, sessionId, messageAt) {
+  const messageTime = new Date(messageAt).getTime();
+  for(let attempt = 0; attempt < 3; attempt++){
+    const { data: row, error } = await supabase.from("conversation_bot_sessions").select("status, last_handled_inbound_at").eq("id", sessionId).maybeSingle();
+    if (error) {
+      console.warn("claimInboundForSession: seguindo sem trava", error.message);
+      return {
+        previous: null
+      };
+    }
+    if (!row || row.status !== SESSION_STATUS_ACTIVE) {
+      return {
+        skipped: "session_not_active"
+      };
+    }
+    const previous = row.last_handled_inbound_at ?? null;
+    if (previous && new Date(previous).getTime() >= messageTime) {
+      return {
+        skipped: "already_handled"
+      };
+    }
+    let update = supabase.from("conversation_bot_sessions").update({
+      last_handled_inbound_at: messageAt
+    }).eq("id", sessionId).eq("status", SESSION_STATUS_ACTIVE);
+    update = previous ? update.eq("last_handled_inbound_at", previous) : update.is("last_handled_inbound_at", null);
+    const { data: updated, error: updateErr } = await update.select("id");
+    if (updateErr) {
+      console.warn("claimInboundForSession: seguindo sem trava", updateErr.message);
+      return {
+        previous
+      };
+    }
+    if ((updated?.length ?? 0) > 0) {
+      return {
+        previous
+      };
+    }
+  }
+  return {
+    skipped: "claim_contention"
+  };
+}
 function isSessionExpired(session, bot) {
   const configured = Number(bot.session_timeout_hours);
   const hours = Number.isFinite(configured) && configured >= 1 ? Math.min(configured, DEFAULT_SESSION_TIMEOUT_HOURS) : DEFAULT_SESSION_TIMEOUT_HOURS;
@@ -388,7 +617,7 @@ function truncateText(value, max) {
   return text.slice(0, max);
 }
 async function getMessageById(supabase, messageId, conversationId) {
-  const { data, error } = await supabase.from("messages").select("id, conversation_id, direction, text, sent_at, created_at, is_automated, payload").eq("id", messageId).eq("conversation_id", conversationId).maybeSingle();
+  const { data, error } = await supabase.from("messages").select("id, conversation_id, direction, type, text, sent_at, created_at, is_automated, payload").eq("id", messageId).eq("conversation_id", conversationId).maybeSingle();
   if (error) {
     console.error("getMessageById error:", error);
     return null;
@@ -744,6 +973,67 @@ async function executeNode(params) {
     });
     return;
   }
+}
+/**
+ * O cliente mandou mídia ou uma frase que não é opção do menu: encerra o bot
+ * e coloca a conversa na fila dos atendentes, avisando o cliente.
+ */ async function handoffUnrecognizedInput(params) {
+  const { supabase, clinicId, conversationId, channelConnectionId, bot, channelConnection, session, node, reason, rawInput } = params;
+  try {
+    await sendBotText({
+      supabase,
+      clinicId,
+      channelConnectionId,
+      conversationId,
+      channelConnection,
+      bot,
+      text: UNRECOGNIZED_HANDOFF_TEXT,
+      session,
+      nodeContext: {
+        nodeId: node.id,
+        nodeKey: node.node_key,
+        nodeType: "handoff_message"
+      }
+    });
+  } catch (err) {
+    // Sem o aviso a conversa ainda precisa chegar a um atendente
+    console.error("handoffUnrecognizedInput send error:", err);
+  }
+  await handoffConversation(supabase, conversationId, null);
+  await insertConversationEvent(supabase, conversationId, "bot_handoff_to_human", {
+    bot_id: bot.id,
+    conversation_bot_session_id: session.id,
+    reason: reason === "media" ? "media_received" : "free_text_received"
+  });
+  await insertBotEvent(supabase, {
+    clinicId,
+    conversationId,
+    botId: bot.id,
+    conversationBotSessionId: session.id,
+    nodeId: node.id,
+    eventType: "human_handoff",
+    payload: {
+      reason: reason === "media" ? "media_received" : "free_text_received",
+      raw_input: rawInput
+    }
+  });
+  await finishSession({
+    supabase,
+    sessionId: session.id,
+    status: SESSION_STATUS_COMPLETED,
+    endedReason: "handoff"
+  });
+  await insertBotEvent(supabase, {
+    clinicId,
+    conversationId,
+    botId: bot.id,
+    conversationBotSessionId: session.id,
+    nodeId: node.id,
+    eventType: "session_completed",
+    payload: {
+      reason: "handoff"
+    }
+  });
 }
 async function handleInvalidOption(params) {
   const { supabase, clinicId, conversationId, channelConnectionId, bot, channelConnection, session, node, rawInput } = params;

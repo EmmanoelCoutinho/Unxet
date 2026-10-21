@@ -10,6 +10,7 @@
  *  6. Encaminhar o payload normalizado para shared-in-config
  *  7. Resolver LID para número real via Evolution API
  *  8. Gravar entrega/leitura das mensagens enviadas ("messages.update")
+ *  9. Tirar o bot da conversa quando a equipe responde pelo celular (fromMe)
  *
  * Nenhuma lógica de negócio vive aqui.
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -248,15 +249,10 @@ serve(async (req)=>{
         status: 200
       });
     }
-    // ── Ignora mensagens enviadas pelo próprio número (fromMe) ────────────
-    if (body?.data?.key?.fromMe === true) {
-      return new Response(JSON.stringify({
-        ignored: true,
-        reason: "from_me"
-      }), {
-        status: 200
-      });
-    }
+    // ── Mensagem enviada pelo próprio número (fromMe) ─────────────────────
+    // Não entra como mensagem do cliente. Mais abaixo só serve para tirar o
+    // bot da conversa quando a equipe responde pelo celular.
+    const isFromMe = body?.data?.key?.fromMe === true;
     // ── Resolve origem da conversa ────────────────────────────────────────
     const remoteJidRaw = body?.data?.key?.remoteJid ?? "";
     // remoteJidAlt — presente em versões >= 2.3.x quando o remetente tem LID
@@ -471,6 +467,29 @@ serve(async (req)=>{
         status: 400
       });
     }
+    if (isFromMe) {
+      const ownMessageTask = endBotSessionIfSentOutsideUnxet({
+        supabase,
+        clinicId: connection.clinic_id,
+        channelConnectionId: connection.id,
+        waId,
+        providerMessageId
+      }).catch((err)=>{
+        console.error("[OWN_MESSAGE_CHECK_ERROR]", err);
+      });
+      // A checagem espera alguns segundos: responde à Evolution sem segurar o webhook
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+        EdgeRuntime.waitUntil(ownMessageTask);
+      } else {
+        await ownMessageTask;
+      }
+      return new Response(JSON.stringify({
+        ignored: true,
+        reason: "from_me"
+      }), {
+        status: 200
+      });
+    }
     const profileName = body?.data?.pushName ?? "Cliente";
     const timestampRaw = body?.data?.messageTimestamp;
     const timestamp = timestampRaw ? new Date(Number(timestampRaw) * 1000).toISOString() : new Date().toISOString();
@@ -668,6 +687,91 @@ serve(async (req)=>{
     });
   }
 });
+// ---------------------------------------------------------------------------
+// Equipe respondendo pelo celular
+// ---------------------------------------------------------------------------
+// Quem envia pelo Unxet (bot, atendente, agendamento) grava a mensagem com o
+// ID do WhatsApp logo depois de a Evolution confirmar o envio. Se depois de
+// alguns segundos esse ID não existe em messages, a mensagem saiu do celular
+// (ou do WhatsApp Web) da empresa: uma pessoa assumiu a conversa e o bot sai.
+const OWN_MESSAGE_CHECK_DELAYS_MS = [
+  0,
+  3000,
+  4000,
+  8000
+];
+function sleep(ms) {
+  return new Promise((resolve)=>setTimeout(resolve, ms));
+}
+async function endBotSessionIfSentOutsideUnxet(params) {
+  const { supabase, clinicId, channelConnectionId, waId, providerMessageId } = params;
+  const { data: contact, error: contactErr } = await supabase.from("contacts").select("id").eq("clinic_id", clinicId).eq("phone", waId).limit(1).maybeSingle();
+  if (contactErr || !contact) return;
+  const { data: conversations, error: convErr } = await supabase.from("conversations").select("id").eq("clinic_id", clinicId).eq("contact_id", contact.id).eq("channel_connection_id", channelConnectionId);
+  if (convErr || !conversations?.length) return;
+  const { data: sessions, error: sessionsErr } = await supabase.from("conversation_bot_sessions").select("id, clinic_id, conversation_id, bot_id, current_node_id").in("conversation_id", conversations.map((c)=>c.id)).eq("channel_connection_id", channelConnectionId).eq("status", "active");
+  if (sessionsErr || !sessions?.length) return;
+  for (const delay of OWN_MESSAGE_CHECK_DELAYS_MS){
+    if (delay) await sleep(delay);
+    const { data: known, error: knownErr } = await supabase.from("messages").select("id").eq("meta_message_id", providerMessageId).limit(1).maybeSingle();
+    if (knownErr) {
+      console.error("[OWN_MESSAGE_LOOKUP_ERROR]", knownErr);
+      return;
+    }
+    if (known) return; // enviada pelo Unxet
+  }
+  const now = new Date().toISOString();
+  for (const session of sessions){
+    const { data: ended, error: endErr } = await supabase.from("conversation_bot_sessions").update({
+      status: "cancelled",
+      ended_reason: "human_reply",
+      completed_at: now,
+      current_node_id: null,
+      last_interaction_at: now,
+      updated_at: now
+    }).eq("id", session.id).eq("status", "active").select("id");
+    if (endErr) {
+      console.error("[OWN_MESSAGE_END_SESSION_ERROR]", endErr);
+      continue;
+    }
+    if (!ended?.length) continue;
+    console.log("[BOT_SESSION_ENDED_BY_PHONE_REPLY]", JSON.stringify({
+      sessionId: session.id,
+      conversationId: session.conversation_id,
+      providerMessageId
+    }));
+    await supabase.from("conversation_bot_events").insert({
+      clinic_id: session.clinic_id,
+      conversation_bot_session_id: session.id,
+      conversation_id: session.conversation_id,
+      bot_id: session.bot_id,
+      node_id: session.current_node_id ?? null,
+      event_type: "session_cancelled",
+      payload: {
+        reason: "human_reply",
+        cause: "sent_outside_unxet",
+        provider_message_id: providerMessageId
+      }
+    });
+    await supabase.from("conversation_events").insert({
+      conversation_id: session.conversation_id,
+      event_type: "bot_session_ended",
+      performed_by: null,
+      metadata: {
+        bot_id: session.bot_id,
+        conversation_bot_session_id: session.id,
+        reason: "human_reply",
+        cause: "sent_outside_unxet"
+      }
+    });
+    // Conversa sai do modo bot e volta a aparecer para os atendentes. O prazo de
+    // 1ª resposta não é reiniciado: alguém da equipe acabou de responder.
+    await supabase.from("conversations").update({
+      in_bot_flow: false,
+      updated_at: now
+    }).eq("id", session.conversation_id).eq("in_bot_flow", true);
+  }
+}
 // ---------------------------------------------------------------------------
 // Profile pic: busca na Evolution API e faz upsert no bucket + contacts
 // ---------------------------------------------------------------------------
