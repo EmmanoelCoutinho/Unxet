@@ -178,38 +178,42 @@ export const AppSidebar: React.FC = () => {
     );
   };
 
-  // No celular a navegação fica no menu do Header (MobileNav)
+  // No celular a navegação fica no menu do Header (MobileNav).
+  // O espaço reservado tem a largura recolhida; ao expandir, a barra passa por cima
+  // do conteúdo em vez de empurrá-lo (evita reflow das telas ao passar o mouse).
   return (
-    <aside className="group hidden h-full w-16 flex-shrink-0 flex-col overflow-hidden border-r bg-gray-50 transition-all duration-200 hover:w-64 md:flex">
-      <div className="border-b p-4">
-        <div className="flex items-center gap-3">
-          <img
-            src="/logo-unxet.png"
-            alt="Logo Unxet"
-            className="h-9 w-9 rounded-md object-contain"
-          />
-          <div className="max-w-0 overflow-hidden transition-all duration-200 group-hover:max-w-[200px]">
-            <div className="opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-              <p className="text-sm font-semibold leading-tight text-gray-900">
-                Unxet
-              </p>
-              <p className="text-xs leading-tight text-gray-500">
-                Central de mensagens
-              </p>
+    <div className="relative hidden h-full w-16 flex-shrink-0 md:block">
+      <aside className="group absolute inset-y-0 left-0 z-30 flex w-16 flex-col overflow-hidden border-r bg-gray-50 transition-all duration-200 hover:w-64 hover:shadow-xl">
+        <div className="border-b p-4">
+          <div className="flex items-center gap-3">
+            <img
+              src="/logo-unxet.png"
+              alt="Logo Unxet"
+              className="h-9 w-9 rounded-md object-contain"
+            />
+            <div className="max-w-0 overflow-hidden transition-all duration-200 group-hover:max-w-[200px]">
+              <div className="opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                <p className="text-sm font-semibold leading-tight text-gray-900">
+                  Unxet
+                </p>
+                <p className="text-xs leading-tight text-gray-500">
+                  Central de mensagens
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
-        {items.filter((item) => !item.mobileOnly).map(renderItem)}
-      </nav>
-
-      {settings && (
-        <div className="shrink-0 border-t bg-gray-50 p-2">
-          {renderItem(settings)}
-        </div>
-      )}
-    </aside>
+  
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
+          {items.filter((item) => !item.mobileOnly).map(renderItem)}
+        </nav>
+  
+        {settings && (
+          <div className="shrink-0 border-t bg-gray-50 p-2">
+            {renderItem(settings)}
+          </div>
+        )}
+      </aside>
+    </div>
   );
 };
