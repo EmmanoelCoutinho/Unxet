@@ -14,6 +14,10 @@
 --    SLA estourado, equipe online) e os números de hoje, calculados pela
 --    mesma report_period_kpis dos relatórios, para os dois nunca divergirem.
 --
+-- 4. Inclui o recurso "analytics" em todos os planos (subscription_plans).
+--    operational_report, operational_now e register_report_export exigem o
+--    recurso; o histórico e a verificação de código não.
+--
 -- Só administradores da empresa chamam as funções; o atendente recebe
 -- "Não autorizado" mesmo chamando a API direto.
 --
@@ -43,6 +47,13 @@ $$;
 
 revoke execute on function public.is_clinic_admin_of(uuid) from public, anon;
 grant execute on function public.is_clinic_admin_of(uuid) to authenticated;
+
+-- Painel e Relatórios (recurso "analytics") fazem parte de todos os planos.
+-- As telas e as funções abaixo continuam conferindo o recurso: para restringir
+-- de novo um plano, basta tirar "analytics" da lista dele.
+update public.subscription_plans
+   set features = array_append(features, 'analytics')
+ where not ('analytics' = any (features));
 
 -- -----------------------------------------------------------------------------
 -- Indicadores de um período (usado para o período escolhido e o anterior)
@@ -189,6 +200,10 @@ declare
 begin
   if auth.uid() is null or not public.is_clinic_admin_of(p_clinic_id) then
     raise exception 'Não autorizado';
+  end if;
+
+  if not public.clinic_has_feature(p_clinic_id, 'analytics') then
+    raise exception 'Recurso fora do plano';
   end if;
 
   if p_start is null or p_end is null or p_end <= p_start then
@@ -592,6 +607,10 @@ begin
     raise exception 'Não autorizado';
   end if;
 
+  if not public.clinic_has_feature(p_clinic_id, 'analytics') then
+    raise exception 'Recurso fora do plano';
+  end if;
+
   select coalesce(nullif(btrim(cu.name), ''), cu.email, 'Administrador')
     into v_name
   from public.clinic_users cu
@@ -705,6 +724,10 @@ declare
 begin
   if auth.uid() is null or not public.is_clinic_admin_of(p_clinic_id) then
     raise exception 'Não autorizado';
+  end if;
+
+  if not public.clinic_has_feature(p_clinic_id, 'analytics') then
+    raise exception 'Recurso fora do plano';
   end if;
 
   select tz.name into v_tz from pg_timezone_names tz where tz.name = p_timezone;

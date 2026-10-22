@@ -69,6 +69,7 @@ const allSidebarItems: SidebarItem[] = [
     icon: FileBarChartIcon,
     path: "/inbox/reports",
     adminOnly: true,
+    planFeature: "analytics",
   },
   {
     label: "Carteira de Clientes",
@@ -165,14 +166,18 @@ const desktopPanelItem: SidebarItem = {
   path: "/inbox",
   extraPaths: ["/inbox/dashboard", "/inbox/chat"],
   adminOnly: true,
+  planFeature: "analytics",
 };
 
 /**
  * Itens da barra lateral (md para cima). Entre md e lg a lista e o Painel
  * ocupam a tela um de cada vez, então o admin precisa dos dois itens.
+ * O Painel só entra se passou pelo filtro de papel e plano (item mobileOnly
+ * presente); sem ele, o início do inbox não é o Painel e fica "Atendimentos".
  */
-const desktopItems = (items: SidebarItem[], isAdmin: boolean, isBelowLg: boolean) => {
-  if (!isAdmin) return items.filter((item) => !item.mobileOnly);
+const desktopItems = (items: SidebarItem[], isBelowLg: boolean) => {
+  const hasPanel = items.some((item) => item.path === "/inbox/dashboard");
+  if (!hasPanel) return items.filter((item) => !item.mobileOnly);
   if (isBelowLg) return items;
   return items
     .filter((item) => !item.mobileOnly)
@@ -186,7 +191,7 @@ export const isSidebarItemActive = (item: SidebarItem, pathname: string) =>
 export const AppSidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { items, settings, isAdmin } = useSidebarNavigation();
+  const { items, settings } = useSidebarNavigation();
   const isBelowLg = useIsBelowLg();
   const internalUnread = useInternalUnreadTotal();
 
@@ -254,7 +259,7 @@ export const AppSidebar: React.FC = () => {
         </div>
 
         <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
-          {desktopItems(items, isAdmin, isBelowLg).map(renderItem)}
+          {desktopItems(items, isBelowLg).map(renderItem)}
         </nav>
 
         {settings && (
