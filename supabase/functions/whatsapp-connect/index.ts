@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { extractWabaIds, metaErrorMessage, parsePhoneNumbers } from "../_shared/whatsappSignup.ts";
+import { clinicCanUseWhatsappNumber, PLAN_LIMIT_MESSAGES } from "../_shared/plan.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 // App Meta de WhatsApp (o mesmo de VITE_META_APP_WABA_ID no front)
@@ -59,6 +60,11 @@ const signupError = (status, error, meta)=>json(status, {
     meta: meta ?? null
   });
 async function persistConnection(supabase, clinicId, { metaWabaId, metaPhoneNumberId, accessToken, displayPhoneNumber }) {
+  // Reconectar o próprio número oficial não ocupa vaga nova no plano
+  const { data: currentOfficial } = await supabase.from("channel_connections").select("id").eq("clinic_id", clinicId).eq("provider", "meta").eq("channel", "whatsapp").maybeSingle();
+  if (!await clinicCanUseWhatsappNumber(supabase, clinicId, currentOfficial?.id ?? null)) {
+    return signupError(403, PLAN_LIMIT_MESSAGES.whatsapp);
+  }
   const now = new Date().toISOString();
   const upsertConnection = await supabase.from("channel_connections").upsert({
     clinic_id: clinicId,

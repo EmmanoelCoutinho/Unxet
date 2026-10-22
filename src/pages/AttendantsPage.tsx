@@ -294,7 +294,7 @@ const SkeletonRow: React.FC = () => (
 );
 
 export const AttendantsPage: React.FC = () => {
-  const { clinicId, membership } = useClinic();
+  const { clinicId, membership, subscription } = useClinic();
   const { authUser } = useAuth();
   const isAdmin = membership?.role === "admin";
 
@@ -305,6 +305,11 @@ export const AttendantsPage: React.FC = () => {
   >({});
   const [hasDepartmentMembers, setHasDepartmentMembers] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Toda pessoa da empresa (admin ou atendente, convite pendente incluso) ocupa vaga
+  const maxAttendants = subscription?.plan.max_attendants ?? null;
+  const atAttendantLimit =
+    maxAttendants !== null && clinicUsers.length >= maxAttendants;
   const [error, setError] = useState<string | null>(null);
   const [adminCount, setAdminCount] = useState(0);
 
@@ -842,6 +847,19 @@ export const AttendantsPage: React.FC = () => {
                 <p className="mt-1 text-sm text-gray-500">
                   Apenas administradores podem editar permissões e vínculos.
                 </p>
+                {subscription && !isLoading && (
+                  <p
+                    className={`mt-1 text-sm ${
+                      atAttendantLimit ? "text-amber-700" : "text-gray-500"
+                    }`}
+                  >
+                    {maxAttendants === null
+                      ? `${clinicUsers.length} ${clinicUsers.length === 1 ? "pessoa" : "pessoas"} · plano ${subscription.plan.name} (atendentes ilimitados)`
+                      : `${clinicUsers.length} de ${maxAttendants} atendentes do plano ${subscription.plan.name}`}
+                    {atAttendantLimit &&
+                      ". Para convidar mais pessoas, fale com a Unxet sobre mudar de plano."}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -850,7 +868,12 @@ export const AttendantsPage: React.FC = () => {
               type="button"
               onClick={handleOpenInvite}
               className="inline-flex items-center gap-2 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-gray-400"
-              disabled={!isAdmin}
+              disabled={!isAdmin || atAttendantLimit}
+              title={
+                atAttendantLimit
+                  ? "Limite de atendentes do plano atingido"
+                  : undefined
+              }
             >
               + Convidar atendente
             </button>

@@ -175,7 +175,7 @@ export const Chat: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { authUser } = useAuth();
-  const { clinicId, membership } = useClinic();
+  const { clinicId, membership, hasFeature } = useClinic();
   const isAdmin = membership?.role === "admin";
   const userNames = useClinicUserNames(clinicId, isAdmin);
 
@@ -1387,7 +1387,10 @@ export const Chat: React.FC = () => {
           onAccept={handleAcceptConversation}
           onClose={handleCloseConversation}
           onRefresh={loadConversation}
-          onTransfer={() => setIsTransferOpen(true)}
+          // Plano sem departamentos: o botão de transferir nem aparece
+          onTransfer={
+            hasFeature("departments") ? () => setIsTransferOpen(true) : undefined
+          }
           acceptDisabled={
             acceptingConversation ||
             !authUser ||

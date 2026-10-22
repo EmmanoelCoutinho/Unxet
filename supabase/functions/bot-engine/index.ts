@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
+import { clinicHasFeature } from "../_shared/plan.ts";
 import { classifyUnmatchedInput } from "../_shared/botInput.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -89,6 +90,14 @@ serve(async (req)=>{
     if (!channelConnection) {
       return json(404, {
         error: "Channel connection not found"
+      });
+    }
+    // Plano sem bots (ex.: rebaixado): o bot antigo para de responder
+    if (!await clinicHasFeature(supabase, body.clinicId, "bots")) {
+      await revealConversation(supabase, body.conversationId);
+      return json(200, {
+        ok: true,
+        skipped: "plan_without_bots"
       });
     }
     const binding = await getActiveBinding(supabase, body.clinicId, body.channelConnectionId);

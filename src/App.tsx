@@ -13,6 +13,8 @@ import { Inbox } from "./pages/Inbox";
 import { Chat } from "./pages/Chat";
 import { Header } from "./components/layout/Header";
 import { MaintenanceBanner } from "./components/layout/MaintenanceBanner";
+import { BillingBanner } from "./components/layout/BillingBanner";
+import { AccessSuspended } from "./pages/AccessSuspended";
 import { PushNotificationsBridge } from "./components/PushNotificationsBridge";
 import { PresenceHeartbeat } from "./components/PresenceHeartbeat";
 import { InternalChatBridge } from "./components/InternalChatBridge";
@@ -26,6 +28,8 @@ import { SetPassword } from "./pages/SetPassword";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { FEATURES, type FeatureKey } from "./constants/features";
+import type { PlanFeature } from "./constants/plans";
+import { PlanUpgradeNotice } from "./components/PlanUpgradeNotice";
 
 // Telas fora do atendimento do dia a dia são baixadas só quando abertas
 const InboxAnalyticsDashboard = lazy(() =>
@@ -153,14 +157,30 @@ const AdminOnly = ({ children }: { children: ReactNode }) => {
 
 // Ao lado da lista de conversas: painel para o admin, tela neutra para o atendente
 const InboxHome = () => {
-  const { membership, loading } = useClinic();
+  const { membership, loading, hasFeature } = useClinic();
 
   if (loading) return <PageLoading />;
-  return membership?.role === "admin" ? (
+  return membership?.role === "admin" && hasFeature("analytics") ? (
     <InboxAnalyticsDashboard />
   ) : (
     <InboxEmpty />
   );
+};
+
+// Recursos fora do plano da empresa: aviso no lugar da tela
+const PlanGate = ({
+  feature,
+  children,
+}: {
+  feature: PlanFeature;
+  children: ReactNode;
+}) => {
+  const { hasFeature, loading } = useClinic();
+
+  if (loading) return <PageLoading />;
+  if (!hasFeature(feature)) return <PlanUpgradeNotice feature={feature} />;
+
+  return <>{children}</>;
 };
 
 // Módulos desligados em FEATURES redirecionam para o início do inbox
@@ -179,10 +199,18 @@ function RoutedApp() {
   const authRoutes = ["/login", "/forgot-password", "/auth/callback", "/auth/set-password"];
   const showHeader = !authRoutes.includes(location.pathname);
   const { loading } = useAuth();
+  const { subscription, loading: clinicLoading } = useClinic();
 
-  // Garante que o loading não trave a tela se o usuário estiver nas telas públicas de auth
-  if (loading && showHeader) {
+  // Garante que o loading não trave a tela se o usuário estiver nas telas públicas de auth.
+  // Espera também a empresa: sem isso o app de uma empresa suspensa aparece
+  // por um instante antes da tela de acesso indisponível.
+  if ((loading || clinicLoading) && showHeader) {
     return <AuthLoadingScreen />;
+  }
+
+  // Empresa suspensa: nenhuma tela do app (as mensagens continuam chegando)
+  if (showHeader && subscription?.status === "suspended") {
+    return <AccessSuspended />;
   }
 
   return (
@@ -199,6 +227,7 @@ function RoutedApp() {
         }
       >
         {showHeader && <MaintenanceBanner />}
+        {showHeader && <BillingBanner />}
         <div className={showHeader ? "min-h-0 flex-1" : undefined}>
         <AppErrorBoundary resetKey={location.pathname}>
         <Suspense fallback={<PageLoading />}>
@@ -222,20 +251,22 @@ function RoutedApp() {
               path="dashboard"
               element={
                 <AdminOnly>
-                  <InboxAnalyticsDashboard />
+                  <PlanGate feature="analytics">
+                    <InboxAnalyticsDashboard />
+                  </PlanGate>
                 </AdminOnly>
               }
             />
             <Route path="chat/:id" element={<Chat />} />
-            <Route path="team" element={<InternalChatPage />} />
-            <Route path="team/:threadId" element={<InternalChatPage />} />
+            <Route path="team" element={<PlanGate feature="internal_chat"><InternalChatPage /></PlanGate>} />
+            <Route path="team/:threadId" element={<PlanGate feature="internal_chat"><InternalChatPage /></PlanGate>} />
             <Route path="tags" element={<Tags />} />
-            <Route path="departments" element={<AdminOnly><DepartmentsPage /></AdminOnly>} />
+            <Route path="departments" element={<AdminOnly><PlanGate feature="departments"><DepartmentsPage /></PlanGate></AdminOnly>} />
             <Route path="attendants" element={<AdminOnly><AttendantsPage /></AdminOnly>} />
             <Route path="quick-messages" element={<QuickMessagesPage />} />
-            <Route path="scheduled-messages" element={<ScheduledMessagesPage />} />
-            <Route path="scheduled-messages/new" element={<ScheduledMessageEditorPage />} />
-            <Route path="scheduled-messages/:id" element={<ScheduledMessageEditorPage />} />
+            <Route path="scheduled-messages" element={<PlanGate feature="scheduled_messages"><ScheduledMessagesPage /></PlanGate>} />
+            <Route path="scheduled-messages/new" element={<PlanGate feature="scheduled_messages"><ScheduledMessageEditorPage /></PlanGate>} />
+            <Route path="scheduled-messages/:id" element={<PlanGate feature="scheduled_messages"><ScheduledMessageEditorPage /></PlanGate>} />
             <Route
               path="marketing-campaigns"
               element={
@@ -270,11 +301,11 @@ function RoutedApp() {
               path="settings/automations/conversations"
               element={<AdminOnly><ConversationAutomationSettingsPage /></AdminOnly>}
             />
-            <Route path="bots" element={<AdminOnly><BotsSettingsPage /></AdminOnly>} />
-            <Route path="bots/new" element={<AdminOnly><BotEditorPage mode="new" /></AdminOnly>} />
+            <Route path="bots" element={<AdminOnly><PlanGate feature="bots"><BotsSettingsPage /></PlanGate></AdminOnly>} />
+            <Route path="bots/new" element={<AdminOnly><PlanGate feature="bots"><BotEditorPage mode="new" /></PlanGate></AdminOnly>} />
             <Route
               path="bots/edit/:botId?"
-              element={<AdminOnly><BotEditorPage mode="edit" /></AdminOnly>}
+              element={<AdminOnly><PlanGate feature="bots"><BotEditorPage mode="edit" /></PlanGate></AdminOnly>}
             />
             <Route
               path="settings"

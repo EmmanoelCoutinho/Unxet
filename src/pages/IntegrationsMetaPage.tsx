@@ -12,6 +12,7 @@ import {
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { useAuth } from "../contexts/AuthContext";
+import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import { SettingsTabs } from "../components/settings/SettingsTabs";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
@@ -68,6 +69,8 @@ type PlatformCardProps = {
 export const MetaIntegrationsPage: React.FC = () => {
   const { profile } = useAuth();
   const clinicId = profile?.clinic_id ?? null;
+  const { hasFeature, subscription } = useClinic();
+  const socialChannelsAllowed = hasFeature("social_channels");
 
   const [clinicName, setClinicName] = useState<string>("");
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -355,7 +358,14 @@ export const MetaIntegrationsPage: React.FC = () => {
         },
       );
 
-      if (error) throw error;
+      if (error) {
+        // Ex.: limite de números do plano; a função explica o motivo em { error }
+        const payload =
+          error.context instanceof Response
+            ? await error.context.clone().json().catch(() => null)
+            : null;
+        throw new Error(payload?.error ?? error.message);
+      }
     } catch (error) {
       const message =
         error instanceof Error
@@ -797,7 +807,7 @@ export const MetaIntegrationsPage: React.FC = () => {
                   size="sm"
                   className="bg-blue-600"
                   onClick={startMetaOAuth}
-                  disabled={!clinicId}
+                  disabled={!clinicId || !socialChannelsAllowed}
                 >
                   <span className="flex items-center gap-2">
                     <ExternalLinkIcon className="h-4 w-4" />
@@ -805,6 +815,15 @@ export const MetaIntegrationsPage: React.FC = () => {
                   </span>
                 </Button>
               </div>
+
+              {!socialChannelsAllowed ? (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Instagram e Messenger não fazem parte do plano{" "}
+                  {subscription?.plan.name ?? "atual"}. Eles estão disponíveis
+                  nos planos Profissional e Empresarial; fale com a Unxet para
+                  mudar de plano.
+                </div>
+              ) : null}
 
               <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
                 <span className="font-medium">Importante:</span> Para realizar a

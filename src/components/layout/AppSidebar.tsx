@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { FiBookOpen } from "react-icons/fi";
 import { FEATURES, type FeatureKey } from "../../constants/features";
+import type { PlanFeature } from "../../constants/plans";
 import { useClinic } from "../../contexts/ClinicContext";
 import { useInternalUnreadTotal } from "../../modules/internalChat/hooks/useInternalChat";
 
@@ -25,6 +26,8 @@ export type SidebarItem = {
   path: string;
   extraPaths?: string[];
   feature?: FeatureKey;
+  // Recurso que depende do plano da empresa (some se o plano não tem)
+  planFeature?: PlanFeature;
   // Só aparece no menu do celular (no desktop o painel já fica ao lado da lista)
   mobileOnly?: boolean;
   // Atendente não vê: só administradores da empresa
@@ -49,6 +52,7 @@ const allSidebarItems: SidebarItem[] = [
     path: "/inbox/team",
     extraPaths: ["/inbox/team"],
     showsInternalUnread: true,
+    planFeature: "internal_chat",
   },
   {
     label: "Painel",
@@ -56,6 +60,7 @@ const allSidebarItems: SidebarItem[] = [
     path: "/inbox/dashboard",
     mobileOnly: true,
     adminOnly: true,
+    planFeature: "analytics",
   },
   {
     label: "Carteira de Clientes",
@@ -74,9 +79,16 @@ const allSidebarItems: SidebarItem[] = [
     icon: Building2Icon,
     path: "/inbox/departments",
     adminOnly: true,
+    planFeature: "departments",
   },
   { label: "Etiquetas", icon: TagIcon, path: "/inbox/tags" },
-  { label: "Bots", icon: BotIcon, path: "/inbox/bots", adminOnly: true },
+  {
+    label: "Bots",
+    icon: BotIcon,
+    path: "/inbox/bots",
+    adminOnly: true,
+    planFeature: "bots",
+  },
   {
     label: "Mensagens rápidas",
     icon: MessageSquareTextIcon,
@@ -87,6 +99,7 @@ const allSidebarItems: SidebarItem[] = [
     icon: CalendarClockIcon,
     path: "/inbox/scheduled-messages",
     extraPaths: ["/inbox/scheduled-messages"],
+    planFeature: "scheduled_messages",
   },
   {
     label: "Marketing / Campanhas",
@@ -122,11 +135,15 @@ export const settingsItem: SidebarItem = {
  * empresa carrega, vale a visão de atendente (não pisca item de admin).
  */
 export const useSidebarNavigation = () => {
-  const { membership } = useClinic();
+  const { membership, hasFeature } = useClinic();
   const isAdmin = membership?.role === "admin";
 
   return {
-    items: sidebarItems.filter((item) => isAdmin || !item.adminOnly),
+    items: sidebarItems.filter(
+      (item) =>
+        (isAdmin || !item.adminOnly) &&
+        (!item.planFeature || hasFeature(item.planFeature)),
+    ),
     settings: isAdmin ? settingsItem : null,
   };
 };

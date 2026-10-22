@@ -8,7 +8,7 @@
  *   nos convites de atendente).
  * - Cria a empresa, o departamento padrão "Recepção" e vincula o usuário como
  *   admin da empresa e membro da Recepção (RPC platform_onboard_clinic, tudo
- *   em uma transação).
+ *   em uma transação), já com o plano e a situação da assinatura escolhidos.
  * - Se a criação da empresa falhar, a conta recém-convidada é excluída para o
  *   e-mail não ficar preso a um cadastro pela metade.
  */
@@ -21,6 +21,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
+
+// Mesmos valores de subscription_plans e do check de clinic_subscriptions.status
+const PLAN_CODES = ["essencial", "profissional", "empresarial"];
+const SUBSCRIPTION_STATUSES = ["trial", "active", "past_due", "suspended", "canceled"];
+const BILLING_CYCLES = ["monthly", "annual"];
 
 const json = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), {
@@ -85,6 +90,26 @@ serve(async (req) => {
     if (!email || !isValidEmail(email)) {
       return json(400, { error: "Informe um e-mail válido" });
     }
+    const planCode = body?.plan_code?.toString().trim() || "essencial";
+    if (!PLAN_CODES.includes(planCode)) {
+      return json(400, { error: "Plano inválido" });
+    }
+    const status = body?.status?.toString().trim() || "active";
+    if (!SUBSCRIPTION_STATUSES.includes(status)) {
+      return json(400, { error: "Situação da assinatura inválida" });
+    }
+    const periodEnd = /^\d{4}-\d{2}-\d{2}$/.test(body?.current_period_end ?? "")
+      ? body.current_period_end
+      : null;
+    const billingCycle = body?.billing_cycle?.toString().trim() || "monthly";
+    if (!BILLING_CYCLES.includes(billingCycle)) {
+      return json(400, { error: "Ciclo de cobrança inválido" });
+    }
+    const hasPrice = body?.price !== null && body?.price !== undefined && body?.price !== "";
+    const price = hasPrice ? Number(body.price) : null;
+    if (hasPrice && !(Number.isFinite(price) && price >= 0)) {
+      return json(400, { error: "Valor da assinatura inválido" });
+    }
 
     log("onboard_start", { requesterId: requester.id, clinicName, email });
 
@@ -141,7 +166,12 @@ serve(async (req) => {
         p_clinic_name: clinicName,
         p_user_id: userId,
         p_user_name: userName,
-        p_user_email: email
+        p_user_email: email,
+        p_plan_code: planCode,
+        p_status: status,
+        p_current_period_end: periodEnd,
+        p_billing_cycle: billingCycle,
+        p_price: price
       }
     );
     if (onboardErr) {

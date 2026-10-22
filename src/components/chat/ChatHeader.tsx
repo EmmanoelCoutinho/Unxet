@@ -153,7 +153,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
   // No celular as ações secundárias vão para o menu "mais"
   const dropdownItems = [
-    ...(isMobile
+    ...(isMobile && onTransfer
       ? [
           {
             label: "Transferir conversa",
@@ -298,17 +298,19 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             )
           ) : (
             <>
-              <CustomTooltip text="Transferir conversa">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onTransfer}
-                  disabled={transferDisabled || !onTransfer}
-                  aria-disabled={transferDisabled || !onTransfer}
-                >
-                  <HiOutlineSwitchHorizontal className="h-5 w-5 text-blue-600" />
-                </Button>
-              </CustomTooltip>
+              {onTransfer && (
+                <CustomTooltip text="Transferir conversa">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onTransfer}
+                    disabled={transferDisabled}
+                    aria-disabled={transferDisabled}
+                  >
+                    <HiOutlineSwitchHorizontal className="h-5 w-5 text-blue-600" />
+                  </Button>
+                </CustomTooltip>
+              )}
 
               <CustomTooltip
                 text={isAccepting ? "Aceitando..." : "Aceitar conversa"}
