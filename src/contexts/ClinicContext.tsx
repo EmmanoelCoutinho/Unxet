@@ -11,6 +11,12 @@ import React, {
 } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "./AuthContext";
+import type {
+  BillingCycle,
+  PlanFeature,
+  SubscriptionPlan,
+  SubscriptionStatus,
+} from "../constants/plans";
 
 type Clinic = {
   id: string;
@@ -27,10 +33,25 @@ type ClinicMembership = {
   // outros campos do clinic_users
 };
 
+export type ClinicSubscription = {
+  plan: SubscriptionPlan;
+  status: SubscriptionStatus;
+  current_period_end: string | null;
+  billing_cycle: BillingCycle;
+  grace_days: number;
+};
+
+// Recarrega o plano de tempos em tempos: suspensão e pagamento aparecem sem
+// a pessoa precisar recarregar a página
+const SUBSCRIPTION_REFRESH_MS = 10 * 60 * 1000;
+
 type ClinicContextType = {
   clinic: Clinic | null;
   clinicId: string | null;
   membership: ClinicMembership | null;
+  // null enquanto carrega ou se a leitura falhar: nada é escondido
+  subscription: ClinicSubscription | null;
+  hasFeature: (feature: PlanFeature) => boolean;
   loading: boolean;
   error: any;
   refetch: () => Promise<void>;
@@ -44,6 +65,9 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   const [clinic, setClinic] = useState<Clinic | null>(null);
   const [membership, setMembership] = useState<ClinicMembership | null>(null);
+  const [subscription, setSubscription] = useState<ClinicSubscription | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
 
@@ -58,6 +82,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
       loadedUserIdRef.current = null;
       setClinic(null);
       setMembership(null);
+      setSubscription(null);
       setLoading(false);
       return;
     }
@@ -108,6 +133,33 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     }
 
     setClinic((clinicRow as Clinic) ?? null);
+
+    // 3) plano: o banco trava o que importa, aqui é só o que aparece na tela
+    const [{ data: subscriptionRow }, { data: planRows }] = await Promise.all([
+      supabase
+        .from("clinic_subscriptions")
+        .select("plan_code, status, current_period_end, billing_cycle, grace_days")
+        .eq("clinic_id", membershipRow.clinic_id)
+        .maybeSingle(),
+      supabase.from("subscription_plans").select("*"),
+    ]);
+    // Empresa sem assinatura vale como Empresarial (mesma regra do banco)
+    const planCode = subscriptionRow?.plan_code ?? "empresarial";
+    const plan = (planRows as SubscriptionPlan[] | null)?.find(
+      (row) => row.code === planCode,
+    );
+    setSubscription(
+      plan
+        ? {
+            plan,
+            status: (subscriptionRow?.status ?? "active") as SubscriptionStatus,
+            current_period_end: subscriptionRow?.current_period_end ?? null,
+            billing_cycle: (subscriptionRow?.billing_cycle ?? "monthly") as BillingCycle,
+            grace_days: subscriptionRow?.grace_days ?? 10,
+          }
+        : null,
+    );
+
     loadedUserIdRef.current = userId;
     setLoading(false);
   }, [userId]);
@@ -120,16 +172,32 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     fetchClinic();
   }, [authLoading, fetchClinic]);
 
+  useEffect(() => {
+    if (!userId) return;
+    const timer = window.setInterval(() => {
+      if (loadedUserIdRef.current === userId) void fetchClinic();
+    }, SUBSCRIPTION_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [userId, fetchClinic]);
+
+  const hasFeature = useCallback(
+    (feature: PlanFeature) =>
+      !subscription || subscription.plan.features.includes(feature),
+    [subscription],
+  );
+
   const value: ClinicContextType = useMemo(
     () => ({
       clinic,
       clinicId,
       membership,
+      subscription,
+      hasFeature,
       loading,
       error,
       refetch: fetchClinic,
     }),
-    [clinic, clinicId, membership, loading, error, fetchClinic]
+    [clinic, clinicId, membership, subscription, hasFeature, loading, error, fetchClinic]
   );
 
   return (

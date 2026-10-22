@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAuthenticatedUser, getClinicMembership } from "../_shared/security.ts";
+import { clinicCanUseWhatsappNumber, PLAN_LIMIT_MESSAGES } from "../_shared/plan.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -77,6 +78,20 @@ serve(async (req)=>{
         error: "Provider must be evolution"
       }), {
         status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+    }
+    // Antes de gerar o QR Code: o número só entra se houver vaga no plano
+    if (!await clinicCanUseWhatsappNumber(supabase, connection.clinic_id, connection.id)) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: PLAN_LIMIT_MESSAGES.whatsapp,
+        code: "plan_limit"
+      }), {
+        status: 403,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json"

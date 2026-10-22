@@ -8,6 +8,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAuthenticatedUser, getClinicMembership } from "../_shared/security.ts";
 import { queueTranscription, runInBackground, storagePathFromPublicUrl } from "../_shared/transcription.ts";
+import { clinicHasFeature } from "../_shared/plan.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -79,6 +80,13 @@ serve(async (req) => {
       }
     }
     if (!allowed) return json(403, { error: "Not allowed" });
+
+    if (!(await clinicHasFeature(admin, conversation.clinic_id, "audio_transcription"))) {
+      return json(403, {
+        error: "Transcrição de áudios não faz parte do plano da empresa.",
+        code: "plan_limit",
+      });
+    }
 
     const { data: lastJob } = await admin
       .from("transcription_jobs")

@@ -1,6 +1,7 @@
 // deno-lint-ignore-file
 // @ts-nocheck
 // Transcrição de áudio: criação do job e disparo da edge function transcribe-audio.
+import { clinicHasFeature } from "./plan.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -52,6 +53,17 @@ export const queueTranscription = async (
   admin,
   params: { messageId: string; storagePath: string | null; language?: string },
 ) => {
+  // Plano sem transcrição: o áudio fica sem status (o app não mostra nada)
+  const { data: owner } = await admin
+    .from("messages")
+    .select("conversations(clinic_id)")
+    .eq("id", params.messageId)
+    .maybeSingle();
+  const clinicId = owner?.conversations?.clinic_id;
+  if (clinicId && !(await clinicHasFeature(admin, clinicId, "audio_transcription"))) {
+    return null;
+  }
+
   if (!params.storagePath) {
     await admin
       .from("messages")

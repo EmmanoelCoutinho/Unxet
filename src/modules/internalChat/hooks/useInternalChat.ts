@@ -110,6 +110,10 @@ export function useInternalThreads() {
 /** Total de mensagens internas não lidas (selo do menu). */
 export function useInternalUnreadTotal() {
   const { threads } = useInternalThreads();
+  const { hasFeature } = useClinic();
+  // Plano sem chat interno: mensagens antigas não lidas não acendem um selo
+  // que leva a uma tela bloqueada
+  if (!hasFeature("internal_chat")) return 0;
   return threads.reduce((total, thread) => total + thread.unreadCount, 0);
 }
 

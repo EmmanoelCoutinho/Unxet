@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toProviderMediaUrl } from "../_shared/media.ts";
 import { queueTranscription, runInBackground, TRANSCRIPTION_BUCKET } from "../_shared/transcription.ts";
+import { clinicIsSuspended } from "../_shared/plan.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -199,6 +200,18 @@ async function authorizeSendForConversation(opts) {
       clinicId,
       userId,
       cuErr: cuErr ?? null
+    }, null, 2));
+    return {
+      ok: false,
+      reason: "Not allowed"
+    };
+  }
+  // Empresa suspensa não envia (o app já fica travado; isto barra chamadas diretas)
+  if (await clinicIsSuspended(supabaseAdmin, clinicId)) {
+    console.log(JSON.stringify({
+      rid,
+      step: "authz_send.denied.clinic_suspended",
+      clinicId
     }, null, 2));
     return {
       ok: false,

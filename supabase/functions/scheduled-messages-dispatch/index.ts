@@ -16,6 +16,7 @@
  */ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
+import { clinicIsSuspended } from "../_shared/plan.ts";
 import { describeProviderError, renderScheduledText, sendDelayMs } from "../_shared/scheduledMessages.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -250,6 +251,7 @@ async function processClinic(supabase, clinicId, recipients) {
     cancelled: 0
   };
   const connection = await loadConnection(supabase, clinicId);
+  const suspended = await clinicIsSuspended(supabase, clinicId);
   for(let index = 0; index < recipients.length; index++){
     const recipient = recipients[index];
     // Cancelada enquanto a rodada estava em andamento
@@ -259,6 +261,14 @@ async function processClinic(supabase, clinicId, recipients) {
         status: "cancelled"
       });
       counts.cancelled++;
+      continue;
+    }
+    if (suspended) {
+      await finishRecipient(supabase, recipient.recipient_id, {
+        status: "failed",
+        error: "O acesso da empresa estava pausado no horário do envio."
+      });
+      counts.failed++;
       continue;
     }
     if (!connection) {

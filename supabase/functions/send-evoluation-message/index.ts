@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toProviderMediaUrl } from "../_shared/media.ts";
 import { queueTranscription, runInBackground, storagePathFromPublicUrl } from "../_shared/transcription.ts";
 import { getClinicMembership } from "../_shared/security.ts";
+import { clinicIsSuspended } from "../_shared/plan.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -141,6 +142,10 @@ serve(async (req)=>{
     } else if (allowed) {
       const { data: deptMember } = await adminSupabase.from("department_members").select("department_id").eq("department_id", conversation.department_id).eq("clinic_user_id", user.id).maybeSingle();
       allowed = !!deptMember;
+    }
+    // Empresa suspensa não envia (o app já fica travado; isto barra chamadas diretas)
+    if (allowed && await clinicIsSuspended(adminSupabase, conversation.clinic_id)) {
+      allowed = false;
     }
     if (!allowed) {
       return new Response(JSON.stringify({
