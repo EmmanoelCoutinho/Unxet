@@ -7,10 +7,12 @@ import { AdminLogin } from "./pages/AdminLogin";
 import { MetricsPage } from "./pages/MetricsPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { MaintenancePage } from "./pages/MaintenancePage";
+import { SubscribersPage } from "./pages/SubscribersPage";
 
-// Novas abas do painel (planos etc.) entram aqui e nas rotas abaixo
+// Novas abas do painel entram aqui e nas rotas abaixo
 const ADMIN_TABS = [
   { to: "/admin/overview", label: "Visão geral" },
+  { to: "/admin/subscribers", label: "Assinantes" },
   { to: "/admin/onboarding", label: "Onboarding" },
   { to: "/admin/maintenance", label: "Manutenção" },
 ];
@@ -48,14 +50,14 @@ const AdminLayout: React.FC = () => {
             </button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-5xl gap-1 px-4 sm:px-8">
+        <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 sm:px-8">
           {ADMIN_TABS.map((tab) => (
             <NavLink
               key={tab.to}
               to={tab.to}
               className={({ isActive }) =>
                 [
-                  "border-b-2 px-3 py-2 text-sm font-medium",
+                  "whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium",
                   isActive
                     ? "border-[#003366] text-[#003366]"
                     : "border-transparent text-gray-500 hover:text-[#1E1E1E]",
@@ -84,6 +86,7 @@ const AdminRoutes: React.FC = () => {
       <Route path="login" element={<AdminLogin />} />
       <Route element={<AdminLayout />}>
         <Route path="overview" element={<MetricsPage />} />
+        <Route path="subscribers" element={<SubscribersPage />} />
         <Route path="onboarding" element={<OnboardingPage />} />
         <Route path="maintenance" element={<MaintenancePage />} />
       </Route>

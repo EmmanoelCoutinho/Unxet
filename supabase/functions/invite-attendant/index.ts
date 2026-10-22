@@ -1,5 +1,6 @@
 // supabase/functions/invite-attendant/index.ts
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { clinicCanAddAttendant, PLAN_LIMIT_MESSAGES } from "../_shared/plan.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -146,6 +147,16 @@ Deno.serve(async (req)=>{
         error: "Não é permitido definir setor principal inativo"
       });
     }
+  }
+  // Antes do convite: o e-mail não pode sair se não há vaga no plano
+  if (!await clinicCanAddAttendant(adminClient, clinicId, email)) {
+    log("plan_attendant_limit", {
+      clinicId
+    });
+    return json(409, {
+      error: PLAN_LIMIT_MESSAGES.attendants,
+      code: "plan_limit"
+    });
   }
   log("invite_call_start", {
     email,
