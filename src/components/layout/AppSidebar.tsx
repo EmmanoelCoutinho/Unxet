@@ -1,10 +1,11 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  BarChart3Icon,
+  ActivityIcon,
   BotIcon,
   Building2Icon,
   CalendarClockIcon,
+  FileBarChartIcon,
   MegaphoneIcon,
   MessageCircleIcon,
   MessageSquareTextIcon,
@@ -17,6 +18,7 @@ import {
 import { FiBookOpen } from "react-icons/fi";
 import { FEATURES, type FeatureKey } from "../../constants/features";
 import { useClinic } from "../../contexts/ClinicContext";
+import { useIsBelowLg } from "../../hooks/useMediaQuery";
 import { useInternalUnreadTotal } from "../../modules/internalChat/hooks/useInternalChat";
 
 export type SidebarItem = {
@@ -52,9 +54,15 @@ const allSidebarItems: SidebarItem[] = [
   },
   {
     label: "Painel",
-    icon: BarChart3Icon,
+    icon: ActivityIcon,
     path: "/inbox/dashboard",
     mobileOnly: true,
+    adminOnly: true,
+  },
+  {
+    label: "Relatórios",
+    icon: FileBarChartIcon,
+    path: "/inbox/reports",
     adminOnly: true,
   },
   {
@@ -128,7 +136,30 @@ export const useSidebarNavigation = () => {
   return {
     items: sidebarItems.filter((item) => isAdmin || !item.adminOnly),
     settings: isAdmin ? settingsItem : null,
+    isAdmin,
   };
+};
+
+// No desktop largo a lista de conversas fica sempre ao lado e o início do
+// inbox já é o Painel do admin: o item "Atendimentos" vira "Painel".
+const desktopPanelItem: SidebarItem = {
+  label: "Painel",
+  icon: ActivityIcon,
+  path: "/inbox",
+  extraPaths: ["/inbox/dashboard", "/inbox/chat"],
+  adminOnly: true,
+};
+
+/**
+ * Itens da barra lateral (md para cima). Entre md e lg a lista e o Painel
+ * ocupam a tela um de cada vez, então o admin precisa dos dois itens.
+ */
+const desktopItems = (items: SidebarItem[], isAdmin: boolean, isBelowLg: boolean) => {
+  if (!isAdmin) return items.filter((item) => !item.mobileOnly);
+  if (isBelowLg) return items;
+  return items
+    .filter((item) => !item.mobileOnly)
+    .map((item) => (item.path === "/inbox" ? desktopPanelItem : item));
 };
 
 export const isSidebarItemActive = (item: SidebarItem, pathname: string) =>
@@ -138,7 +169,8 @@ export const isSidebarItemActive = (item: SidebarItem, pathname: string) =>
 export const AppSidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { items, settings } = useSidebarNavigation();
+  const { items, settings, isAdmin } = useSidebarNavigation();
+  const isBelowLg = useIsBelowLg();
   const internalUnread = useInternalUnreadTotal();
 
   const renderItem = (item: SidebarItem) => {
@@ -203,11 +235,11 @@ export const AppSidebar: React.FC = () => {
             </div>
           </div>
         </div>
-  
+
         <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
-          {items.filter((item) => !item.mobileOnly).map(renderItem)}
+          {desktopItems(items, isAdmin, isBelowLg).map(renderItem)}
         </nav>
-  
+
         {settings && (
           <div className="shrink-0 border-t bg-gray-50 p-2">
             {renderItem(settings)}

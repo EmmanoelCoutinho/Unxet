@@ -188,24 +188,24 @@ export const Inbox: React.FC = () => {
             />
           </div>
 
-          <div className="mt-3 flex items-center">
+          <div className="mt-3 flex items-center gap-1">
             <button
               type="button"
               onClick={() => setTab("open")}
               className={[
-                "h-10 flex-1 text-sm font-medium transition",
+                "h-10 flex-auto whitespace-nowrap px-2 text-sm font-medium transition",
                 tab === "open"
                   ? "border-b-4 border-blue-500 text-blue-500"
                   : "bg-white text-gray-700 hover:bg-gray-50",
               ].join(" ")}
             >
-              <span className="inline-flex items-center justify-center gap-2">
+              <span className="inline-flex items-center justify-center gap-1.5">
                 Abertas
                 <span className="text-xs opacity-90">
                   ({openConversations.length})
                 </span>
                 {totalUnreadOpen > 0 && (
-                  <span className="ml-1 rounded-full bg-[#0A84FF] px-2 py-0.5 text-xs font-semibold text-white">
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0A84FF] px-1.5 text-[11px] font-semibold leading-none text-white">
                     {totalUnreadOpen}
                   </span>
                 )}
@@ -216,19 +216,19 @@ export const Inbox: React.FC = () => {
               type="button"
               onClick={() => setTab("pending")}
               className={[
-                "h-10 flex-1 text-sm font-medium transition",
+                "h-10 flex-auto whitespace-nowrap px-2 text-sm font-medium transition",
                 tab === "pending"
                   ? "border-b-4 border-blue-500 text-blue-500"
                   : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
               ].join(" ")}
             >
-              <span className="inline-flex items-center justify-center gap-2">
+              <span className="inline-flex items-center justify-center gap-1.5">
                 Pendentes
                 <span className="text-xs opacity-90">
                   ({pendingConversations.length})
                 </span>
                 {totalUnreadPending > 0 && (
-                  <span className="ml-1 rounded-full bg-[#0A84FF] px-2 py-0.5 text-xs font-semibold text-white">
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0A84FF] px-1.5 text-[11px] font-semibold leading-none text-white">
                     {totalUnreadPending}
                   </span>
                 )}
@@ -240,13 +240,13 @@ export const Inbox: React.FC = () => {
               onClick={() => setTab("bot")}
               title="Clientes que ainda estão no atendimento automático"
               className={[
-                "h-10 flex-1 text-sm font-medium transition",
+                "h-10 flex-auto whitespace-nowrap px-2 text-sm font-medium transition",
                 tab === "bot"
                   ? "border-b-4 border-blue-500 text-blue-500"
                   : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
               ].join(" ")}
             >
-              <span className="inline-flex items-center justify-center gap-2">
+              <span className="inline-flex items-center justify-center gap-1.5">
                 No bot
                 <span className="text-xs opacity-90">
                   ({botConversations.length})

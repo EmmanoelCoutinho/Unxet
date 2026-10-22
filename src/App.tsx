@@ -33,6 +33,9 @@ const InboxAnalyticsDashboard = lazy(() =>
     default: m.InboxAnalyticsDashboard,
   })),
 );
+const ReportsPage = lazy(() =>
+  import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })),
+);
 const Tags = lazy(() =>
   import("./pages/Tags").then((m) => ({ default: m.Tags })),
 );
@@ -226,6 +229,7 @@ function RoutedApp() {
                 </AdminOnly>
               }
             />
+            <Route path="reports" element={<AdminOnly><ReportsPage /></AdminOnly>} />
             <Route path="chat/:id" element={<Chat />} />
             <Route path="team" element={<InternalChatPage />} />
             <Route path="team/:threadId" element={<InternalChatPage />} />
