@@ -1,5 +1,7 @@
 import { supabase } from "../../../lib/supabaseClient";
+import { whatsappConnectionLabel } from "../../../lib/whatsappConnections";
 import type {
+  QrWhatsappNumber,
   SaveScheduledMessageInput,
   ScheduledMessage,
   ScheduledRecipient,
@@ -29,11 +31,12 @@ type ScheduledMessageRow = {
   finished_at: string | null;
   created_at: string;
   updated_at: string;
+  channel_connection_id: string | null;
   recipients: RecipientRow[] | null;
 };
 
 const SELECT =
-  "id, clinic_id, created_by, message, scheduled_at, status, started_at, finished_at, created_at, updated_at, " +
+  "id, clinic_id, created_by, message, scheduled_at, status, started_at, finished_at, created_at, updated_at, channel_connection_id, " +
   "recipients:scheduled_message_recipients(id, position, contact_id, name, phone, status, error, sent_at, conversation_id)";
 
 const LIST_LIMIT = 200;
@@ -49,6 +52,7 @@ const mapRow = (row: ScheduledMessageRow): ScheduledMessage => ({
   finishedAt: row.finished_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  channelConnectionId: row.channel_connection_id ?? null,
   recipients: [...(row.recipients ?? [])]
     .sort((a, b) => a.position - b.position)
     .map((r) => ({
@@ -111,6 +115,7 @@ export const saveScheduledMessage = async (
         ? { contact_id: recipient.contactId }
         : { phone: recipient.phone, name: recipient.name },
     ),
+    p_channel_connection_id: input.channelConnectionId,
   });
 
   if (error) throw error;
@@ -171,4 +176,28 @@ export const hasConnectedQrWhatsapp = async (
   if (error) throw error;
 
   return (data ?? []).length > 0;
+};
+
+// Números QR Code da empresa (os removidos ficam de fora)
+export const listQrWhatsappNumbers = async (
+  clinicId: string | null,
+): Promise<QrWhatsappNumber[]> => {
+  if (!clinicId) return [];
+
+  const { data, error } = await supabase
+    .from("channel_connections")
+    .select("id, status, display_name, connected_phone, connected_name")
+    .eq("clinic_id", clinicId)
+    .eq("provider", "evolution")
+    .eq("channel", "whatsapp")
+    .is("archived_at", null)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    label: whatsappConnectionLabel(row),
+    connected: row.status === "connected",
+  }));
 };

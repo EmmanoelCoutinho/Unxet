@@ -75,11 +75,12 @@ serve(async (req)=>{
       });
     }
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    // "connecting" fica de fora: é o fluxo do QR Code, controlado pelo webhook
+    // "connecting" fica de fora: é o fluxo do QR Code, controlado pelo webhook.
+    // Número removido (archived_at) não tem mais instância na Evolution.
     const { data: connections, error } = await supabase.from("channel_connections").select("id, session_name, status, evolution_api_url, evolution_api_key").eq("provider", "evolution").in("status", [
       "connected",
       "disconnected"
-    ]).not("session_name", "is", null);
+    ]).not("session_name", "is", null).is("archived_at", null);
     if (error) {
       console.error("[CONNECTION_SYNC_QUERY_ERROR]", error);
       return new Response(JSON.stringify({

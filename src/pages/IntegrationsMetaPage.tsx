@@ -5,7 +5,6 @@ import {
   ExternalLinkIcon,
   FacebookIcon,
   InstagramIcon,
-  LogOutIcon,
   MessageCircleIcon,
   Settings2Icon,
 } from "lucide-react";
@@ -16,6 +15,10 @@ import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import { SettingsTabs } from "../components/settings/SettingsTabs";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import {
+  EvolutionConnectionsPanel,
+  type DepartmentOption,
+} from "../components/settings/EvolutionConnectionsPanel";
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID as string | undefined;
 const META_APP_WABA_ID = import.meta.env.VITE_META_APP_WABA_ID as
@@ -40,11 +43,23 @@ type Connection = {
   connected_phone?: string | null;
   connected_name?: string | null;
   session_name?: string | null;
+  display_name?: string | null;
+  default_department_id?: string | null;
+  archived_at?: string | null;
   last_connection_at?: string | null;
   last_disconnection_at?: string | null;
-  status: "connecting" | "connected" | "disconnected" | "needs_reauth";
+  status:
+    | "connecting"
+    | "connected"
+    | "disconnected"
+    | "disconnecting"
+    | "needs_reauth";
+  created_at?: string | null;
   updated_at: string | null;
 };
+
+const CONNECTION_COLUMNS =
+  "id,provider,channel,meta_waba_id,meta_phone_number_id,meta_page_id,meta_ig_user_id,qr_code,connected_phone,connected_name,session_name,display_name,default_department_id,archived_at,last_connection_at,last_disconnection_at,status,created_at,updated_at";
 
 type DbClinicRow = {
   id: string;
@@ -74,9 +89,8 @@ export const MetaIntegrationsPage: React.FC = () => {
 
   const [clinicName, setClinicName] = useState<string>("");
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [qrLoading, setQrLoading] = useState(false);
-  const [disconnectLoading, setDisconnectLoading] = useState(false);
 
   const clinicLabel = useMemo(() => {
     if (!clinicId) return "Empresa atual (indefinida)";
@@ -102,11 +116,19 @@ export const MetaIntegrationsPage: React.FC = () => {
     [connections],
   );
 
-  const whatsappEvolution = useMemo(
+  // Números conectados por QR Code (Evolution), na ordem em que foram criados
+  const evolutionConnections = useMemo(
     () =>
-      connections.find(
-        (c) => c.channel === "whatsapp" && c.provider === "evolution",
-      ) ?? null,
+      connections
+        .filter(
+          (c) =>
+            c.channel === "whatsapp" &&
+            c.provider === "evolution" &&
+            !c.archived_at,
+        )
+        .sort((a, b) =>
+          String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")),
+        ),
     [connections],
   );
 
@@ -117,103 +139,22 @@ export const MetaIntegrationsPage: React.FC = () => {
   );
 
   const isWhatsAppEvolutionConnected = useMemo(
-    () =>
-      whatsappEvolution?.provider === "evolution" &&
-      whatsappEvolution.status === "connected",
-    [whatsappEvolution],
+    () => evolutionConnections.some((c) => c.status === "connected"),
+    [evolutionConnections],
   );
+
+  // Status resumido do cartão: algum número conectado, conectando ou nenhum
+  const evolutionSummaryStatus = useMemo<Connection["status"] | null>(() => {
+    if (evolutionConnections.length === 0) return null;
+    if (isWhatsAppEvolutionConnected) return "connected";
+    if (evolutionConnections.some((c) => c.status === "connecting")) {
+      return "connecting";
+    }
+    return "disconnected";
+  }, [evolutionConnections, isWhatsAppEvolutionConnected]);
 
   const blockMetaByEvolution = isWhatsAppEvolutionConnected;
   const blockEvolutionByMeta = isWhatsAppMetaConnected;
-
-  const formatDateTime = useCallback((value?: string | null) => {
-    if (!value) return null;
-
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return null;
-
-    return new Intl.DateTimeFormat("pt-BR", {
-      dateStyle: "short",
-      timeStyle: "short",
-    }).format(parsed);
-  }, []);
-
-  const formatPhoneIdentifier = useCallback((value?: string | null) => {
-    const rawValue = value?.trim();
-    if (!rawValue) return null;
-
-    const identifier = rawValue.includes("@")
-      ? rawValue.split("@")[0].trim()
-      : rawValue;
-    const digits = identifier.replace(/\D/g, "");
-
-    if (digits.length === 13 && digits.startsWith("55")) {
-      return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
-    }
-
-    if (digits.length === 12 && digits.startsWith("55")) {
-      return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
-    }
-
-    if (digits.length === 11) {
-      return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-    }
-
-    if (digits.length === 10) {
-      return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-    }
-
-    return identifier;
-  }, []);
-
-  const whatsappEvolutionConnectedLabel = useMemo(() => {
-    if (!whatsappEvolution) return null;
-
-    const name = whatsappEvolution.connected_name?.trim();
-    const phone = whatsappEvolution.connected_phone?.trim();
-
-    if (name && phone) return `${name} - ${phone}`;
-    if (phone) return phone;
-    if (name) return name;
-    return null;
-  }, [whatsappEvolution]);
-
-  const whatsappEvolutionConnectedPhoneLabel = useMemo(
-    () => formatPhoneIdentifier(whatsappEvolution?.connected_phone),
-    [formatPhoneIdentifier, whatsappEvolution?.connected_phone],
-  );
-
-  const whatsappEvolutionActionLabel = useMemo(() => {
-    if (disconnectLoading) return "Desconectando...";
-    if (qrLoading) return "Gerando QR Code...";
-    if (isWhatsAppEvolutionConnected) return "Desconectar";
-    if (!whatsappEvolution) return "Conectar via QR Code";
-    if (whatsappEvolution.status === "disconnected") return "Reconectar";
-    return "Conectar via QR Code";
-  }, [
-    disconnectLoading,
-    isWhatsAppEvolutionConnected,
-    qrLoading,
-    whatsappEvolution,
-  ]);
-
-  const whatsappQrCode = useMemo(
-    () =>
-      whatsappEvolution?.provider === "evolution"
-        ? (whatsappEvolution.qr_code ?? null)
-        : null,
-    [whatsappEvolution],
-  );
-
-  const lastConnectionLabel = useMemo(
-    () => formatDateTime(whatsappEvolution?.last_connection_at),
-    [formatDateTime, whatsappEvolution?.last_connection_at],
-  );
-
-  const lastDisconnectionLabel = useMemo(
-    () => formatDateTime(whatsappEvolution?.last_disconnection_at),
-    [formatDateTime, whatsappEvolution?.last_disconnection_at],
-  );
 
   const startMetaOAuth = useCallback(() => {
     if (!clinicId) return;
@@ -298,12 +239,12 @@ export const MetaIntegrationsPage: React.FC = () => {
 
     const { data, error } = await supabase
       .from("channel_connections")
-      .select(
-        "id,provider,channel,meta_waba_id,meta_phone_number_id,meta_page_id,meta_ig_user_id,qr_code,connected_phone,connected_name,session_name,last_connection_at,last_disconnection_at,status,updated_at",
-      )
+      .select(CONNECTION_COLUMNS)
       .in("provider", ["meta", "evolution"])
       .eq("clinic_id", clinicId)
       .in("channel", ["messenger", "instagram", "whatsapp"])
+      // Números removidos ficam só no histórico das conversas
+      .is("archived_at", null)
       .order("updated_at", { ascending: false });
 
     if (error) {
@@ -315,119 +256,24 @@ export const MetaIntegrationsPage: React.FC = () => {
     setConnections((data ?? []) as Connection[]);
   }, [clinicId]);
 
-  const startEvolutionConnection = useCallback(async () => {
+  const fetchDepartments = useCallback(async () => {
     if (!clinicId) return;
 
-    setErrorMsg(null);
-    setQrLoading(true);
+    const { data, error } = await supabase
+      .from("departments")
+      .select("id,name,is_default")
+      .eq("clinic_id", clinicId)
+      .eq("is_active", true)
+      .order("name");
 
-    try {
-      let evolutionConnection =
-        connections.find(
-          (connection) =>
-            connection.provider === "evolution" &&
-            connection.channel === "whatsapp",
-        ) ?? null;
-
-      if (!evolutionConnection) {
-        const { data, error } = await supabase
-          .from("channel_connections")
-          .insert({
-            clinic_id: clinicId,
-            provider: "evolution",
-            channel: "whatsapp",
-            status: "disconnected",
-            session_name: `clinic_${clinicId}`,
-          })
-          .select(
-            "id,provider,channel,meta_waba_id,meta_phone_number_id,meta_page_id,meta_ig_user_id,qr_code,connected_phone,connected_name,session_name,last_connection_at,last_disconnection_at,status,updated_at",
-          )
-          .single();
-
-        if (error) throw error;
-
-        evolutionConnection = data as Connection;
-      }
-
-      const { error } = await supabase.functions.invoke(
-        "create-evolution-connection",
-        {
-          body: {
-            connectionId: evolutionConnection.id,
-          },
-        },
-      );
-
-      if (error) {
-        // Ex.: limite de números do plano; a função explica o motivo em { error }
-        const payload =
-          error.context instanceof Response
-            ? await error.context.clone().json().catch(() => null)
-            : null;
-        throw new Error(payload?.error ?? error.message);
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Não foi possível iniciar a conexão via QR Code.";
-      setErrorMsg(message);
-      setQrLoading(false);
-      return;
-    }
-
-    await fetchConnections();
-  }, [clinicId, connections, fetchConnections]);
-
-  const disconnectEvolutionConnection = useCallback(async () => {
-    if (!whatsappEvolution?.id) {
-      setErrorMsg("Conexão Evolution não encontrada para desconectar.");
-      return;
-    }
-
-    setErrorMsg(null);
-    setDisconnectLoading(true);
-
-    try {
-      const { error: fnError } = await supabase.functions.invoke(
-        "disconnect-evolution-connection",
-        {
-          body: {
-            connectionId: whatsappEvolution.id,
-          },
-        },
-      );
-
-      if (fnError) {
-        const response = (fnError as { context?: Response }).context;
-        const errorPayload = (await response?.json?.().catch(() => null)) as {
-          error?: string;
-          message?: string;
-        } | null;
-
-        throw new Error(
-          errorPayload?.error ??
-            errorPayload?.message ??
-            "Não foi possível desconectar a instância Evolution.",
-        );
-      }
-
-      await fetchConnections();
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Não foi possível desconectar a instância Evolution.";
-      setErrorMsg(message);
-    } finally {
-      setDisconnectLoading(false);
-    }
-  }, [fetchConnections, whatsappEvolution?.id]);
+    if (!error) setDepartments((data ?? []) as DepartmentOption[]);
+  }, [clinicId]);
 
   useEffect(() => {
     fetchClinic();
     fetchConnections();
-  }, [fetchClinic, fetchConnections]);
+    fetchDepartments();
+  }, [fetchClinic, fetchConnections, fetchDepartments]);
 
   useEffect(() => {
     if (!clinicId) return;
@@ -470,14 +316,6 @@ export const MetaIntegrationsPage: React.FC = () => {
             updated[index] = { ...updated[index], ...incoming };
             return updated;
           });
-
-          if (
-            nextRow?.provider === "evolution" &&
-            nextRow?.channel === "whatsapp"
-          ) {
-            setQrLoading(false);
-            setDisconnectLoading(false);
-          }
         },
       )
       .subscribe();
@@ -661,104 +499,26 @@ export const MetaIntegrationsPage: React.FC = () => {
 
                 <PlatformCard
                   title="WhatsApp via QR Code"
-                  description="Conecte um WhatsApp existente escaneando um QR Code."
-                  status={whatsappEvolution?.status}
+                  description="Conecte um ou mais WhatsApps escaneando um QR Code."
+                  status={evolutionSummaryStatus}
                   icon={
                     <MessageCircleIcon className="h-5 w-5 text-green-600" />
                   }
                   accessItems={[
                     "Conexão rápida e simples.",
-                    "Ativação em poucos segundos.",
+                    "Vários números na mesma empresa, cada um com seu nome.",
+                    "Cada número pode cair em um departamento.",
                     "Integração instantânea com a inbox.",
-                    "Ideal para operação imediata.",
                   ]}
-                  actionLabel={whatsappEvolutionActionLabel}
-                  onAction={
-                    isWhatsAppEvolutionConnected
-                      ? disconnectEvolutionConnection
-                      : startEvolutionConnection
-                  }
-                  actionDisabled={
-                    !clinicId ||
-                    qrLoading ||
-                    disconnectLoading ||
-                    (!isWhatsAppEvolutionConnected && blockEvolutionByMeta)
-                  }
-                  actionClassName={
-                    isWhatsAppEvolutionConnected
-                      ? "bg-red-600 hover:bg-red-700"
-                      : "bg-green-600"
-                  }
-                  actionIcon={
-                    isWhatsAppEvolutionConnected ? (
-                      <LogOutIcon className="h-4 w-4" />
-                    ) : undefined
-                  }
-                  actionAfterChildren={isWhatsAppEvolutionConnected}
                 >
-                  {isWhatsAppEvolutionConnected ? (
-                    <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-                      <p className="font-medium">WhatsApp conectado</p>
-                      {whatsappEvolutionConnectedPhoneLabel ? (
-                        <p className="mt-1">
-                          <span className="font-medium">Número conectado:</span>{" "}
-                          {whatsappEvolutionConnectedPhoneLabel}
-                        </p>
-                      ) : null}
-                      {whatsappEvolution?.connected_name ? (
-                        <p className="mt-1">
-                          {whatsappEvolution.connected_name}
-                        </p>
-                      ) : null}
-                      {!whatsappEvolution?.connected_phone &&
-                      !whatsappEvolution?.connected_name &&
-                      whatsappEvolutionConnectedLabel ? (
-                        <p className="mt-1">
-                          {whatsappEvolutionConnectedLabel}
-                        </p>
-                      ) : null}
-                      {lastConnectionLabel ? (
-                        <p className="mt-2 text-xs text-green-700">
-                          Conectado em {lastConnectionLabel}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : blockEvolutionByMeta ? (
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                      Esta opção fica indisponível enquanto houver um WhatsApp
-                      conectado via Meta.
-                    </div>
-                  ) : whatsappEvolution?.provider === "evolution" &&
-                    whatsappQrCode ? (
-                    <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-5 text-center">
-                      <p className="text-sm font-semibold text-gray-900">
-                        Escaneie o QR Code
-                      </p>
-                      <p className="mt-1 text-sm text-gray-600">
-                        Abra o WhatsApp no celular e conecte o dispositivo.
-                      </p>
-                      <div className="mt-4 flex justify-center">
-                        <img
-                          src={whatsappQrCode}
-                          alt="QR Code WhatsApp"
-                          className="h-72 w-72"
-                        />
-                      </div>
-                      {lastDisconnectionLabel ? (
-                        <p className="mt-4 text-xs text-gray-500">
-                          Última desconexão em {lastDisconnectionLabel}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : (
-                    lastDisconnectionLabel && (
-                      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                        <p className="mt-2 text-xs text-gray-500">
-                          Última desconexão em {lastDisconnectionLabel}
-                        </p>
-                      </div>
-                    )
-                  )}
+                  <EvolutionConnectionsPanel
+                    clinicId={clinicId}
+                    connections={evolutionConnections}
+                    departments={departments}
+                    blockedByMeta={blockEvolutionByMeta}
+                    onChanged={fetchConnections}
+                    onError={setErrorMsg}
+                  />
                 </PlatformCard>
               </div>
             </Card>

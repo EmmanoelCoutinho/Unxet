@@ -38,6 +38,8 @@ import { ArrowDownIcon, ArrowLeftIcon } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { TransferModal } from "../components/chat/TransferModal";
 import { sharedContactText, type SharedContact } from "../lib/sharedContact";
+import { whatsappConnectionLabel } from "../lib/whatsappConnections";
+import { useWhatsappConnections } from "../hooks/useWhatsappConnections";
 
 type UiTag = { id: string; name: string; color: string };
 
@@ -193,6 +195,7 @@ export const Chat: React.FC = () => {
   const navigate = useNavigate();
   const { authUser } = useAuth();
   const { clinicId, membership, hasFeature } = useClinic();
+  const { hasMultiple: hasMultipleWhatsapp } = useWhatsappConnections(clinicId);
   const isAdmin = membership?.role === "admin";
   const userNames = useClinicUserNames(clinicId, isAdmin);
 
@@ -537,7 +540,11 @@ export const Chat: React.FC = () => {
         status,
         channel,
         channel_connections (
-          provider
+          id,
+          provider,
+          display_name,
+          connected_phone,
+          connected_name
         ),
         last_message_at,
         created_at,
@@ -645,6 +652,10 @@ export const Chat: React.FC = () => {
         channel: (data as any).channel as Channel,
         status: ((data as any).status as Conversation["status"]) ?? "pending",
         provider: (data as any).channel_connections?.provider ?? undefined,
+        connectionId: (data as any).channel_connections?.id ?? undefined,
+        connectionLabel: (data as any).channel_connections
+          ? whatsappConnectionLabel((data as any).channel_connections)
+          : undefined,
         contactName:
           contactRow?.name ?? contactRow?.phone ?? "Contato sem nome",
         contactNumber: contactRow?.phone ?? "",
@@ -1407,6 +1418,11 @@ export const Chat: React.FC = () => {
               : undefined
           }
           departmentName={conversation.departmentName}
+          connectionLabel={
+            hasMultipleWhatsapp && conversation.channel === "whatsapp"
+              ? conversation.connectionLabel
+              : undefined
+          }
           onBack={() => navigate("/inbox")}
           onManageTags={() => setIsManageTagsOpen(true)}
           onAccept={handleAcceptConversation}

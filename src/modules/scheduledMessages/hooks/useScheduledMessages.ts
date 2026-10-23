@@ -4,6 +4,7 @@ import {
   deleteScheduledMessage,
   getScheduledMessage,
   hasConnectedQrWhatsapp,
+  listQrWhatsappNumbers,
   listScheduledMessages,
   saveScheduledMessage,
   searchWalletContacts,
@@ -21,6 +22,8 @@ export const scheduledMessageQueryKeys = {
     [...scheduledMessageQueryKeys.all, "detail", id] as const,
   qrConnection: (clinicId: string | null) =>
     [...scheduledMessageQueryKeys.all, "qr-connection", clinicId] as const,
+  qrNumbers: (clinicId: string | null) =>
+    [...scheduledMessageQueryKeys.all, "qr-numbers", clinicId] as const,
   walletSearch: (clinicId: string | null, search: string) =>
     [...scheduledMessageQueryKeys.all, "wallet", clinicId, search] as const,
 };
@@ -106,6 +109,16 @@ export const useQrWhatsappConnected = (clinicId: string | null) => {
 
   // Sem resposta (carregando ou erro) não mostra o aviso de desconectado
   return query.data ?? true;
+};
+
+export const useQrWhatsappNumbers = (clinicId: string | null) => {
+  const query = useQuery({
+    queryKey: scheduledMessageQueryKeys.qrNumbers(clinicId),
+    queryFn: () => listQrWhatsappNumbers(clinicId),
+    enabled: Boolean(clinicId),
+  });
+
+  return { numbers: query.data ?? [], loading: query.isLoading };
 };
 
 export const useWalletContactSearch = (

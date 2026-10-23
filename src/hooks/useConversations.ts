@@ -11,6 +11,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { useClinic } from "../contexts/ClinicContext";
 import { DELETED_MESSAGE_TEXT } from "./useMessages";
+import { whatsappConnectionLabel } from "../lib/whatsappConnections";
 
 type UseConversationsOptions = {
   status?: string;
@@ -228,7 +229,11 @@ export function useConversations(options: UseConversationsOptions = {}) {
           status,
           channel,
           channel_connections (
-            provider
+            id,
+            provider,
+            display_name,
+            connected_phone,
+            connected_name
           ),
           last_message_at,
           created_at,
@@ -353,6 +358,10 @@ export function useConversations(options: UseConversationsOptions = {}) {
               channel: row.channel as Channel,
               status: row.status,
               provider: row.channel_connections?.provider,
+              connectionId: row.channel_connections?.id ?? undefined,
+              connectionLabel: row.channel_connections
+                ? whatsappConnectionLabel(row.channel_connections)
+                : undefined,
               contactName:
                 contactRow?.name ?? contactRow?.phone ?? "Contato sem nome",
               contactNumber: contactRow?.phone ?? "",

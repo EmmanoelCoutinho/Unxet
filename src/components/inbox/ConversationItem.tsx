@@ -14,6 +14,8 @@ interface ConversationItemProps {
   conversation: Conversation;
   // Responsável pela conversa (exibido só para admin)
   assigneeName?: string;
+  // Número da empresa por onde a conversa acontece (só com mais de um)
+  connectionLabel?: string;
   onClick: () => void;
 }
 type Channel = "whatsapp" | "instagram" | "messenger";
@@ -21,6 +23,7 @@ type Channel = "whatsapp" | "instagram" | "messenger";
 export const ConversationItem: React.FC<ConversationItemProps> = ({
   conversation,
   assigneeName,
+  connectionLabel,
   onClick,
 }) => {
   
@@ -143,10 +146,17 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
           )}
           <div className="flex items-center gap-2 min-w-0 relative pr-10">
             <span
-              className={`flex items-center gap-1 text-xs font-medium ${channelInfo.textColor} flex-shrink-0`}
+              title={
+                connectionLabel
+                  ? `${channelInfo.name}: ${connectionLabel}`
+                  : undefined
+              }
+              className={`flex min-w-0 max-w-[45%] items-center gap-1 text-xs font-medium ${channelInfo.textColor} flex-shrink-0`}
             >
               {channelInfo.icon}
-              {channelInfo.name}
+              <span className="truncate">
+                {connectionLabel ?? channelInfo.name}
+              </span>
             </span>
             {conversation.slaBreached && (
               <span

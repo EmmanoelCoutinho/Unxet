@@ -51,6 +51,9 @@ export type Conversation = {
   // O bot ainda conduz a conversa: fica na aba "No bot", fora da fila
   inBotFlow?: boolean;
   provider?: "meta" | "evolution";
+  // Número de WhatsApp da empresa por onde a conversa acontece
+  connectionId?: string;
+  connectionLabel?: string;
   // Última mensagem do cliente (janela de 24h do WhatsApp oficial)
   lastInboundAt?: string;
   // Cliente ainda aguarda a 1ª resposta e o prazo de SLA da clínica já passou

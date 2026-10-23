@@ -429,6 +429,9 @@ verify_jwt = true
 [functions.create-evolution-connection]
 verify_jwt = true
 
+[functions.archive-evolution-connection]
+verify_jwt = true
+
 [functions.evolution-webhook]
 verify_jwt = true
 

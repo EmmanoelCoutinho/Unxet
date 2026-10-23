@@ -22,6 +22,7 @@ import {
   RecipientStatusBadge,
 } from "../modules/scheduledMessages/components/StatusBadge";
 import {
+  useQrWhatsappNumbers,
   useScheduledMessage,
   useScheduledMessageActions,
   useWalletContactSearch,
@@ -202,6 +203,18 @@ const ScheduledMessageForm: React.FC<{ existing: ScheduledMessage | null }> = ({
   const [message, setMessage] = useState(existing?.message ?? "");
   const messageRef = useRef<HTMLTextAreaElement>(null);
 
+  // Número de saída: a escolha só aparece quando a empresa tem mais de um
+  const { numbers } = useQrWhatsappNumbers(clinicId);
+  const [connectionId, setConnectionId] = useState<string | null>(
+    existing?.channelConnectionId ?? null,
+  );
+
+  useEffect(() => {
+    if (numbers.length === 0) return;
+    if (connectionId && numbers.some((n) => n.id === connectionId)) return;
+    setConnectionId((numbers.find((n) => n.connected) ?? numbers[0]).id);
+  }, [numbers, connectionId]);
+
   const [source, setSource] = useState<RecipientSource>("wallet");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -311,6 +324,7 @@ const ScheduledMessageForm: React.FC<{ existing: ScheduledMessage | null }> = ({
         message,
         scheduledAt,
         recipients,
+        channelConnectionId: numbers.length > 0 ? connectionId : null,
       });
       toast.success(
         existing ? "Programação atualizada." : "Mensagem programada.",
@@ -552,6 +566,33 @@ const ScheduledMessageForm: React.FC<{ existing: ScheduledMessage | null }> = ({
             Horário do seu computador. Com vários destinatários, os envios saem
             aos poucos (cerca de 6 por minuto) a partir desse horário.
           </p>
+          {numbers.length > 1 && (
+            <div className="mt-4">
+              <label
+                htmlFor="scheduled-connection"
+                className="block text-sm font-medium text-slate-800"
+              >
+                Enviar pelo número
+              </label>
+              <select
+                id="scheduled-connection"
+                value={connectionId ?? ""}
+                onChange={(event) => setConnectionId(event.target.value || null)}
+                className={`${FIELD_CLASS} mt-1 bg-white`}
+              >
+                {numbers.map((number) => (
+                  <option key={number.id} value={number.id}>
+                    {number.connected
+                      ? number.label
+                      : `${number.label} (desconectado)`}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                As respostas dos clientes chegam por esse mesmo número.
+              </p>
+            </div>
+          )}
         </Card>
 
         <Card className="rounded-2xl border border-slate-200 p-5">
@@ -645,6 +686,13 @@ const ScheduledMessageDetails: React.FC<{
   const { total, sent, failed, waiting } = summarizeRecipients(
     scheduledMessage.recipients,
   );
+  const { clinicId } = useClinic();
+  const { numbers } = useQrWhatsappNumbers(clinicId);
+  const numberLabel =
+    numbers.length > 1
+      ? numbers.find((n) => n.id === scheduledMessage.channelConnectionId)
+          ?.label
+      : undefined;
 
   const handleCancel = async () => {
     const ok = await confirm({
@@ -733,6 +781,12 @@ const ScheduledMessageDetails: React.FC<{
           <p className="mt-4 whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-800">
             {scheduledMessage.message}
           </p>
+          {numberLabel && (
+            <p className="mt-3 text-xs text-slate-500">
+              Enviada pelo número{" "}
+              <span className="font-medium text-slate-700">{numberLabel}</span>
+            </p>
+          )}
         </Card>
 
         {isCancellable(scheduledMessage.status) && (

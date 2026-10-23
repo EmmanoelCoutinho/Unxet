@@ -13,6 +13,7 @@ import {
   getAssigneeLabel,
   useClinicUserNames,
 } from "../hooks/useClinicUserNames";
+import { useWhatsappConnections } from "../hooks/useWhatsappConnections";
 import { useAuth } from "../contexts/AuthContext";
 import { useClinic } from "../contexts/ClinicContext";
 import { setAppBadge } from "../lib/pushNotifications";
@@ -43,6 +44,7 @@ export const Inbox: React.FC = () => {
   const { clinicId, membership } = useClinic();
   const isAdmin = membership?.role === "admin";
   const userNames = useClinicUserNames(clinicId, isAdmin);
+  const { hasMultiple: hasMultipleWhatsapp } = useWhatsappConnections(clinicId);
 
   useEffect(() => {
     const baseTitle = "Unxet";
@@ -295,6 +297,11 @@ export const Inbox: React.FC = () => {
                           authUser?.id,
                           userNames,
                         )
+                      : undefined
+                  }
+                  connectionLabel={
+                    hasMultipleWhatsapp && conversation.channel === "whatsapp"
+                      ? conversation.connectionLabel
                       : undefined
                   }
                   onClick={() => navigate(`/inbox/chat/${conversation.id}`)}

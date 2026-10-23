@@ -344,7 +344,7 @@ serve(async (req)=>{
         status: 400
       });
     }
-    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key").eq("provider", "evolution").eq("session_name", instanceName).maybeSingle();
+    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
     if (connectionError || !connection) {
       console.error("Connection not found:", connectionError);
       return new Response("Connection not found", {

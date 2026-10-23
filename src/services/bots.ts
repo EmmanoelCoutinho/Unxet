@@ -49,7 +49,7 @@ const getFriendlySupabaseErrorMessage = (error: SupabaseLikeError) => {
 
 // Nunca inclua access_token / evolution_api_key aqui
 const CHANNEL_CONNECTION_COLUMNS =
-  "id,clinic_id,provider,channel,status,connected_phone,connected_name,updated_at";
+  "id,clinic_id,provider,channel,status,connected_phone,connected_name,display_name,updated_at";
 
 const isSupabaseLikeError = (error: unknown): error is SupabaseLikeError =>
   typeof error === "object" && error !== null;
@@ -731,6 +731,8 @@ export const botsService = {
         .from("channel_connections")
         .select(CHANNEL_CONNECTION_COLUMNS)
         .eq("clinic_id", clinicId)
+        // Número removido não recebe mais mensagens: não faz sentido vincular bot
+        .is("archived_at", null)
         .order("updated_at", { ascending: false });
 
       if (error) return { data: null, error: asError(error) };

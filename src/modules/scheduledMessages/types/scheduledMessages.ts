@@ -35,7 +35,16 @@ export type ScheduledMessage = {
   finishedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // Número de WhatsApp (QR Code) por onde sai; null = o conectado mais recente
+  channelConnectionId: string | null;
   recipients: ScheduledRecipient[];
+};
+
+// Número de WhatsApp por QR Code que pode enviar programadas
+export type QrWhatsappNumber = {
+  id: string;
+  label: string;
+  connected: boolean;
 };
 
 // Destinatário ainda no formulário: cliente da carteira ou número digitado
@@ -50,6 +59,7 @@ export type SaveScheduledMessageInput = {
   message: string;
   scheduledAt: Date;
   recipients: RecipientDraft[];
+  channelConnectionId: string | null;
 };
 
 export type WalletContact = {

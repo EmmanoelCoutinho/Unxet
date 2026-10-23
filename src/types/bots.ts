@@ -178,6 +178,7 @@ export type ChannelConnectionRow = {
   status?: "connected" | "disconnected" | "needs_reauth" | OpenString | null;
   connected_phone?: string | null;
   connected_name?: string | null;
+  display_name?: string | null;
   updated_at?: string | null;
 };
 

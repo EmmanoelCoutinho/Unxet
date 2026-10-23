@@ -209,6 +209,14 @@ serve(async (req)=>{
         headers: corsHeaders
       });
     }
+    if (connection.archived_at) {
+      return new Response(JSON.stringify({
+        error: "O número de WhatsApp desta conversa foi removido da empresa."
+      }), {
+        status: 400,
+        headers: corsHeaders
+      });
+    }
     if (!connection.evolution_api_url || !connection.evolution_api_key || !connection.session_name) {
       return new Response(JSON.stringify({
         error: "Evolution connection is incomplete"

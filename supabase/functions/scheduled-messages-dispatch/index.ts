@@ -7,7 +7,7 @@
  *
  * A cada rodada pega até PER_CLINIC destinatários por empresa
  * (claim_scheduled_message_recipients já os marca como "sending") e envia pelo
- * WhatsApp conectado por QR Code (Evolution) da empresa, um de cada vez e com
+ * número de WhatsApp (QR Code / Evolution) escolhido na programação, um de cada vez e com
  * uma pausa entre eles. Empresas diferentes são processadas em paralelo.
  *
  * Cada mensagem enviada fica registrada na conversa do cliente; se ele nunca
@@ -18,6 +18,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
 import { describeProviderError, renderScheduledText, sendDelayMs } from "../_shared/scheduledMessages.ts";
+import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -65,8 +66,14 @@ async function resolvePhoneNumber(connection, rawNumber) {
   }
   return rawNumber;
 }
-/** Conexão QR Code conectada da empresa, ou null. */ async function loadConnection(supabase, clinicId) {
-  const { data, error } = await supabase.from("channel_connections").select("id, session_name, evolution_api_url, evolution_api_key").eq("clinic_id", clinicId).eq("provider", "evolution").eq("channel", "whatsapp").eq("status", "connected").order("last_connection_at", {
+/**
+ * Número QR Code conectado por onde a programação sai, ou null.
+ * Programação sem número escolhido (criada antes de existir a escolha) sai
+ * pelo QR Code conectado mais recente da empresa.
+ */ async function loadConnection(supabase, clinicId, connectionId) {
+  let query = supabase.from("channel_connections").select("id, session_name, evolution_api_url, evolution_api_key").eq("clinic_id", clinicId).eq("provider", "evolution").eq("channel", "whatsapp").eq("status", "connected").is("archived_at", null);
+  if (connectionId) query = query.eq("id", connectionId);
+  const { data, error } = await query.order("last_connection_at", {
     ascending: false,
     nullsFirst: false
   }).limit(1);
@@ -112,15 +119,19 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
   }).limit(1);
   if (findErr) throw findErr;
   if (found?.[0]) return found[0];
-  const { data: department } = await supabase.from("departments").select("id").eq("clinic_id", clinicId).eq("is_default", true).eq("is_active", true).maybeSingle();
-  if (!department?.id) throw new Error("Empresa sem departamento padrão ativo");
+  const [{ data: department }, connectionDepartment] = await Promise.all([
+    supabase.from("departments").select("id").eq("clinic_id", clinicId).eq("is_default", true).eq("is_active", true).maybeSingle(),
+    loadConnectionDepartment(supabase, connectionId)
+  ]);
+  const departmentId = pickDefaultDepartmentId(connectionDepartment, clinicId, department?.id ?? null);
+  if (!departmentId) throw new Error("Empresa sem departamento padrão ativo");
   // Encerrada: a empresa falou primeiro, não há ninguém esperando resposta
   const { data: created, error: createErr } = await supabase.from("conversations").insert({
     clinic_id: clinicId,
     contact_id: contactId,
     channel: "whatsapp",
     channel_connection_id: connectionId,
-    department_id: department.id,
+    department_id: departmentId,
     status: "closed",
     closed_at: sentAt,
     status_changed_at: sentAt,
@@ -250,7 +261,13 @@ async function processClinic(supabase, clinicId, recipients) {
     failed: 0,
     cancelled: 0
   };
-  const connection = await loadConnection(supabase, clinicId);
+  // Uma busca por número de saída (chave vazia = programação sem número escolhido)
+  const connections = new Map();
+  const connectionFor = async (connectionId)=>{
+    const key = connectionId ?? "";
+    if (!connections.has(key)) connections.set(key, await loadConnection(supabase, clinicId, connectionId));
+    return connections.get(key);
+  };
   const suspended = await clinicIsSuspended(supabase, clinicId);
   for(let index = 0; index < recipients.length; index++){
     const recipient = recipients[index];
@@ -271,10 +288,11 @@ async function processClinic(supabase, clinicId, recipients) {
       counts.failed++;
       continue;
     }
+    const connection = await connectionFor(recipient.channel_connection_id ?? null);
     if (!connection) {
       await finishRecipient(supabase, recipient.recipient_id, {
         status: "failed",
-        error: "O WhatsApp (QR Code) da empresa estava desconectado no horário do envio."
+        error: recipient.channel_connection_id ? "O número de WhatsApp escolhido estava desconectado no horário do envio." : "O WhatsApp (QR Code) da empresa estava desconectado no horário do envio."
       });
       counts.failed++;
       continue;
