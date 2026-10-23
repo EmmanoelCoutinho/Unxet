@@ -99,12 +99,13 @@ export type Message = {
   localStatus?: MessageSendStatus;
   localError?: string | null;
   localPayload?: {
-    type: "text" | "image" | "audio" | "document";
+    type: "text" | "image" | "audio" | "document" | "contact";
     text?: string;
     mediaUrl?: string;
     mediaMimeType?: string;
     filename?: string;
     fileSize?: number;
+    contact?: { name: string; phone: string };
   };
 };
 

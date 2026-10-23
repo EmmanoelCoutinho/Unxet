@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toProviderMediaUrl } from "../_shared/media.ts";
 import { queueTranscription, runInBackground, TRANSCRIPTION_BUCKET } from "../_shared/transcription.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
+import { parseSharedContact, sharedContactText, toMetaContact } from "../_shared/contactCard.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -324,8 +325,21 @@ serve(async (req)=>{
     const userId = u.user.id;
     const body = await req.json().catch(()=>({}));
     const { conversationId, nonce, text, type, mediaUrl, mediaMimeType, filename, fileSize } = body;
-    const bodyText = safeStr(text).trim();
-    const outboundType = inferOutboundType({
+    // Contato compartilhado (vCard): sai como "contacts" na Meta e fica no histórico como texto
+    const sharedContact = type === "contact" ? parseSharedContact(body.contact) : null;
+    if (type === "contact" && !sharedContact) {
+      return new Response(JSON.stringify({
+        error: "Contato inválido: informe nome e telefone com DDD"
+      }), {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+    }
+    const bodyText = sharedContact ? sharedContactText(sharedContact) : safeStr(text).trim();
+    const outboundType = sharedContact ? "text" : inferOutboundType({
       type,
       mediaUrl,
       mediaMimeType
@@ -507,7 +521,12 @@ serve(async (req)=>{
       messaging_product: "whatsapp",
       to: waId
     };
-    if (outboundType === "image" && mediaUrl) {
+    if (sharedContact) {
+      metaPayload.type = "contacts";
+      metaPayload.contacts = [
+        toMetaContact(sharedContact)
+      ];
+    } else if (outboundType === "image" && mediaUrl) {
       metaPayload.type = "image";
       metaPayload.image = {
         link: providerMediaUrl,

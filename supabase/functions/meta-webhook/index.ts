@@ -13,6 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyMetaSignature } from "../_shared/security.ts";
 import { applyMessageStatus } from "../_shared/messageStatus.ts";
+import { metaContactsText } from "../_shared/contactCard.ts";
 // ---------------------------------------------------------------------------
 // ENV
 // ---------------------------------------------------------------------------
@@ -200,6 +201,9 @@ serve(async (req)=>{
     const isAudioMessage = rawType === "audio";
     const isDocumentMessage = rawType === "document";
     const isInteractiveMessage = rawType === "interactive";
+    const isContactsMessage = rawType === "contacts";
+    // O banco não tem tipo "contacts": o contato recebido é gravado como texto
+    const messageType = isContactsMessage ? "text" : rawType;
     // -----------------------------------------------------------------------
     // RESOLVE CONNECTION
     // -----------------------------------------------------------------------
@@ -256,6 +260,8 @@ serve(async (req)=>{
     } else if (isInteractiveMessage) {
       interactiveReply = extractInteractiveReply(message);
       text = interactiveReply.selectedTitle || interactiveReply.selectedId || "";
+    } else if (isContactsMessage) {
+      text = metaContactsText(message);
     }
     // -----------------------------------------------------------------------
     // SHARED PAYLOAD
@@ -268,7 +274,7 @@ serve(async (req)=>{
       profileName,
       providerMessageId,
       timestamp: timestamp.toISOString(),
-      messageType: rawType,
+      messageType,
       text,
       ...mediaId ? {
         media: {
