@@ -8,6 +8,7 @@ import {
   LockIcon,
   MicIcon,
   MessageSquareTextIcon,
+  ContactIcon,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button } from "../ui/Button";
@@ -17,22 +18,27 @@ import { EmojiPicker } from "./EmojiPicker";
 import { QuickMessagesPicker } from "./QuickMessagesPicker";
 import type { QuickMessage } from "../../services/quickMessages";
 import { compressImageFile } from "../../lib/imageUtils";
+import type { SharedContact } from "../../lib/sharedContact";
+import { ShareContactModal } from "./ShareContactModal";
 
 const MAX_AUDIO_FILE_BYTES = 16 * 1024 * 1024;
 
 type SendableInput =
   | string
   | {
-      type: "text" | "image" | "audio" | "document";
+      type: "text" | "image" | "audio" | "document" | "contact";
       text?: string;
       mediaUrl?: string;
       mediaMimeType?: string;
       filename?: string;
       fileSize?: number;
+      contact?: SharedContact;
     };
 
 interface MessageInputProps {
   onSend: (input: SendableInput) => void;
+  // envio de cartão de contato (só WhatsApp)
+  allowContacts?: boolean;
   disabled?: boolean;
   disabledReason?: string;
   draft?: string;
@@ -65,6 +71,7 @@ type AllowedDocumentMime =
 
 export const MessageInput: React.FC<MessageInputProps> = ({
   onSend,
+  allowContacts = false,
   disabled = false,
   disabledReason,
   draft,
@@ -77,6 +84,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [showEmojis, setShowEmojis] = useState(false);
   const [showAttachments, setShowAttachments] = useState(false);
   const [showQuickMessages, setShowQuickMessages] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -952,6 +960,25 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                   </span>
                   <span className="text-xs text-[#6B7280]">Selecionar</span>
                 </button>
+
+                {allowContacts && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (disabled) return;
+                      setShowAttachments(false);
+                      setShowContactModal(true);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-[#F3F4F6] transition-colors sm:py-2"
+                  >
+                    <span className="flex items-center gap-2 text-[#1F2937]">
+                      <ContactIcon className="w-4 h-4" />
+                      Contato
+                    </span>
+                    <span className="text-xs text-[#6B7280]">Selecionar</span>
+                  </button>
+                )}
               </div>
             )}
           </button>
@@ -1046,6 +1073,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           setMessage(selectedMessage);
         }}
       />
+
+      {allowContacts && (
+        <ShareContactModal
+          open={showContactModal && !disabled}
+          clinicId={clinicId}
+          onClose={() => setShowContactModal(false)}
+          onConfirm={(contact) => {
+            setShowContactModal(false);
+            onSend({ type: "contact", contact });
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { toProviderMediaUrl } from "../_shared/media.ts";
 import { queueTranscription, runInBackground, storagePathFromPublicUrl } from "../_shared/transcription.ts";
 import { getClinicMembership } from "../_shared/security.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
+import { parseSharedContact, sharedContactText, toEvolutionContact } from "../_shared/contactCard.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -110,6 +111,16 @@ serve(async (req)=>{
     if (!conversationId) {
       return new Response(JSON.stringify({
         error: "conversationId is required"
+      }), {
+        status: 400,
+        headers: corsHeaders
+      });
+    }
+    // Contato compartilhado (vCard): vai pela rota própria e fica no histórico como texto
+    const sharedContact = type === "contact" ? parseSharedContact(body.contact) : null;
+    if (type === "contact" && !sharedContact) {
+      return new Response(JSON.stringify({
+        error: "Contato inválido: informe nome e telefone com DDD"
       }), {
         status: 400,
         headers: corsHeaders
@@ -273,7 +284,36 @@ serve(async (req)=>{
     // Não é necessário converter para ogg como na Meta API.
     // Bucket privado: a Evolution recebe um link assinado e temporário do arquivo
     const providerMediaUrl = mediaUrl ? await toProviderMediaUrl(adminSupabase, mediaUrl) : null;
-    if (isAudio && mediaUrl) {
+    if (sharedContact) {
+      console.log("[EVOLUTION_SEND_CONTACT]", JSON.stringify({
+        number,
+        contact: sharedContact
+      }));
+      const resp = await fetch(`${baseUrl}/message/sendContact/${session}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: apiKey
+        },
+        body: JSON.stringify({
+          number,
+          contact: [
+            toEvolutionContact(sharedContact)
+          ]
+        })
+      });
+      evolutionResponse = await resp.json().catch(()=>null);
+      if (!resp.ok) {
+        console.error("[EVOLUTION_CONTACT_ERROR]", evolutionResponse);
+        return new Response(JSON.stringify({
+          error: "Failed to send contact",
+          details: evolutionResponse
+        }), {
+          status: 500,
+          headers: corsHeaders
+        });
+      }
+    } else if (isAudio && mediaUrl) {
       console.log("[EVOLUTION_SEND_AUDIO]", JSON.stringify({
         number,
         mediaUrl
@@ -403,7 +443,7 @@ serve(async (req)=>{
       meta_message_id: evolutionResponse?.key?.id ?? null,
       sender: session,
       receiver: number,
-      text: text ?? "",
+      text: sharedContact ? sharedContactText(sharedContact) : text ?? "",
       media_url: mediaUrl ?? null,
       media_mime_type: finalMimeType || null,
       filename: fileName ?? null,

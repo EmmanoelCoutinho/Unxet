@@ -37,29 +37,32 @@ import { MessageInput } from "../components/chat/MessageInput";
 import { ArrowDownIcon, ArrowLeftIcon } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { TransferModal } from "../components/chat/TransferModal";
+import { sharedContactText, type SharedContact } from "../lib/sharedContact";
 
 type UiTag = { id: string; name: string; color: string };
 
 type SendableInput =
   | string
   | {
-      type: "text" | "image" | "audio" | "document";
+      type: "text" | "image" | "audio" | "document" | "contact";
       text?: string;
       mediaUrl?: string;
       mediaMimeType?: string;
       filename?: string;
       fileSize?: number;
+      contact?: SharedContact;
     };
 
 type LocalSendStatus = "sending" | "failed" | "sent";
 
 type LocalPayload = {
-  type: "text" | "image" | "audio" | "document";
+  type: "text" | "image" | "audio" | "document" | "contact";
   text?: string;
   mediaUrl?: string;
   mediaMimeType?: string;
   filename?: string;
   fileSize?: number;
+  contact?: SharedContact;
 };
 
 type LocalMessageMeta = {
@@ -143,11 +146,13 @@ function getSendFunctionName(channel: string, provider?: string) {
 
 function normalizeInput(input: SendableInput) {
   let bodyText = "";
-  let outboundType: "text" | "image" | "audio" | "document" = "text";
+  let outboundType: "text" | "image" | "audio" | "document" | "contact" =
+    "text";
   let mediaUrl: string | undefined;
   let mediaMimeType: string | undefined;
   let filename: string | undefined;
   let fileSize: number | undefined;
+  let contact: SharedContact | undefined;
 
   if (typeof input === "string") {
     bodyText = input.trim();
@@ -159,15 +164,27 @@ function normalizeInput(input: SendableInput) {
     mediaMimeType = input.mediaMimeType;
     filename = input.filename;
     fileSize = input.fileSize;
+    contact = input.contact;
+    // contato vira texto no histórico (a edge function grava no mesmo formato)
+    if (outboundType === "contact" && contact) {
+      bodyText = sharedContactText(contact);
+    }
   }
 
   return {
     bodyText,
     outboundType,
+    // tipo exibido na bolha: não existe bolha própria de contato
+    displayType: (outboundType === "contact" ? "text" : outboundType) as
+      | "text"
+      | "image"
+      | "audio"
+      | "document",
     mediaUrl,
     mediaMimeType,
     filename,
     fileSize,
+    contact,
   };
 }
 
@@ -1030,6 +1047,7 @@ export const Chat: React.FC = () => {
         mediaMimeType,
         filename,
         fileSize,
+        contact,
       } = normalizeInput(input);
 
       if (!bodyText && !mediaUrl) {
@@ -1076,6 +1094,10 @@ export const Chat: React.FC = () => {
           mediaMimeType,
           filename,
           fileSize,
+          // com "+": a edge function não acrescenta o 55 de novo
+          contact: contact
+            ? { name: contact.name, phone: `+${contact.phone}` }
+            : undefined,
         },
       });
 
@@ -1188,10 +1210,12 @@ export const Chat: React.FC = () => {
     const {
       bodyText,
       outboundType,
+      displayType,
       mediaUrl,
       mediaMimeType,
       filename,
       fileSize,
+      contact,
     } = normalizeInput(input);
 
     if (!bodyText && !mediaUrl) return;
@@ -1205,7 +1229,7 @@ export const Chat: React.FC = () => {
       direction: "outbound",
       text: bodyText,
       createdAt: new Date().toISOString(),
-      type: outboundType,
+      type: displayType,
       mediaUrl,
       mediaMimeType,
       filename,
@@ -1220,6 +1244,7 @@ export const Chat: React.FC = () => {
         mediaMimeType,
         filename,
         fileSize,
+        contact,
       },
     };
 
@@ -1587,6 +1612,7 @@ export const Chat: React.FC = () => {
       {conversation?.status === "open" && (
         <MessageInput
           onSend={handleSendMessage}
+          allowContacts={conversation.channel === "whatsapp"}
           disabled={!canReply}
           draft={draftMessage}
           onDraftChange={setDraftMessage}
