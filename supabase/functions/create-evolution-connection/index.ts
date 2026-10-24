@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAuthenticatedUser, getClinicMembership } from "../_shared/security.ts";
-import { clinicCanUseWhatsappNumber, PLAN_LIMIT_MESSAGES } from "../_shared/plan.ts";
+import { clinicCanAddQrNumber, clinicCanUseWhatsappNumber, PLAN_LIMIT_MESSAGES } from "../_shared/plan.ts";
+import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -137,8 +138,18 @@ serve(async (req)=>{
       });
     }
     if (!connection.id) {
+      // Número novo: o primeiro sempre pode; os demais dependem do adicional
+      // "Vários números de WhatsApp" (o gatilho no banco confere de novo)
+      if (!await clinicCanAddQrNumber(supabase, connection.clinic_id)) {
+        return json(403, {
+          success: false,
+          error: PLAN_LIMIT_MESSAGES.whatsappAddon,
+          code: "plan_limit"
+        });
+      }
+      // Sem o adicional a tela não pede nome: o número fica sem apelido
       const name = String(displayName ?? "").trim();
-      if (!name || name.length > 60) {
+      if (name.length > 60) {
         return json(400, {
           success: false,
           error: "Dê um nome ao número (até 60 caracteres)."
@@ -150,7 +161,7 @@ serve(async (req)=>{
         channel: "whatsapp",
         status: "disconnected",
         session_name: newSessionName(connection.clinic_id),
-        display_name: name
+        display_name: name || null
       }).select("*").single();
       if (createError || !created) {
         console.error("Failed to create channel connection:", createError);
@@ -227,15 +238,25 @@ serve(async (req)=>{
     // =========================================================
     if (connectionState === "open" || connectionState === "connected") {
       console.log("Instance already connected");
-      await supabase.from("channel_connections").update({
+      const { error: connectedError } = await supabase.from("channel_connections").update({
         status: "connected",
         qr_code: null,
+        disconnect_reason: null,
         // Credenciais gravadas pelo servidor (o front não envia mais a chave);
         // usadas por send-evoluation-message / evolution-in / bot-sender-whatsapp
         evolution_api_url: evolutionApiUrl,
         evolution_api_key: evolutionApiKey,
         updated_at: new Date().toISOString()
       }).eq("id", connectionId);
+      const rejection = connectionRejectionReason(connectedError);
+      if (rejection) {
+        await rejectConnection(supabase, connection, evolutionApiUrl, evolutionApiKey, rejection);
+        return json(403, {
+          success: false,
+          error: rejection === "plan_limit" ? PLAN_LIMIT_MESSAGES.whatsapp : "Este WhatsApp já está conectado em outro número do sistema.",
+          code: rejection
+        });
+      }
       return json(200, {
         success: true,
         status: "connected",
@@ -264,6 +285,7 @@ serve(async (req)=>{
     const { error: updateError } = await supabase.from("channel_connections").update({
       qr_code: qrCode,
       status: "connecting",
+      disconnect_reason: null,
       evolution_api_url: evolutionApiUrl,
       evolution_api_key: evolutionApiKey,
       updated_at: new Date().toISOString()

@@ -37,13 +37,19 @@ import {
   formatUsage,
   getDueState,
   getPlanAlerts,
+  parseWhatsappAddon,
   predictStatus,
   todayIso,
+  WHATSAPP_ADDON_DEFAULT,
+  WHATSAPP_ADDON_MAX,
+  WHATSAPP_ADDON_MIN,
+  whatsappNumbersLimit,
   type DueState,
   type PlatformSubscriptions,
   type SubscriberRow,
   type SubscriptionPayment,
 } from "../lib/subscriptions";
+import { WhatsappAddonField } from "../components/WhatsappAddonField";
 
 const STATUSES = Object.keys(
   SUBSCRIPTION_STATUS_LABELS,
@@ -252,11 +258,25 @@ const EditSubscriptionModal = ({
   );
   const [periodEnd, setPeriodEnd] = useState(clinic.current_period_end ?? "");
   const [notes, setNotes] = useState(clinic.notes ?? "");
+  const [addonEnabled, setAddonEnabled] = useState(
+    clinic.whatsapp_numbers_addon !== null,
+  );
+  const [addonQuantity, setAddonQuantity] = useState(
+    String(clinic.whatsapp_numbers_addon ?? WHATSAPP_ADDON_DEFAULT),
+  );
   const [saving, setSaving] = useState(false);
 
   const plan = plans.find((p) => p.code === planCode);
-  // Prévia do que ficaria acima do plano escolhido
-  const alerts = getPlanAlerts({ ...clinic, plan_code: planCode }, plan);
+  const addonValue = parseWhatsappAddon(addonEnabled, addonQuantity);
+  // Prévia do que ficaria acima do plano (e do adicional) escolhido
+  const alerts = getPlanAlerts(
+    {
+      ...clinic,
+      plan_code: planCode,
+      whatsapp_numbers_addon: addonValue ?? clinic.whatsapp_numbers_addon,
+    },
+    plan,
+  );
 
   // Escolher "Suspensa" é manual, a não ser que já estivesse suspensa por atraso
   const manualSuspension =
@@ -283,6 +303,12 @@ const EditSubscriptionModal = ({
       toast.error("A carência deve ficar entre 0 e 90 dias.");
       return;
     }
+    if (addonValue === undefined) {
+      toast.error(
+        `Vários números de WhatsApp: informe de ${WHATSAPP_ADDON_MIN} a ${WHATSAPP_ADDON_MAX} números.`,
+      );
+      return;
+    }
 
     setSaving(true);
     const { error } = await adminSupabase.rpc("platform_set_subscription", {
@@ -294,6 +320,7 @@ const EditSubscriptionModal = ({
       p_billing_cycle: billingCycle,
       p_price: priceValue,
       p_grace_days: grace,
+      p_whatsapp_numbers_addon: addonValue,
     });
     setSaving(false);
     if (error) {
@@ -346,6 +373,13 @@ const EditSubscriptionModal = ({
             ))}
           </ul>
         </div>
+
+        <WhatsappAddonField
+          enabled={addonEnabled}
+          quantity={addonQuantity}
+          onEnabledChange={setAddonEnabled}
+          onQuantityChange={setAddonQuantity}
+        />
 
         {alerts.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -1102,7 +1136,16 @@ export const SubscribersPage: React.FC = () => {
                       <dd className="text-slate-800">
                         {formatUsage(
                           clinic.whatsapp,
-                          plan?.max_whatsapp_numbers ?? null,
+                          whatsappNumbersLimit(
+                            clinic.whatsapp_numbers_addon,
+                            plan,
+                          ),
+                        )}
+                        {clinic.whatsapp_numbers_addon !== null && (
+                          <span className="block text-xs text-slate-500">
+                            Adicional: até {clinic.whatsapp_numbers_addon}{" "}
+                            números
+                          </span>
                         )}
                       </dd>
                     </div>

@@ -13,6 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
 import { reconcileConnectionStatus } from "../_shared/evolutionWebhook.ts";
+import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -111,6 +112,12 @@ serve(async (req)=>{
       };
       // .eq("status") evita sobrescrever uma mudança feita pelo webhook nesse meio-tempo
       const { error: updateError } = await supabase.from("channel_connections").update(patch).eq("id", connection.id).eq("status", connection.status);
+      const rejection = connectionRejectionReason(updateError);
+      if (rejection) {
+        // Número que nunca tinha conectado e passou do limite (ou celular repetido)
+        await rejectConnection(supabase, connection, apiUrl, apiKey, rejection);
+        return;
+      }
       if (updateError) {
         console.error("[CONNECTION_SYNC_UPDATE_ERROR]", connection.id, updateError);
         return;

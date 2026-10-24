@@ -18,6 +18,13 @@ import {
   type PlanCode,
   type SubscriptionStatus,
 } from "../../../constants/plans";
+import {
+  parseWhatsappAddon,
+  WHATSAPP_ADDON_DEFAULT,
+  WHATSAPP_ADDON_MAX,
+  WHATSAPP_ADDON_MIN,
+} from "../lib/subscriptions";
+import { WhatsappAddonField } from "../components/WhatsappAddonField";
 
 type OnboardedClinic = {
   clinicName: string;
@@ -63,6 +70,10 @@ export const OnboardingPage: React.FC = () => {
   const [periodEnd, setPeriodEnd] = useState("");
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [price, setPrice] = useState("");
+  const [addonEnabled, setAddonEnabled] = useState(false);
+  const [addonQuantity, setAddonQuantity] = useState(
+    String(WHATSAPP_ADDON_DEFAULT),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState<OnboardedClinic | null>(null);
 
@@ -83,6 +94,13 @@ export const OnboardingPage: React.FC = () => {
       toast.error("Valor da assinatura inválido. Use, por exemplo, 199,90.");
       return;
     }
+    const addonValue = parseWhatsappAddon(addonEnabled, addonQuantity);
+    if (addonValue === undefined) {
+      toast.error(
+        `Vários números de WhatsApp: informe de ${WHATSAPP_ADDON_MIN} a ${WHATSAPP_ADDON_MAX} números.`,
+      );
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -98,6 +116,7 @@ export const OnboardingPage: React.FC = () => {
             current_period_end: periodEnd || null,
             billing_cycle: billingCycle,
             price: priceValue,
+            whatsapp_numbers_addon: addonValue,
             redirect_to: getAuthCallbackUrl(),
           },
         },
@@ -113,6 +132,8 @@ export const OnboardingPage: React.FC = () => {
       setBillingCycle("monthly");
       setPrice("");
       setPeriodEnd("");
+      setAddonEnabled(false);
+      setAddonQuantity(String(WHATSAPP_ADDON_DEFAULT));
     } catch (err) {
       toast.error(await getOnboardErrorMessage(err));
     } finally {
@@ -250,6 +271,12 @@ export const OnboardingPage: React.FC = () => {
                 onChange={(e) => setPeriodEnd(e.target.value)}
               />
             </div>
+            <WhatsappAddonField
+              enabled={addonEnabled}
+              quantity={addonQuantity}
+              onEnabledChange={setAddonEnabled}
+              onQuantityChange={setAddonQuantity}
+            />
           </fieldset>
 
           <fieldset className="space-y-4">

@@ -110,6 +110,13 @@ serve(async (req) => {
     if (hasPrice && !(Number.isFinite(price) && price >= 0)) {
       return json(400, { error: "Valor da assinatura inválido" });
     }
+    // Adicional "Vários números de WhatsApp": vazio = desligado
+    const hasAddon = body?.whatsapp_numbers_addon !== null &&
+      body?.whatsapp_numbers_addon !== undefined && body?.whatsapp_numbers_addon !== "";
+    const whatsappNumbersAddon = hasAddon ? Number(body.whatsapp_numbers_addon) : null;
+    if (hasAddon && !(Number.isInteger(whatsappNumbersAddon) && whatsappNumbersAddon >= 2 && whatsappNumbersAddon <= 50)) {
+      return json(400, { error: "Quantidade de números de WhatsApp inválida (de 2 a 50)" });
+    }
 
     log("onboard_start", { requesterId: requester.id, clinicName, email });
 
@@ -171,7 +178,8 @@ serve(async (req) => {
         p_status: status,
         p_current_period_end: periodEnd,
         p_billing_cycle: billingCycle,
-        p_price: price
+        p_price: price,
+        p_whatsapp_numbers_addon: whatsappNumbersAddon
       }
     );
     if (onboardErr) {

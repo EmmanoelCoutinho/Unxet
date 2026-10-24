@@ -46,11 +46,19 @@ export const clinicCanUseWhatsappNumber = (
     p_connection_id: connectionId ?? null,
   });
 
+// Mais de um número por QR Code só com o adicional (e dentro da quantidade dele)
+export const clinicCanAddQrNumber = (admin, clinicId: string) =>
+  callBoolean(admin, "clinic_can_add_qr_number", {
+    p_clinic_id: clinicId,
+  });
+
 export const PLAN_LIMIT_MESSAGES = {
+  whatsappAddon:
+    "A empresa atingiu o limite de números de WhatsApp. Fale com a Unxet para ativar mais números.",
   attendants:
     "A empresa atingiu o limite de atendentes do plano. Fale com a Unxet para mudar de plano.",
   whatsapp:
-    "O plano da empresa permite apenas um número de WhatsApp em uso. Desconecte o outro número ou fale com a Unxet para mudar de plano.",
+    "A empresa atingiu o limite de números de WhatsApp em uso. Desconecte outro número ou fale com a Unxet para ampliar o plano.",
   departments:
     "Departamentos e transferências não fazem parte do plano da empresa.",
 };

@@ -32,6 +32,8 @@ type Props = {
   departments: DepartmentOption[];
   // WhatsApp oficial conectado: novos números por QR Code ficam bloqueados
   blockedByMeta: boolean;
+  // Quantos números o adicional permite (null = adicional desligado)
+  maxNumbers: number | null;
   onChanged: () => Promise<void> | void;
   onError: (message: string | null) => void;
 };
@@ -62,9 +64,15 @@ const formatDateTime = (value?: string | null) => {
 const statusBadge = (status: string) => {
   const config =
     status === "connected"
-      ? { cls: "border-green-200 bg-green-50 text-green-700", label: "Conectado" }
+      ? {
+          cls: "border-green-200 bg-green-50 text-green-700",
+          label: "Conectado",
+        }
       : status === "connecting"
-        ? { cls: "border-blue-200 bg-blue-50 text-blue-700", label: "Conectando" }
+        ? {
+            cls: "border-blue-200 bg-blue-50 text-blue-700",
+            label: "Conectando",
+          }
         : status === "disconnecting"
           ? {
               cls: "border-gray-200 bg-gray-50 text-gray-700",
@@ -82,7 +90,7 @@ const statusBadge = (status: string) => {
   );
 };
 
-type ItemProps = Omit<Props, "connections" | "clinicId"> & {
+type ItemProps = Omit<Props, "connections" | "clinicId" | "maxNumbers"> & {
   connection: EvolutionConnection;
 };
 
@@ -110,7 +118,10 @@ const EvolutionConnectionItem: React.FC<ItemProps> = ({
   const lastDisconnection = formatDateTime(connection.last_disconnection_at);
 
   const saveFields = useCallback(
-    async (patch: { display_name?: string; default_department_id?: string | null }) => {
+    async (patch: {
+      display_name?: string;
+      default_department_id?: string | null;
+    }) => {
       onError(null);
       setBusy("save");
       const { error } = await supabase
@@ -340,6 +351,7 @@ export const EvolutionConnectionsPanel: React.FC<Props> = ({
   connections,
   departments,
   blockedByMeta,
+  maxNumbers,
   onChanged,
   onError,
 }) => {
@@ -348,6 +360,11 @@ export const EvolutionConnectionsPanel: React.FC<Props> = ({
   const [creating, setCreating] = useState(false);
 
   const showForm = adding || connections.length === 0;
+  // Adicional desligado (ou no limite): os números que existem ficam, mas não
+  // dá para adicionar outro
+  const canAdd =
+    connections.length === 0 ||
+    (maxNumbers !== null && connections.length < maxNumbers);
 
   const addConnection = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -385,8 +402,8 @@ export const EvolutionConnectionsPanel: React.FC<Props> = ({
     <div className="space-y-3">
       {blockedByMeta ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-          Esta opção fica indisponível enquanto houver um WhatsApp conectado
-          via Meta.
+          Esta opção fica indisponível enquanto houver um WhatsApp conectado via
+          Meta.
         </div>
       ) : null}
 
@@ -401,7 +418,13 @@ export const EvolutionConnectionsPanel: React.FC<Props> = ({
         />
       ))}
 
-      {blockedByMeta ? null : showForm ? (
+      {blockedByMeta ? null : !canAdd ? (
+        <p className="text-xs text-gray-500">
+          {maxNumbers !== null
+            ? `A empresa usa ${connections.length} de ${maxNumbers} números de WhatsApp. Para conectar mais, fale com a Unxet.`
+            : "Para conectar mais números, fale com a Unxet."}
+        </p>
+      ) : showForm ? (
         <form
           onSubmit={addConnection}
           className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4"
@@ -413,8 +436,8 @@ export const EvolutionConnectionsPanel: React.FC<Props> = ({
             {connections.length === 0 ? "Nome do número" : "Novo número"}
           </label>
           <p className="text-xs text-gray-500">
-            Aparece no atendimento para a equipe saber por qual número o
-            cliente falou.
+            Aparece no atendimento para a equipe saber por qual número o cliente
+            falou.
           </p>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <input

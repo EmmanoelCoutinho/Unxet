@@ -20,6 +20,8 @@ export type SubscriberRow = {
   billing_cycle: BillingCycle;
   price: number | null;
   grace_days: number;
+  // Adicional "Vários números de WhatsApp": null = desligado
+  whatsapp_numbers_addon: number | null;
   blocked_at: string | null;
   blocked_reason: "overdue" | "manual" | null;
   notes: string | null;
@@ -30,6 +32,8 @@ export type SubscriberRow = {
   attendants: number;
   pending_invites: number;
   whatsapp: number;
+  // Números por QR Code cadastrados (os removidos não contam)
+  qr_numbers: number;
   instagram: number;
   messenger: number;
   active_bots: number;
@@ -121,12 +125,19 @@ export const getPlanAlerts = (
       `${row.attendants} atendentes (limite ${plan.max_attendants})`,
     );
   }
-  if (
-    plan.max_whatsapp_numbers !== null &&
-    row.whatsapp > plan.max_whatsapp_numbers
-  ) {
+  const whatsappLimit = whatsappNumbersLimit(row.whatsapp_numbers_addon, plan);
+  if (whatsappLimit !== null && row.whatsapp > whatsappLimit) {
     alerts.push(
-      `${row.whatsapp} números de WhatsApp (limite ${plan.max_whatsapp_numbers})`,
+      `${row.whatsapp} números de WhatsApp (limite ${whatsappLimit})`,
+    );
+  }
+  // Números QR Code de quando o adicional estava ligado (ou com mais vagas)
+  const qrLimit = row.whatsapp_numbers_addon ?? 1;
+  if (row.qr_numbers > qrLimit) {
+    alerts.push(
+      row.whatsapp_numbers_addon
+        ? `${row.qr_numbers} números QR Code (adicional permite ${qrLimit})`
+        : `${row.qr_numbers} números QR Code (adicional desligado)`,
     );
   }
   if (!has("social_channels") && row.instagram + row.messenger > 0) {
@@ -175,6 +186,35 @@ const moneyFormat = new Intl.NumberFormat("pt-BR", {
 
 export const formatMoney = (value: number | null | undefined) =>
   value === null || value === undefined ? "–" : moneyFormat.format(Number(value));
+
+// Adicional "Vários números de WhatsApp": quantidade total de números
+export const WHATSAPP_ADDON_MIN = 2;
+export const WHATSAPP_ADDON_MAX = 50;
+export const WHATSAPP_ADDON_DEFAULT = 2;
+
+// Valor do formulário → o que vai para o banco: null = desligado.
+// Quantidade fora da faixa devolve undefined (inválido).
+export const parseWhatsappAddon = (
+  enabled: boolean,
+  quantity: string,
+): number | null | undefined => {
+  if (!enabled) return null;
+  const value = Number(quantity);
+  if (
+    !Number.isInteger(value) ||
+    value < WHATSAPP_ADDON_MIN ||
+    value > WHATSAPP_ADDON_MAX
+  ) {
+    return undefined;
+  }
+  return value;
+};
+
+// Limite de números conectados: o adicional, quando ligado, vale sobre o plano
+export const whatsappNumbersLimit = (
+  addon: number | null | undefined,
+  plan: SubscriptionPlan | undefined,
+) => addon ?? plan?.max_whatsapp_numbers ?? null;
 
 // Quanto do limite está em uso: "2/3", "12" (ilimitado)
 export const formatUsage = (used: number, max: number | null) =>

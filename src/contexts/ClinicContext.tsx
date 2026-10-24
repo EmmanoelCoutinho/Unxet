@@ -39,6 +39,8 @@ export type ClinicSubscription = {
   current_period_end: string | null;
   billing_cycle: BillingCycle;
   grace_days: number;
+  // Adicional "Vários números de WhatsApp": null = desligado (um número só)
+  whatsapp_numbers_addon: number | null;
 };
 
 // Recarrega o plano de tempos em tempos: suspensão e pagamento aparecem sem
@@ -138,7 +140,9 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     const [{ data: subscriptionRow }, { data: planRows }] = await Promise.all([
       supabase
         .from("clinic_subscriptions")
-        .select("plan_code, status, current_period_end, billing_cycle, grace_days")
+        .select(
+          "plan_code, status, current_period_end, billing_cycle, grace_days, whatsapp_numbers_addon",
+        )
         .eq("clinic_id", membershipRow.clinic_id)
         .maybeSingle(),
       supabase.from("subscription_plans").select("*"),
@@ -156,6 +160,8 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
             current_period_end: subscriptionRow?.current_period_end ?? null,
             billing_cycle: (subscriptionRow?.billing_cycle ?? "monthly") as BillingCycle,
             grace_days: subscriptionRow?.grace_days ?? 10,
+            whatsapp_numbers_addon:
+              subscriptionRow?.whatsapp_numbers_addon ?? null,
           }
         : null,
     );
