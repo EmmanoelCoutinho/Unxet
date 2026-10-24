@@ -7,6 +7,8 @@ type EmojiPickerProps = {
   disabled?: boolean;
   pickerRef?: React.RefObject<HTMLDivElement>;
   onPick: (emoji: string) => void;
+  // Caixa flutuante: ocupa a largura da caixa
+  compact?: boolean;
 };
 
 // Termos de busca (pt/en) para os emojis mais usados em atendimento
@@ -128,6 +130,7 @@ export function EmojiPicker({
   disabled,
   pickerRef,
   onPick,
+  compact = false,
 }: EmojiPickerProps) {
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] =
@@ -182,7 +185,7 @@ export function EmojiPicker({
   return (
     <div
       ref={pickerRef as any}
-      className="absolute bottom-full left-0 right-0 z-30 mb-2 max-h-[min(420px,60dvh)] overflow-hidden sm:left-16 sm:right-auto sm:w-[360px] rounded-lg border border-[#E5E7EB] bg-white shadow-lg"
+      className={`absolute bottom-full left-0 right-0 z-30 mb-2 max-h-[min(420px,60dvh)] overflow-hidden ${compact ? "" : "sm:left-16 sm:right-auto sm:w-[360px]"} rounded-lg border border-[#E5E7EB] bg-white shadow-lg`}
     >
       {/* Header: busca */}
       <div className="p-2 border-b border-[#E5E7EB]">
