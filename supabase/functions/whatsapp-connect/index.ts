@@ -76,7 +76,7 @@ async function persistConnection(supabase, clinicId, { metaWabaId, metaPhoneNumb
     status: "connected",
     updated_at: now
   }, {
-    onConflict: "clinic_id,provider,channel"
+    onConflict: "clinic_id,provider,channel,session_name"
   }).select("id, clinic_id, channel, meta_waba_id, meta_phone_number_id, status").maybeSingle();
   if (upsertConnection.error || !upsertConnection.data?.id) {
     return json(500, {

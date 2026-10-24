@@ -18,6 +18,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
 import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { redactWebhookSecrets, stripWebhookEventSuffix } from "../_shared/evolutionWebhook.ts";
+import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -26,6 +27,9 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const SHARED_IN_CONFIG_URL = Deno.env.get("SHARED_IN_CONFIG_URL") ?? `${SUPABASE_URL}/functions/v1/shared-in-config`;
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
 const EVOLUTION_WEBHOOK_SECRET = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") ?? "";
+// Credenciais da conexão têm prioridade; estas valem para conexão sem elas
+const EVOLUTION_API_URL_FALLBACK = Deno.env.get("EVOLUTION_API_URL") ?? "";
+const EVOLUTION_API_KEY_FALLBACK = Deno.env.get("EVOLUTION_API_KEY") ?? "";
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -344,7 +348,7 @@ serve(async (req)=>{
         status: 400
       });
     }
-    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key").eq("provider", "evolution").eq("session_name", instanceName).maybeSingle();
+    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
     if (connectionError || !connection) {
       console.error("Connection not found:", connectionError);
       return new Response("Connection not found", {
@@ -368,12 +372,21 @@ serve(async (req)=>{
         const { error: updateError } = await supabase.from("channel_connections").update({
           status: "connected",
           qr_code: null,
+          disconnect_reason: null,
           connected_phone: connectedPhone,
           connected_name: connectedName,
           last_connection_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }).eq("id", connection.id);
-        if (updateError) {
+        const rejection = connectionRejectionReason(updateError);
+        if (rejection) {
+          // QR Code escaneado acima do limite ou celular já conectado em outro número
+          console.warn("[CONNECTION_REJECTED]", connection.id, rejection);
+          await rejectConnection(supabase, {
+            id: connection.id,
+            session_name: instanceName
+          }, connection.evolution_api_url || EVOLUTION_API_URL_FALLBACK, connection.evolution_api_key || EVOLUTION_API_KEY_FALLBACK, rejection);
+        } else if (updateError) {
           console.error("[CONNECTION_CONNECTED_ERROR]", updateError);
         } else {
           console.log("[CONNECTION_CONNECTED_SUCCESS]", connection.id);

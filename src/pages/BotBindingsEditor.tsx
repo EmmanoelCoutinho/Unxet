@@ -245,7 +245,8 @@ export const BotBindingsEditor = ({
                     <div className="flex flex-wrap items-center gap-2">
                       <MessageCircleIcon className="h-4 w-4 shrink-0 text-green-600" />
                       <div className="text-sm font-semibold text-slate-900">
-                        WhatsApp · {providerLabel(conn)}
+                        WhatsApp ·{" "}
+                        {conn.display_name?.trim() || providerLabel(conn)}
                       </div>
                       {connectionStatusBadge(conn.status)}
                       {conflict ? (
@@ -255,6 +256,9 @@ export const BotBindingsEditor = ({
                       ) : null}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
+                      {conn.display_name?.trim()
+                        ? `${providerLabel(conn)} · `
+                        : ""}
                       {phone ? `${phone} · ` : ""}Acionamento: {TRIGGER_LABEL}
                     </div>
                   </div>
@@ -267,7 +271,7 @@ export const BotBindingsEditor = ({
                       type="button"
                       role="switch"
                       aria-checked={enabled}
-                      aria-label={`Vincular WhatsApp ${providerLabel(conn)} a este bot`}
+                      aria-label={`Vincular WhatsApp ${conn.display_name?.trim() || providerLabel(conn)} a este bot`}
                       disabled={!isAdmin || saving}
                       onClick={() => handleToggleEnabled(conn, !enabled)}
                       className={[

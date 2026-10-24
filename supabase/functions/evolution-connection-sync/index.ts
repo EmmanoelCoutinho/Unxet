@@ -13,6 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
 import { reconcileConnectionStatus } from "../_shared/evolutionWebhook.ts";
+import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -75,11 +76,12 @@ serve(async (req)=>{
       });
     }
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    // "connecting" fica de fora: é o fluxo do QR Code, controlado pelo webhook
+    // "connecting" fica de fora: é o fluxo do QR Code, controlado pelo webhook.
+    // Número removido (archived_at) não tem mais instância na Evolution.
     const { data: connections, error } = await supabase.from("channel_connections").select("id, session_name, status, evolution_api_url, evolution_api_key").eq("provider", "evolution").in("status", [
       "connected",
       "disconnected"
-    ]).not("session_name", "is", null);
+    ]).not("session_name", "is", null).is("archived_at", null);
     if (error) {
       console.error("[CONNECTION_SYNC_QUERY_ERROR]", error);
       return new Response(JSON.stringify({
@@ -110,6 +112,12 @@ serve(async (req)=>{
       };
       // .eq("status") evita sobrescrever uma mudança feita pelo webhook nesse meio-tempo
       const { error: updateError } = await supabase.from("channel_connections").update(patch).eq("id", connection.id).eq("status", connection.status);
+      const rejection = connectionRejectionReason(updateError);
+      if (rejection) {
+        // Número que nunca tinha conectado e passou do limite (ou celular repetido)
+        await rejectConnection(supabase, connection, apiUrl, apiKey, rejection);
+        return;
+      }
       if (updateError) {
         console.error("[CONNECTION_SYNC_UPDATE_ERROR]", connection.id, updateError);
         return;

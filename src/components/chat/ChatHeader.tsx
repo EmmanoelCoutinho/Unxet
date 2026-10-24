@@ -8,6 +8,7 @@ import { FiSearch } from "react-icons/fi";
 import { CustomTooltip } from "../ui/CustomTooltip";
 import {
   ArrowLeftIcon,
+  MessageCircleIcon,
   TagIcon,
   MoreVerticalIcon,
   PictureInPicture2Icon,
@@ -25,6 +26,8 @@ interface ChatHeaderProps {
   assigneeName?: string;
   // Setor em que a conversa está
   departmentName?: string;
+  // Número da empresa por onde a conversa acontece (só com mais de um)
+  connectionLabel?: string;
   onBack: () => void;
   onManageTags?: () => void;
   onAccept?: () => Promise<void> | void;
@@ -57,6 +60,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   conversation,
   assigneeName,
   departmentName,
+  connectionLabel,
   onBack,
   onManageTags,
   onAccept,
@@ -390,6 +394,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                   className="flex-shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
                 >
                   SLA estourado
+                </span>
+              )}
+
+              {connectionLabel && (
+                <span
+                  title={`Número da empresa: ${connectionLabel}`}
+                  className="inline-flex min-w-0 max-w-[10rem] flex-shrink-0 items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700"
+                >
+                  <MessageCircleIcon className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">{connectionLabel}</span>
                 </span>
               )}
 

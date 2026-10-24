@@ -19,6 +19,7 @@ import { queueTranscription, runInBackground } from "../_shared/transcription.ts
 import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 import { queueInboundPush } from "../_shared/push.ts";
 import { timingSafeEqual } from "../_shared/security.ts";
+import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -98,15 +99,18 @@ serve(async (req)=>{
     }
     // ── 2. Automation settings ────────────────────────────────────────────
     const automationSettings = await getAutomationSettings(supabase, clinicId);
-    // ── 3. Departamento padrão ────────────────────────────────────────────
-    const { data: defaultDept, error: defaultDeptErr } = await supabase.from("departments").select("id").eq("clinic_id", clinicId).eq("is_default", true).eq("is_active", true).maybeSingle();
+    // ── 3. Departamento padrão (do número; sem ele, o da empresa) ─────────
+    const [{ data: defaultDept, error: defaultDeptErr }, connectionDepartment] = await Promise.all([
+      supabase.from("departments").select("id").eq("clinic_id", clinicId).eq("is_default", true).eq("is_active", true).maybeSingle(),
+      loadConnectionDepartment(supabase, channelConnectionId)
+    ]);
     if (defaultDeptErr) {
       console.error("Erro ao buscar departamento padrão:", defaultDeptErr);
       return new Response("Default department lookup error", {
         status: 500
       });
     }
-    const defaultDepartmentId = defaultDept?.id ?? null;
+    const defaultDepartmentId = pickDefaultDepartmentId(connectionDepartment, clinicId, defaultDept?.id ?? null);
     if (!defaultDepartmentId) {
       console.error("Nenhum departamento padrão ativo encontrado para clinic:", clinicId);
       return new Response("Clinic missing default department", {

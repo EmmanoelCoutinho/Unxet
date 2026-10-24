@@ -5,8 +5,10 @@ import {
   formatUsage,
   getDueState,
   getPlanAlerts,
+  parseWhatsappAddon,
   predictStatus,
   todayIso,
+  whatsappNumbersLimit,
   type SubscriberRow,
 } from "./subscriptions";
 
@@ -46,6 +48,7 @@ const row = (overrides: Partial<SubscriberRow> = {}): SubscriberRow => ({
   billing_cycle: "monthly",
   price: null,
   grace_days: 10,
+  whatsapp_numbers_addon: null,
   blocked_at: null,
   blocked_reason: null,
   notes: null,
@@ -56,6 +59,7 @@ const row = (overrides: Partial<SubscriberRow> = {}): SubscriberRow => ({
   attendants: 1,
   pending_invites: 0,
   whatsapp: 1,
+  qr_numbers: 1,
   instagram: 0,
   messenger: 0,
   active_bots: 0,
@@ -119,6 +123,53 @@ describe("getPlanAlerts", () => {
     expect(
       getPlanAlerts(row({ attendants: 80, whatsapp: 2, active_bots: 3 }), empresarial),
     ).toEqual([]);
+  });
+
+  it("o adicional de números vale sobre o limite do plano", () => {
+    expect(
+      getPlanAlerts(
+        row({ whatsapp: 3, qr_numbers: 3, whatsapp_numbers_addon: 3 }),
+        essencial,
+      ),
+    ).toEqual([]);
+    expect(
+      getPlanAlerts(
+        row({ whatsapp: 4, qr_numbers: 4, whatsapp_numbers_addon: 3 }),
+        essencial,
+      ),
+    ).toEqual([
+      "4 números de WhatsApp (limite 3)",
+      "4 números QR Code (adicional permite 3)",
+    ]);
+  });
+
+  it("vários números QR Code sem o adicional", () => {
+    expect(
+      getPlanAlerts(row({ whatsapp: 1, qr_numbers: 2 }), empresarial),
+    ).toEqual(["2 números QR Code (adicional desligado)"]);
+  });
+});
+
+describe("parseWhatsappAddon", () => {
+  it("desligado vira null", () => {
+    expect(parseWhatsappAddon(false, "5")).toBeNull();
+  });
+
+  it("ligado aceita de 2 a 50", () => {
+    expect(parseWhatsappAddon(true, "2")).toBe(2);
+    expect(parseWhatsappAddon(true, "50")).toBe(50);
+    expect(parseWhatsappAddon(true, "1")).toBeUndefined();
+    expect(parseWhatsappAddon(true, "51")).toBeUndefined();
+    expect(parseWhatsappAddon(true, "2.5")).toBeUndefined();
+    expect(parseWhatsappAddon(true, "")).toBeUndefined();
+  });
+});
+
+describe("whatsappNumbersLimit", () => {
+  it("usa o adicional quando ligado e o plano quando não", () => {
+    expect(whatsappNumbersLimit(4, essencial)).toBe(4);
+    expect(whatsappNumbersLimit(null, essencial)).toBe(1);
+    expect(whatsappNumbersLimit(null, empresarial)).toBeNull();
   });
 });
 

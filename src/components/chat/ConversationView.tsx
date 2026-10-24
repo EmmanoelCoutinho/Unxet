@@ -39,6 +39,8 @@ import { TbMessageCheck } from "react-icons/tb";
 import { useAuth } from "../../contexts/AuthContext";
 import { TransferModal } from "./TransferModal";
 import { sharedContactText, type SharedContact } from "../../lib/sharedContact";
+import { whatsappConnectionLabel } from "../../lib/whatsappConnections";
+import { useWhatsappConnections } from "../../hooks/useWhatsappConnections";
 import { useFloatingChats } from "../../modules/floatingChats/FloatingChatsContext";
 import { WindowControls, type WindowControlsProps } from "./WindowControls";
 
@@ -215,6 +217,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const { getDraft, setDraft } = useFloatingChats();
   const { authUser } = useAuth();
   const { clinicId, membership, hasFeature } = useClinic();
+  const { hasMultiple: hasMultipleWhatsapp } = useWhatsappConnections(clinicId);
   const isAdmin = membership?.role === "admin";
   const userNames = useClinicUserNames(clinicId, isAdmin);
 
@@ -567,7 +570,11 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         status,
         channel,
         channel_connections (
-          provider
+          id,
+          provider,
+          display_name,
+          connected_phone,
+          connected_name
         ),
         last_message_at,
         created_at,
@@ -675,6 +682,10 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         channel: (data as any).channel as Channel,
         status: ((data as any).status as Conversation["status"]) ?? "pending",
         provider: (data as any).channel_connections?.provider ?? undefined,
+        connectionId: (data as any).channel_connections?.id ?? undefined,
+        connectionLabel: (data as any).channel_connections
+          ? whatsappConnectionLabel((data as any).channel_connections)
+          : undefined,
         contactName:
           contactRow?.name ?? contactRow?.phone ?? "Contato sem nome",
         contactNumber: contactRow?.phone ?? "",
@@ -1454,6 +1465,11 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
               : undefined
           }
           departmentName={conversation.departmentName}
+          connectionLabel={
+            hasMultipleWhatsapp && conversation.channel === "whatsapp"
+              ? conversation.connectionLabel
+              : undefined
+          }
           onBack={onExit}
           onManageTags={() => setIsManageTagsOpen(true)}
           onAccept={handleAcceptConversation}

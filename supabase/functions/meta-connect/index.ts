@@ -256,7 +256,7 @@ serve(async (req)=>{
         status: "connected",
         updated_at: now
       }, {
-        onConflict: "clinic_id,provider,channel"
+        onConflict: "clinic_id,provider,channel,session_name"
       }).select("id").maybeSingle();
       if (upsertMessenger.error) {
         return json(500, {
@@ -276,7 +276,7 @@ serve(async (req)=>{
           status: "connected",
           updated_at: now
         }, {
-          onConflict: "clinic_id,provider,channel"
+          onConflict: "clinic_id,provider,channel,session_name"
         }).select("id").maybeSingle();
         if (upsertInstagram.error) {
           return json(500, {
@@ -342,7 +342,7 @@ serve(async (req)=>{
         status: "connected",
         updated_at: now
       }, {
-        onConflict: "clinic_id,provider,channel"
+        onConflict: "clinic_id,provider,channel,session_name"
       }).select("id, meta_ig_user_id, status").maybeSingle();
       if (upsertInstagram.error) {
         return json(500, {
