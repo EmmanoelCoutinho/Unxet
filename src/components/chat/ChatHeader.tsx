@@ -10,11 +10,13 @@ import {
   ArrowLeftIcon,
   TagIcon,
   MoreVerticalIcon,
+  PictureInPicture2Icon,
   UserIcon,
 } from "lucide-react";
 import { CustomDropdown } from "../ui/CustomDropdown";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { SecureImage } from "../ui/SecureImage";
+import { WindowControls, type WindowControlsProps } from "./WindowControls";
 
 interface ChatHeaderProps {
   conversation: Conversation;
@@ -32,6 +34,11 @@ interface ChatHeaderProps {
   acceptDisabled?: boolean;
   transferDisabled?: boolean;
   closeDisabled?: boolean;
+  // Caixa flutuante: cabeçalho enxuto, ações no menu "mais" e botões da janela
+  compact?: boolean;
+  windowControls?: WindowControlsProps;
+  // Tela cheia no computador: botão para levar a conversa para uma caixa
+  onPopOut?: () => void;
 }
 
 const STATUS_BADGE: Record<
@@ -59,10 +66,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   acceptDisabled = false,
   transferDisabled = false,
   closeDisabled = false,
+  compact = false,
+  windowControls,
+  onPopOut,
 }) => {
   const [isAccepting, setIsAccepting] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
-  const isMobile = useIsMobile();
+  // Na caixa flutuante não cabem os botões da tela cheia: mesmo arranjo do celular
+  const isMobile = useIsMobile() || compact;
   const confirm = useConfirm();
 
   const initials = useMemo(() => {
@@ -183,18 +194,37 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   ];
 
   return (
-    <div className="sticky top-0 z-10 shrink-0 border-b border-[#E5E7EB] bg-white px-2 py-2 sm:h-20 sm:p-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-          <button
-            onClick={onBack}
-            className="flex-shrink-0 rounded-lg p-2 transition-colors hover:bg-[#E5E7EB]"
-            aria-label="Voltar para conversas"
-          >
-            <ArrowLeftIcon className="h-5 w-5 text-[#1E1E1E]" />
-          </button>
+    <div
+      className={
+        compact
+          ? "sticky top-0 z-10 shrink-0 border-b border-[#E5E7EB] bg-white py-1.5 pl-2 pr-1"
+          : "sticky top-0 z-10 shrink-0 border-b border-[#E5E7EB] bg-white px-2 py-2 sm:h-20 sm:p-4"
+      }
+    >
+      <div className={`flex items-center justify-between ${compact ? "gap-1" : "gap-2"}`}>
+        <div
+          className={`flex min-w-0 flex-1 items-center ${
+            compact ? "cursor-pointer gap-2" : "gap-2 sm:gap-3"
+          }`}
+          // Na caixa, clicar no nome minimiza (como nas barras minimizadas)
+          onClick={compact ? windowControls?.onMinimize : undefined}
+          title={compact ? "Minimizar" : undefined}
+        >
+          {!compact && (
+            <button
+              onClick={onBack}
+              className="flex-shrink-0 rounded-lg p-2 transition-colors hover:bg-[#E5E7EB]"
+              aria-label="Voltar para conversas"
+            >
+              <ArrowLeftIcon className="h-5 w-5 text-[#1E1E1E]" />
+            </button>
+          )}
 
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0A84FF] font-medium text-white">
+          <div
+            className={`flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0A84FF] font-medium text-white ${
+              compact ? "h-8 w-8 text-xs" : "h-10 w-10"
+            }`}
+          >
             {avatar ? (
               <SecureImage
                 src={avatar}
@@ -208,12 +238,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </div>
 
           <div className="min-w-0 flex-1">
-            <h2 className="truncate font-semibold text-[#1E1E1E]">
+            <h2
+              className={`truncate font-semibold text-[#1E1E1E] ${compact ? "text-sm" : ""}`}
+            >
               {conversation.contactName}
             </h2>
 
             <div className="mt-0.5 flex min-w-0 items-center gap-2 overflow-hidden">
-              {formattedIdentifier && (
+              {formattedIdentifier && !compact && (
                 <span className="min-w-0 truncate text-xs text-gray-500 sm:flex-shrink-0">
                   {formattedIdentifier}
                 </span>
@@ -234,7 +266,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 </span>
               )}
 
-              {departmentName && (
+              {departmentName && !compact && (
                 <span
                   title={`Setor: ${departmentName}`}
                   className="hidden min-w-0 max-w-[10rem] flex-shrink-0 truncate text-xs text-gray-500 sm:inline"
@@ -243,7 +275,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 </span>
               )}
 
-              {assigneeName && (
+              {assigneeName && !compact && (
                 <span
                   title={`Responsável: ${assigneeName}`}
                   className="inline-flex min-w-0 max-w-[10rem] flex-shrink-0 items-center gap-1 text-xs text-gray-500"
@@ -258,15 +290,25 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                   key={tag.id ?? tag.name}
                   title={tag.name}
                   className={`${
-                    index > 0 ? "hidden sm:inline-block" : "inline-block"
-                  } min-w-0 max-w-[9rem] select-none truncate rounded-full px-2 py-0.5 text-xs font-medium text-white sm:max-w-none sm:px-3 sm:py-1`}
+                    index > 0
+                      ? compact
+                        ? "hidden"
+                        : "hidden sm:inline-block"
+                      : "inline-block"
+                  } min-w-0 max-w-[9rem] select-none truncate rounded-full px-2 py-0.5 text-xs font-medium text-white ${
+                    compact ? "" : "sm:max-w-none sm:px-3 sm:py-1"
+                  }`}
                   style={{ backgroundColor: tag.color }}
                 >
                   {tag.name}
                 </span>
               ))}
               {visibleTags.length > 1 && (
-                <span className="inline-flex flex-shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 sm:hidden">
+                <span
+                  className={`inline-flex flex-shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 ${
+                    compact ? "" : "sm:hidden"
+                  }`}
+                >
                   +{visibleTags.length - 1}
                 </span>
               )}
@@ -274,7 +316,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2">
+        <div
+          className={`flex flex-shrink-0 items-center ${compact ? "gap-0.5" : "gap-1 sm:gap-2"}`}
+        >
           {onSearch && (
             <CustomTooltip text="Buscar na conversa">
               <Button variant="ghost" size="sm" onClick={onSearch}>
@@ -350,6 +394,23 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             }
             items={dropdownItems}
           />
+
+          {onPopOut && !compact && (
+            <span className="hidden lg:inline-flex">
+              <CustomTooltip text="Abrir em janela flutuante">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onPopOut}
+                  aria-label="Abrir em janela flutuante"
+                >
+                  <PictureInPicture2Icon className="h-5 w-5" />
+                </Button>
+              </CustomTooltip>
+            </span>
+          )}
+
+          {compact && windowControls && <WindowControls {...windowControls} />}
         </div>
       </div>
     </div>

@@ -18,6 +18,9 @@ import { AccessSuspended } from "./pages/AccessSuspended";
 import { PushNotificationsBridge } from "./components/PushNotificationsBridge";
 import { PresenceHeartbeat } from "./components/PresenceHeartbeat";
 import { InternalChatBridge } from "./components/InternalChatBridge";
+import { FloatingChatsProvider } from "./modules/floatingChats/FloatingChatsContext";
+import { FloatingChatsLayer } from "./modules/floatingChats/FloatingChatsLayer";
+import { ConversationsProvider } from "./contexts/ConversationsContext";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { ConfirmDialogProvider } from "./components/ui/ConfirmDialog";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -217,7 +220,8 @@ function RoutedApp() {
   }
 
   return (
-    <>
+    <FloatingChatsProvider>
+    <ConversationsProvider>
       <PushNotificationsBridge />
       <PresenceHeartbeat />
       <InternalChatBridge />
@@ -339,7 +343,10 @@ function RoutedApp() {
         </AppErrorBoundary>
         </div>
       </main>
-    </>
+      {/* Conversas em caixas flutuantes, por cima de qualquer tela */}
+      {showHeader && <FloatingChatsLayer />}
+    </ConversationsProvider>
+    </FloatingChatsProvider>
   );
 }
 

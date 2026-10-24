@@ -6,11 +6,13 @@ import {
   CheckCheck,
   ChevronDown,
   DownloadIcon,
-  FileIcon,
+  ExternalLinkIcon,
+  FileTextIcon,
   Trash2,
 } from "lucide-react";
 import type { Message as UiMessage } from "../../types";
 import { AudioTranscriptStatus } from "./AudioTranscriptStatus";
+import { AudioPlayer } from "./AudioPlayer";
 import { useMediaUrl } from "../../lib/mediaUrls";
 
 interface MessageBubbleProps {
@@ -197,7 +199,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   );
   const documentSize = formatBytes(documentFileSize);
   const documentMeta = documentSize
-    ? `${documentLabel} - ${documentSize}`
+    ? `${documentLabel} · ${documentSize}`
     : documentLabel;
   const documentAccentClass = getDocumentAccentClass(documentLabel);
 
@@ -350,7 +352,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <div className={`flex w-full ${isClient ? "justify-start" : "justify-end"}`}>
       <div
-        className={`flex min-w-0 items-end gap-1 max-w-[88%] sm:gap-2 sm:max-w-md ${
+        className={`flex min-w-0 items-end gap-1 max-w-[88%] sm:gap-2 sm:max-w-[min(28rem,88%)] ${
           isClient ? "" : "flex-row-reverse"
         }`}
       >
@@ -392,21 +394,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
                   {mediaType === "audio" && (
                     <div className="space-y-1">
-                      <div
-                        className={`
-                          flex items-center gap-3 rounded-2xl px-3 py-2
-                          ${isClient ? "bg-[#E5E7EB]" : "bg-[#0A84FF]"}
-                          text-[#1E1E1E]
-                        `}
-                      >
-                        <audio
-                          controls
-                          className="w-56 max-w-full h-9 bg-transparent outline-none"
-                          src={mediaUrl}
-                        >
-                          Seu navegador não suporta o player de áudio.
-                        </audio>
-                      </div>
+                      <AudioPlayer src={mediaUrl} outgoing={!isClient} />
                       <AudioTranscriptStatus
                         status={transcriptStatus}
                         transcriptText={transcriptText}
@@ -428,27 +416,85 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   )}
 
                   {mediaType === "document" && (
-                    <a
-                      href={mediaUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-3 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-[#1E1E1E] transition hover:bg-[#F3F4F6]"
+                    // Cartão do documento: nome inteiro e faixa com Abrir e Baixar.
+                    // Recebido: branco. Enviado: azul (translúcido dentro do balão com legenda).
+                    <div
+                      className={`w-72 max-w-full overflow-hidden rounded-2xl ${
+                        isClient
+                          ? "border border-[#E5E7EB] bg-white shadow-sm"
+                          : onlyDocument
+                            ? "bg-[#0A84FF] text-white shadow-sm"
+                            : "bg-white/15 text-white"
+                      }`}
                     >
-                      <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-lg ${documentAccentClass}`}
+                      <a
+                        href={mediaUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`Abrir ${documentFilename || "documento"}`}
+                        className={`flex items-center gap-3 p-3 transition-colors ${
+                          isClient ? "hover:bg-[#F9FAFB]" : "hover:bg-white/10"
+                        }`}
                       >
-                        <FileIcon className="h-5 w-5 text-white" />
+                        <div
+                          className={`flex h-12 w-11 flex-shrink-0 flex-col items-center justify-center rounded-lg shadow-sm ${documentAccentClass} ${
+                            isClient ? "" : "ring-1 ring-white/40"
+                          }`}
+                        >
+                          <FileTextIcon className="h-5 w-5 text-white/90" />
+                          <span className="mt-0.5 max-w-full truncate px-0.5 text-[9px] font-bold leading-none tracking-wide text-white">
+                            {documentLabel}
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={`line-clamp-2 break-words text-sm font-semibold leading-snug ${
+                              isClient ? "text-[#111827]" : "text-white"
+                            }`}
+                          >
+                            {documentFilename || "Documento"}
+                          </p>
+                          <p
+                            className={`mt-0.5 text-xs ${
+                              isClient ? "text-[#6B7280]" : "text-blue-100"
+                            }`}
+                          >
+                            {documentMeta}
+                          </p>
+                        </div>
+                      </a>
+                      <div
+                        className={`grid grid-cols-2 divide-x border-t text-sm font-medium ${
+                          isClient
+                            ? "divide-[#E5E7EB] border-[#E5E7EB] text-[#0A84FF]"
+                            : "divide-white/25 border-white/25 text-white"
+                        }`}
+                      >
+                        <a
+                          href={mediaUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`flex items-center justify-center gap-1.5 py-2 transition-colors ${
+                            isClient ? "hover:bg-blue-50" : "hover:bg-white/10"
+                          }`}
+                        >
+                          <ExternalLinkIcon className="h-4 w-4" />
+                          Abrir
+                        </a>
+                        <a
+                          href={mediaUrl}
+                          download={documentFilename || true}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`flex items-center justify-center gap-1.5 py-2 transition-colors ${
+                            isClient ? "hover:bg-blue-50" : "hover:bg-white/10"
+                          }`}
+                        >
+                          <DownloadIcon className="h-4 w-4" />
+                          Baixar
+                        </a>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-[#111827] truncate">
-                          {documentFilename || "Documento"}
-                        </p>
-                        <p className="text-xs text-[#6B7280]">{documentMeta}</p>
-                      </div>
-                      <div className="ml-auto flex h-8 w-8 items-center justify-center rounded-full border border-[#D1D5DB] text-[#6B7280]">
-                        <DownloadIcon className="h-4 w-4" />
-                      </div>
-                    </a>
+                    </div>
                   )}
 
                   {mediaType === "sticker" && (

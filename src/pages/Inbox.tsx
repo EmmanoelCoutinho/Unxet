@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Outlet, useLocation, useMatch, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useMatch } from "react-router-dom";
 import { MessageSquareIcon, SlidersHorizontalIcon } from "lucide-react";
 
 import { Input } from "../components/ui/Input";
@@ -8,7 +8,8 @@ import { AppSidebar } from "../components/layout/AppSidebar";
 import { ConversationItem } from "../components/inbox/ConversationItem";
 import { ChannelFilter } from "../components/inbox/ChannelFilter";
 import { TagFilter } from "../components/inbox/TagFilter";
-import { useConversations } from "../hooks/useConversations";
+import { useConversationList } from "../contexts/ConversationsContext";
+import { useOpenConversation } from "../modules/floatingChats/useOpenConversation";
 import {
   getAssigneeLabel,
   useClinicUserNames,
@@ -22,7 +23,6 @@ import type { Channel } from "../types";
 type InboxTab = "open" | "pending" | "bot";
 
 export const Inbox: React.FC = () => {
-  const navigate = useNavigate();
   const location = useLocation();
   // Abaixo de lg mostramos um painel por vez: a lista em /inbox e as demais telas no lugar dela
   const isInboxRoot = location.pathname.replace(/\/+$/, "") === "/inbox";
@@ -31,17 +31,23 @@ export const Inbox: React.FC = () => {
 
   const activeConversationId = useMatch("/inbox/chat/:id")?.params.id ?? null;
 
+  // A lista vive acima das rotas: as caixas flutuantes também usam
   const {
     conversations,
     loading: isLoading,
     totalUnreadCount,
     totalUnreadOpen,
     totalUnreadPending,
-  } = useConversations({ activeConversationId });
+  } = useConversationList();
+  const openConversation = useOpenConversation();
 
   const { authUser } = useAuth();
-  const { clinicId, membership } = useClinic();
+  const { clinicId, membership, hasFeature } = useClinic();
   const isAdmin = membership?.role === "admin";
+  // No início do inbox o admin vê o painel ao lado da lista; o atendente,
+  // uma tela vazia, que dá lugar à lista inteira
+  const listFillsScreen =
+    isInboxRoot && !(isAdmin && hasFeature("analytics"));
   const userNames = useClinicUserNames(clinicId, isAdmin);
 
   useEffect(() => {
@@ -131,7 +137,10 @@ export const Inbox: React.FC = () => {
 
       <div
         className={[
-          "h-full min-h-0 w-full flex-col border-r lg:w-96 lg:flex-shrink-0",
+          "h-full min-h-0 w-full flex-col border-r",
+          // Sem conversa em tela cheia nem painel ao lado, a lista ocupa a tela
+          // (as conversas abrem em caixas flutuantes por cima)
+          listFillsScreen ? "lg:min-w-0 lg:flex-1" : "lg:w-96 lg:flex-shrink-0",
           isInboxRoot ? "flex" : "hidden",
           isInternalChat ? "lg:hidden" : "lg:flex",
         ].join(" ")}
@@ -297,7 +306,13 @@ export const Inbox: React.FC = () => {
                         )
                       : undefined
                   }
-                  onClick={() => navigate(`/inbox/chat/${conversation.id}`)}
+                  onClick={() =>
+                    openConversation(conversation.id, {
+                      title: conversation.contactName,
+                      // Com uma conversa em tela cheia, a próxima também abre assim
+                      fullScreen: Boolean(activeConversationId),
+                    })
+                  }
                 />
               ))}
             </div>
@@ -307,7 +322,8 @@ export const Inbox: React.FC = () => {
 
       <div
         className={[
-          "min-h-0 min-w-0 flex-1 flex-col lg:flex",
+          "min-h-0 min-w-0 flex-1 flex-col",
+          listFillsScreen ? "lg:hidden" : "lg:flex",
           isInboxRoot ? "hidden" : "flex",
         ].join(" ")}
       >
