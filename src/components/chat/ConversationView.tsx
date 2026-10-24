@@ -35,6 +35,7 @@ import { MessageBubble } from "./MessageBubble";
 import { SystemEventBubble } from "./SystemEventBubble";
 import { MessageInput } from "./MessageInput";
 import { ArrowDownIcon, ArrowLeftIcon } from "lucide-react";
+import { TbMessageCheck } from "react-icons/tb";
 import { useAuth } from "../../contexts/AuthContext";
 import { TransferModal } from "./TransferModal";
 import { sharedContactText, type SharedContact } from "../../lib/sharedContact";
@@ -1656,6 +1657,28 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         clinicId={clinicId}
         currentDepartmentId={conversation?.departmentId ?? null}
       />
+
+      {/* Caixa flutuante: aceitar fica no rodapé, onde o campo de mensagem
+          aparece depois de aceitar */}
+      {isFloating && conversation?.status === "pending" && (
+        <div className="flex shrink-0 items-center gap-3 border-t border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2.5">
+          <p className="min-w-0 flex-1 text-xs leading-snug text-[#6B7280]">
+            {conversation.inBotFlow
+              ? "O cliente ainda está no atendimento automático."
+              : "Aceite a conversa para responder."}
+          </p>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleAcceptConversation}
+            disabled={acceptingConversation || !authUser}
+            className="flex flex-shrink-0 items-center gap-1.5 px-4"
+          >
+            <TbMessageCheck className="h-4 w-4" />
+            {acceptingConversation ? "Aceitando..." : "Aceitar"}
+          </Button>
+        </div>
+      )}
 
       {conversation?.status === "open" && (
         <MessageInput
