@@ -6,6 +6,7 @@ import {
   CheckCheck,
   ChevronDown,
   DownloadIcon,
+  ExternalLinkIcon,
   FileTextIcon,
   Trash2,
 } from "lucide-react";
@@ -414,7 +415,58 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     />
                   )}
 
-                  {mediaType === "document" && (
+                  {mediaType === "document" && isClient && onlyDocument && (
+                    // Documento recebido sem legenda: cartão branco com ações
+                    <div className="w-72 max-w-full overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-sm">
+                      <a
+                        href={mediaUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`Abrir ${documentFilename || "documento"}`}
+                        className="flex items-center gap-3 p-3 transition-colors hover:bg-[#F9FAFB]"
+                      >
+                        <div
+                          className={`flex h-12 w-11 flex-shrink-0 flex-col items-center justify-center rounded-lg shadow-sm ${documentAccentClass}`}
+                        >
+                          <FileTextIcon className="h-5 w-5 text-white/90" />
+                          <span className="mt-0.5 max-w-full truncate px-0.5 text-[9px] font-bold leading-none tracking-wide text-white">
+                            {documentLabel}
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="line-clamp-2 break-words text-sm font-semibold leading-snug text-[#111827]">
+                            {documentFilename || "Documento"}
+                          </p>
+                          <p className="mt-0.5 text-xs text-[#6B7280]">
+                            {documentMeta}
+                          </p>
+                        </div>
+                      </a>
+                      <div className="grid grid-cols-2 divide-x divide-[#E5E7EB] border-t border-[#E5E7EB] text-sm font-medium text-[#0A84FF]">
+                        <a
+                          href={mediaUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-center gap-1.5 py-2 transition-colors hover:bg-blue-50"
+                        >
+                          <ExternalLinkIcon className="h-4 w-4" />
+                          Abrir
+                        </a>
+                        <a
+                          href={mediaUrl}
+                          download={documentFilename || true}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-center gap-1.5 py-2 transition-colors hover:bg-blue-50"
+                        >
+                          <DownloadIcon className="h-4 w-4" />
+                          Baixar
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {mediaType === "document" && !(isClient && onlyDocument) && (
                     <a
                       href={mediaUrl}
                       target="_blank"
