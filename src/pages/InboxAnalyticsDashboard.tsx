@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useOpenConversation } from "../modules/floatingChats/useOpenConversation";
 import { useQuery } from "@tanstack/react-query";
 import {
   ActivityIcon,
@@ -316,6 +317,8 @@ const TeamNow = ({ team, nowMs }: { team: LiveTeamRow[]; nowMs: number }) => {
 export const InboxAnalyticsDashboard: React.FC = () => {
   const { clinicId } = useClinic();
   const navigate = useNavigate();
+  // No computador abre em caixa flutuante, sem sair do painel
+  const openConversation = useOpenConversation();
   const nowMs = useNow();
   const [channels, setChannels] = useState<string[]>([]);
   const [departmentId, setDepartmentId] = useState("");
@@ -620,7 +623,9 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                     <tr
                       key={item.conversationId}
                       className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
-                      onClick={() => navigate(`/inbox/chat/${item.conversationId}`)}
+                      onClick={() =>
+                        openConversation(item.conversationId, { title: item.contact })
+                      }
                     >
                       <td className="px-2 py-2 font-medium text-slate-700">{item.contact}</td>
                       <td className="px-2 py-2">{channelLabel(item.channel)}</td>

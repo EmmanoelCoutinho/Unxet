@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useOpenConversation } from "../modules/floatingChats/useOpenConversation";
 import {
   ArrowLeftIcon,
   BanIcon,
@@ -680,7 +681,7 @@ const ScheduledMessageForm: React.FC<{ existing: ScheduledMessage | null }> = ({
 const ScheduledMessageDetails: React.FC<{
   scheduledMessage: ScheduledMessage;
 }> = ({ scheduledMessage }) => {
-  const navigate = useNavigate();
+  const openConversation = useOpenConversation();
   const confirm = useConfirm();
   const { cancel, acting } = useScheduledMessageActions();
   const { total, sent, failed, waiting } = summarizeRecipients(
@@ -763,7 +764,7 @@ const ScheduledMessageDetails: React.FC<{
                 <button
                   type="button"
                   onClick={() =>
-                    navigate(`/inbox/chat/${recipient.conversationId}`)
+                    openConversation(recipient.conversationId!)
                   }
                   className="mt-1.5 text-xs font-medium text-blue-600 hover:underline"
                 >

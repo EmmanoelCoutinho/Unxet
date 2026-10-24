@@ -16,9 +16,11 @@ import { whatsappConnectionLabel } from "../lib/whatsappConnections";
 type UseConversationsOptions = {
   status?: string;
   channel?: string;
-  /** Conversa aberta na tela agora (rota do chat), se houver. */
-  activeConversationId?: string | null;
+  /** Conversas na tela agora: a da tela cheia e as caixas flutuantes expandidas. */
+  activeConversationIds?: string[];
 };
+
+const NO_IDS: string[] = [];
 
 type DbMessage = {
   id: string;
@@ -51,9 +53,9 @@ export function useConversations(options: UseConversationsOptions = {}) {
   const didInitialLoadRef = useRef(false);
   const fetchSeqRef = useRef(0);
 
-  const activeConversationId = options.activeConversationId ?? null;
-  const activeConversationIdRef = useRef(activeConversationId);
-  activeConversationIdRef.current = activeConversationId;
+  const activeConversationIds = options.activeConversationIds ?? NO_IDS;
+  const activeConversationIdsRef = useRef(activeConversationIds);
+  activeConversationIdsRef.current = activeConversationIds;
 
   // Leituras feitas neste aparelho. Enquanto o servidor não confirma (pending)
   // ou se confirmou depois que uma contagem foi pedida (confirmedAt), essa
@@ -64,7 +66,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
   // O atendente está com esta conversa aberta e com o app na tela
   const isViewing = (conversationId: string) =>
-    activeConversationIdRef.current === conversationId &&
+    activeConversationIdsRef.current.includes(conversationId) &&
     document.visibilityState === "visible";
 
   const parsePayload = (raw: any) => {
@@ -802,14 +804,30 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
   // Abrir a conversa por qualquer caminho (lista, link direto, notificação)
   // marca como lida; voltar para o app com ela aberta, também.
+  // Com várias caixas abertas, só as que acabaram de entrar na tela são
+  // marcadas: abrir uma caixa nova não marca de novo as outras
+  const markedOnScreenRef = useRef<{
+    markAsRead: typeof markAsRead | null;
+    ids: Set<string>;
+  }>({ markAsRead: null, ids: new Set() });
   useEffect(() => {
-    if (activeConversationId && document.visibilityState === "visible") {
-      markAsRead(activeConversationId);
+    const previous = markedOnScreenRef.current;
+    // Usuário mudou (markAsRead novo): as marcações anteriores não valem
+    const alreadyMarked =
+      previous.markAsRead === markAsRead ? previous.ids : new Set<string>();
+    markedOnScreenRef.current = {
+      markAsRead,
+      ids: new Set(activeConversationIds),
+    };
+    if (document.visibilityState === "visible") {
+      for (const id of activeConversationIds) {
+        if (!alreadyMarked.has(id)) markAsRead(id);
+      }
     }
 
     const onVisibilityChange = () => {
       if (document.visibilityState !== "visible") return;
-      if (activeConversationId) markAsRead(activeConversationId);
+      for (const id of activeConversationIds) markAsRead(id);
       // O realtime pode ter perdido eventos com o app em segundo plano
       scheduleRefetchRef.current();
     };
@@ -817,7 +835,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () =>
       document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [activeConversationId, markAsRead]);
+  }, [activeConversationIds, markAsRead]);
 
   const totalUnreadCount = useMemo(() => {
     return conversations.reduce(

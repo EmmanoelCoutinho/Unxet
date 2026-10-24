@@ -20,8 +20,12 @@ import type { QuickMessage } from "../../services/quickMessages";
 import { compressImageFile } from "../../lib/imageUtils";
 import type { SharedContact } from "../../lib/sharedContact";
 import { ShareContactModal } from "./ShareContactModal";
+import { AttachmentTray, type PendingAttachment } from "./AttachmentTray";
 
 const MAX_AUDIO_FILE_BYTES = 16 * 1024 * 1024;
+// Limite de documento do WhatsApp
+const MAX_DOCUMENT_FILE_BYTES = 100 * 1024 * 1024;
+const MAX_ATTACHMENTS = 10;
 
 type SendableInput =
   | string
@@ -39,12 +43,17 @@ interface MessageInputProps {
   onSend: (input: SendableInput) => void;
   // envio de cartão de contato (só WhatsApp)
   allowContacts?: boolean;
+  // Canal aceita legenda em imagem e documento (WhatsApp). Nos outros, o
+  // texto vai como mensagem separada depois dos arquivos
+  captionsSupported?: boolean;
   disabled?: boolean;
   disabledReason?: string;
   draft?: string;
   onDraftChange?: (value: string) => void;
   quickMessages?: QuickMessage[];
   quickMessagesLoading?: boolean;
+  // Caixa flutuante: sem os tamanhos maiores de telas largas
+  compact?: boolean;
   onRecordingStateChange?: (state: {
     isRecording: boolean;
     isSendingAudio: boolean;
@@ -72,6 +81,7 @@ type AllowedDocumentMime =
 export const MessageInput: React.FC<MessageInputProps> = ({
   onSend,
   allowContacts = false,
+  captionsSupported = true,
   disabled = false,
   disabledReason,
   draft,
@@ -79,8 +89,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   quickMessages = [],
   quickMessagesLoading = false,
   onRecordingStateChange,
+  compact = false,
 }) => {
   const [internalMessage, setInternalMessage] = useState("");
+  // Classes de telas largas (sm:) ficam de fora na caixa flutuante
+  const sm = (classes: string) => (compact ? "" : classes);
   const [showEmojis, setShowEmojis] = useState(false);
   const [showAttachments, setShowAttachments] = useState(false);
   const [showQuickMessages, setShowQuickMessages] = useState(false);
@@ -88,6 +101,28 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  const [pendingAttachments, setPendingAttachments] = useState<
+    PendingAttachment[]
+  >([]);
+  const pendingRef = useRef(pendingAttachments);
+  pendingRef.current = pendingAttachments;
+  const [sendingAttachments, setSendingAttachments] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const hasAttachments = pendingAttachments.length > 0;
+
+  // Libera as prévias das imagens ao sair da conversa
+  useEffect(
+    () => () => {
+      pendingRef.current.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+    },
+    [],
+  );
 
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const attachmentsRef = useRef<HTMLDivElement | null>(null);
@@ -127,6 +162,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   useEffect(() => {
     if (!disabled) return;
+
+    // Sem permissão para responder: os anexos da fila são descartados
+    setPendingAttachments((current) => {
+      current.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+      return current.length ? [] : current;
+    });
 
     setShowEmojis(false);
     setShowAttachments(false);
@@ -188,6 +231,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (disabled) return;
+
+    if (pendingRef.current.length > 0) {
+      void sendAttachments();
+      return;
+    }
 
     if (message.trim()) {
       onSend(message.trim());
@@ -614,6 +662,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     const hasText = Boolean(message.trim());
 
+    if (pendingRef.current.length > 0) {
+      void sendAttachments();
+      return;
+    }
+
     if (hasText) {
       onSend(message.trim());
       setMessage("");
@@ -667,95 +720,146 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     });
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (disabled) {
-      e.target.value = "";
+  // Imagens e documentos ficam na fila até o atendente clicar em enviar
+  const addFiles = async (files: File[]) => {
+    if (disabled || files.length === 0) return;
+
+    const room = MAX_ATTACHMENTS - pendingRef.current.length;
+    if (room <= 0) {
+      toast.info(`Dá para anexar até ${MAX_ATTACHMENTS} arquivos por vez.`);
       return;
     }
-
-    setShowAttachments(false);
-
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const allFiles = Array.from(files);
-    const validImages: Array<{
-      file: File;
-      mimeType: AllowedImageMime;
-      extension: "jpg" | "png";
-      originalSize: number;
-      compressedSize: number;
-      wasCompressed: boolean;
-    }> = [];
-
-    for (const file of allFiles) {
-      const realMimeType = await detectRealImageMimeType(file);
-
-      if (!realMimeType) continue;
-
-      const compressedImage = await compressImageFile(file, realMimeType);
-
-      validImages.push({
-        file: compressedImage.file,
-        mimeType: compressedImage.mimeType,
-        extension: compressedImage.extension,
-        originalSize: compressedImage.originalSize,
-        compressedSize: compressedImage.compressedSize,
-        wasCompressed: compressedImage.wasCompressed,
-      });
+    if (files.length > room) {
+      toast.info(`Dá para anexar até ${MAX_ATTACHMENTS} arquivos por vez.`);
     }
 
-    const compressedImagesCount = validImages.filter(
-      (image) => image.wasCompressed,
-    ).length;
+    const accepted: PendingAttachment[] = [];
+    let rejected = 0;
 
-    if (compressedImagesCount > 0) {
-      const originalTotal = validImages.reduce(
-        (total, image) => total + image.originalSize,
-        0,
-      );
-      const compressedTotal = validImages.reduce(
-        (total, image) => total + image.compressedSize,
-        0,
-      );
-
-      console.info("[MessageInput] Imagens comprimidas antes do upload:", {
-        count: compressedImagesCount,
-        originalTotal,
-        compressedTotal,
-      });
-    }
-
-    if (validImages.length === 0) {
-      toast.info("Por enquanto só aceitamos imagens JPG ou PNG válidas.");
-      e.target.value = "";
-      return;
-    }
-
-    if (validImages.length < allFiles.length) {
-      console.warn("Alguns arquivos foram ignorados por não serem JPG/PNG.");
-      toast.info("Algumas imagens foram ignoradas por não serem JPG ou PNG.");
-    }
-
-    try {
-      for (const image of validImages) {
-        const { publicUrl } = await uploadFileToSupabase(image.file, "image", {
-          contentType: image.mimeType,
-          extension: image.extension,
+    for (const file of files.slice(0, room)) {
+      const imageMime = await detectRealImageMimeType(file);
+      if (imageMime) {
+        const compressed = await compressImageFile(file, imageMime);
+        accepted.push({
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          kind: "image",
+          file: compressed.file,
+          mimeType: compressed.mimeType,
+          extension: compressed.extension,
+          previewUrl: URL.createObjectURL(compressed.file),
         });
-
-        onSend({
-          type: "image",
-          mediaUrl: publicUrl,
-          mediaMimeType: image.mimeType,
-        });
+        continue;
       }
-    } catch (err) {
-      console.error("Erro ao enviar imagens:", err);
-      toast.error("Ocorreu um erro ao enviar a imagem. Tente novamente.");
-    } finally {
-      e.target.value = "";
+
+      if (file.size > MAX_DOCUMENT_FILE_BYTES) {
+        rejected += 1;
+        continue;
+      }
+      const validDocument = await validateDocumentFile(file);
+      if (validDocument) {
+        accepted.push({
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          kind: "document",
+          file,
+          mimeType: validDocument.mimeType,
+          extension: validDocument.extension,
+        });
+        continue;
+      }
+
+      rejected += 1;
     }
+
+    if (rejected > 0) {
+      toast.info(
+        rejected === 1
+          ? "Um arquivo foi ignorado. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB)."
+          : `${rejected} arquivos foram ignorados. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB).`,
+      );
+    }
+
+    if (accepted.length > 0) {
+      setPendingAttachments((current) => [...current, ...accepted]);
+      textareaRef.current?.focus();
+    }
+  };
+
+  const removeAttachment = (id: string) => {
+    setPendingAttachments((current) => {
+      const removed = current.find((item) => item.id === id);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return current.filter((item) => item.id !== id);
+    });
+  };
+
+  // Envia os arquivos na ordem, com o texto digitado: no WhatsApp como
+  // legenda do primeiro arquivo; nos outros canais, como mensagem depois
+  const sendAttachments = async () => {
+    if (disabled || sendingAttachments) return;
+    const items = pendingRef.current;
+    if (items.length === 0) return;
+
+    const text = message.trim();
+    setShowEmojis(false);
+    setSendingAttachments({ done: 0, total: items.length });
+
+    let sent = 0;
+    try {
+      for (const [index, item] of items.entries()) {
+        const caption = captionsSupported && index === 0 ? text || undefined : undefined;
+        const { publicUrl } = await uploadFileToSupabase(item.file, item.kind, {
+          contentType: item.mimeType,
+          extension: item.extension,
+        });
+
+        onSend(
+          item.kind === "image"
+            ? {
+                type: "image",
+                mediaUrl: publicUrl,
+                mediaMimeType: item.mimeType,
+                text: caption,
+              }
+            : {
+                type: "document",
+                mediaUrl: publicUrl,
+                mediaMimeType: item.mimeType,
+                filename: item.file.name,
+                fileSize: item.file.size,
+                text: caption,
+              },
+        );
+
+        sent += 1;
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        setPendingAttachments((current) => current.filter((x) => x.id !== item.id));
+        setSendingAttachments({ done: sent, total: items.length });
+
+        // A legenda já foi com o primeiro arquivo
+        if (caption) setMessage("");
+      }
+
+      if (text && !captionsSupported) {
+        onSend(text);
+      }
+      if (text) setMessage("");
+    } catch (err) {
+      console.error("Erro ao enviar anexos:", err);
+      toast.error(
+        sent > 0
+          ? "Alguns arquivos não foram enviados. Eles continuam anexados para tentar de novo."
+          : "Não foi possível enviar os arquivos. Eles continuam anexados para tentar de novo.",
+      );
+    } finally {
+      setSendingAttachments(null);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setShowAttachments(false);
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    await addFiles(files);
   };
 
   const handleAudioChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -807,49 +911,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const handleDocumentChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    if (disabled) {
-      e.target.value = "";
-      return;
-    }
-
     setShowAttachments(false);
-
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const file = files[0];
-    const validDocument = await validateDocumentFile(file);
-
-    if (!validDocument) {
-      toast.info(
-        "Por enquanto só aceitamos documentos TXT, PDF, DOC, DOCX, XLS, XLSX, PPT ou PPTX.",
-      );
-      e.target.value = "";
-      return;
-    }
-
-    try {
-      const { publicUrl } = await uploadFileToSupabase(file, "document", {
-        contentType: validDocument.mimeType,
-        extension: validDocument.extension,
-      });
-
-      onSend({
-        type: "document",
-        mediaUrl: publicUrl,
-        mediaMimeType: validDocument.mimeType,
-        filename: file.name,
-        fileSize: file.size,
-        text: message.trim() || undefined,
-      });
-
-      setMessage("");
-    } catch (err) {
-      console.error("Erro ao enviar documento:", err);
-      toast.error("Não foi possível enviar o documento.");
-    } finally {
-      e.target.value = "";
-    }
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    await addFiles(files);
   };
 
   const formatRecordTime = (totalSeconds: number) => {
@@ -866,7 +931,39 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     : "Digite uma mensagem...";
 
   return (
-    <div className="sticky bottom-0 shrink-0 border-t border-[#E5E7EB] bg-white p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-20 shadow-sm sm:p-4">
+    <div
+      className={`sticky bottom-0 shrink-0 border-t border-[#E5E7EB] bg-white p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-20 shadow-sm ${sm("sm:p-4")} ${
+        isDraggingFiles ? "ring-2 ring-inset ring-[#0A84FF] bg-blue-50/60" : ""
+      }`}
+      // Arrastar arquivos para o campo também anexa
+      onDragOver={(event) => {
+        if (disabled || !event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        setIsDraggingFiles(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setIsDraggingFiles(false);
+        }
+      }}
+      onDrop={(event) => {
+        if (disabled || !event.dataTransfer.files.length) return;
+        event.preventDefault();
+        setIsDraggingFiles(false);
+        void addFiles(Array.from(event.dataTransfer.files));
+      }}
+    >
+      <AttachmentTray
+        items={pendingAttachments}
+        onRemove={removeAttachment}
+        sending={sendingAttachments}
+        captionHint={
+          captionsSupported
+            ? "o texto digitado vai como legenda"
+            : "o texto digitado vai em uma mensagem separada"
+        }
+      />
+
       {disabled && (
         <div className="mb-2 flex items-center gap-2 text-xs text-[#6B7280]">
           <LockIcon className="w-4 h-4" />
@@ -891,15 +988,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
       <form
         onSubmit={handleSubmit}
-        className="relative flex items-end gap-1 sm:items-stretch sm:gap-2"
+        className={`relative flex items-end gap-1 ${sm("sm:items-stretch sm:gap-2")}`}
       >
-        <div className="flex shrink-0 gap-0.5 sm:gap-2">
+        <div className={`flex shrink-0 gap-0.5 ${sm("sm:gap-2")}`}>
           <button
             type="button"
             onClick={handleAttachmentClick}
             disabled={disabled}
             aria-label="Anexar"
-            className="relative flex h-11 w-10 items-center justify-center rounded-lg hover:bg-[#E5E7EB] transition-colors disabled:opacity-50 disabled:hover:bg-transparent sm:h-12 sm:w-12"
+            className={`relative flex h-11 w-10 items-center justify-center rounded-lg hover:bg-[#E5E7EB] transition-colors disabled:opacity-50 disabled:hover:bg-transparent ${sm("sm:h-12 sm:w-12")}`}
           >
             <PaperclipIcon className="w-5 h-5 text-gray-500" />
 
@@ -928,7 +1025,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 >
                   <span className="flex items-center gap-2 text-[#1F2937]">
                     <ImageIcon className="w-4 h-4" />
-                    Imagem
+                    Imagens
                   </span>
                   <span className="text-xs text-[#6B7280]">Selecionar</span>
                 </button>
@@ -956,7 +1053,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 >
                   <span className="flex items-center gap-2 text-[#1F2937]">
                     <FileIcon className="w-4 h-4" />
-                    Documento
+                    Documentos
                   </span>
                   <span className="text-xs text-[#6B7280]">Selecionar</span>
                 </button>
@@ -992,35 +1089,47 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               setShowAttachments(false);
             }}
             aria-label="Emojis"
-            className="flex h-11 w-10 items-center justify-center rounded-lg hover:bg-[#E5E7EB] transition-colors disabled:opacity-50 disabled:hover:bg-transparent sm:h-12 sm:w-12"
+            className={`flex h-11 w-10 items-center justify-center rounded-lg hover:bg-[#E5E7EB] transition-colors disabled:opacity-50 disabled:hover:bg-transparent ${sm("sm:h-12 sm:w-12")}`}
           >
             <SmileIcon className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
         <textarea
+          ref={textareaRef}
+          // Colar uma imagem (Ctrl+V) anexa em vez de enviar
+          onPaste={(event) => {
+            const files = Array.from(event.clipboardData.files);
+            if (files.length === 0) return;
+            event.preventDefault();
+            void addFiles(files);
+          }}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholderText}
           rows={1}
           disabled={disabled}
-          className="min-h-11 min-w-0 flex-1 rounded-lg border border-[#E5E7EB] px-3 py-2.5 resize-none sm:min-h-12 sm:px-4 sm:py-3 max-h-32 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] disabled:cursor-not-allowed disabled:bg-[#F9FAFB] disabled:text-[#9CA3AF]"
+          className={`min-h-11 min-w-0 flex-1 rounded-lg border border-[#E5E7EB] px-3 py-2.5 resize-none ${sm("sm:min-h-12 sm:px-4 sm:py-3")} max-h-32 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] disabled:cursor-not-allowed disabled:bg-[#F9FAFB] disabled:text-[#9CA3AF]`}
         />
 
         <Button
           type="button"
           variant="primary"
-          aria-label={message.trim() || isRecording ? "Enviar" : "Gravar áudio"}
-          className={`flex h-11 min-w-11 shrink-0 items-center justify-center !px-0 sm:h-12 sm:w-auto sm:min-h-12 sm:!px-4 ${
+          aria-label={
+            message.trim() || isRecording || hasAttachments
+              ? "Enviar"
+              : "Gravar áudio"
+          }
+          className={`flex h-11 min-w-11 shrink-0 items-center justify-center !px-0 ${sm("sm:h-12 sm:w-auto sm:min-h-12 sm:!px-4")} ${
             isRecording ? "bg-red-500 hover:bg-red-600 focus:ring-red-500" : ""
           }`}
-          disabled={disabled || isSendingAudio}
+          disabled={disabled || isSendingAudio || Boolean(sendingAttachments)}
           onClick={handlePrimaryClick}
         >
           {disabled ? (
             <LockIcon className="w-4 h-4" />
-          ) : message.trim() || isRecording ? (
+          ) : message.trim() || isRecording || hasAttachments ? (
             <SendIcon className="w-4 h-4" />
           ) : (
             <MicIcon className="w-4 h-4" />
@@ -1032,6 +1141,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           disabled={disabled}
           pickerRef={pickerRef}
           onPick={handleEmojiClick}
+          compact={compact}
         />
       </form>
 
@@ -1057,6 +1167,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       <input
         style={{ display: "none" }}
         ref={docInputRef}
+        multiple
         type="file"
         accept=".txt,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
         className="invisible"
