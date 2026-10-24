@@ -415,18 +415,31 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     />
                   )}
 
-                  {mediaType === "document" && isClient && onlyDocument && (
-                    // Documento recebido sem legenda: cartão branco com ações
-                    <div className="w-72 max-w-full overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-sm">
+                  {mediaType === "document" && (
+                    // Cartão do documento: nome inteiro e faixa com Abrir e Baixar.
+                    // Recebido: branco. Enviado: azul (translúcido dentro do balão com legenda).
+                    <div
+                      className={`w-72 max-w-full overflow-hidden rounded-2xl ${
+                        isClient
+                          ? "border border-[#E5E7EB] bg-white shadow-sm"
+                          : onlyDocument
+                            ? "bg-[#0A84FF] text-white shadow-sm"
+                            : "bg-white/15 text-white"
+                      }`}
+                    >
                       <a
                         href={mediaUrl}
                         target="_blank"
                         rel="noreferrer"
                         title={`Abrir ${documentFilename || "documento"}`}
-                        className="flex items-center gap-3 p-3 transition-colors hover:bg-[#F9FAFB]"
+                        className={`flex items-center gap-3 p-3 transition-colors ${
+                          isClient ? "hover:bg-[#F9FAFB]" : "hover:bg-white/10"
+                        }`}
                       >
                         <div
-                          className={`flex h-12 w-11 flex-shrink-0 flex-col items-center justify-center rounded-lg shadow-sm ${documentAccentClass}`}
+                          className={`flex h-12 w-11 flex-shrink-0 flex-col items-center justify-center rounded-lg shadow-sm ${documentAccentClass} ${
+                            isClient ? "" : "ring-1 ring-white/40"
+                          }`}
                         >
                           <FileTextIcon className="h-5 w-5 text-white/90" />
                           <span className="mt-0.5 max-w-full truncate px-0.5 text-[9px] font-bold leading-none tracking-wide text-white">
@@ -434,20 +447,36 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                           </span>
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="line-clamp-2 break-words text-sm font-semibold leading-snug text-[#111827]">
+                          <p
+                            className={`line-clamp-2 break-words text-sm font-semibold leading-snug ${
+                              isClient ? "text-[#111827]" : "text-white"
+                            }`}
+                          >
                             {documentFilename || "Documento"}
                           </p>
-                          <p className="mt-0.5 text-xs text-[#6B7280]">
+                          <p
+                            className={`mt-0.5 text-xs ${
+                              isClient ? "text-[#6B7280]" : "text-blue-100"
+                            }`}
+                          >
                             {documentMeta}
                           </p>
                         </div>
                       </a>
-                      <div className="grid grid-cols-2 divide-x divide-[#E5E7EB] border-t border-[#E5E7EB] text-sm font-medium text-[#0A84FF]">
+                      <div
+                        className={`grid grid-cols-2 divide-x border-t text-sm font-medium ${
+                          isClient
+                            ? "divide-[#E5E7EB] border-[#E5E7EB] text-[#0A84FF]"
+                            : "divide-white/25 border-white/25 text-white"
+                        }`}
+                      >
                         <a
                           href={mediaUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center justify-center gap-1.5 py-2 transition-colors hover:bg-blue-50"
+                          className={`flex items-center justify-center gap-1.5 py-2 transition-colors ${
+                            isClient ? "hover:bg-blue-50" : "hover:bg-white/10"
+                          }`}
                         >
                           <ExternalLinkIcon className="h-4 w-4" />
                           Abrir
@@ -457,66 +486,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                           download={documentFilename || true}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center justify-center gap-1.5 py-2 transition-colors hover:bg-blue-50"
+                          className={`flex items-center justify-center gap-1.5 py-2 transition-colors ${
+                            isClient ? "hover:bg-blue-50" : "hover:bg-white/10"
+                          }`}
                         >
                           <DownloadIcon className="h-4 w-4" />
                           Baixar
                         </a>
                       </div>
                     </div>
-                  )}
-
-                  {mediaType === "document" && !(isClient && onlyDocument) && (
-                    <a
-                      href={mediaUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={`Abrir ${documentFilename || "documento"}`}
-                      className={`group/doc flex w-64 max-w-full items-center gap-3 rounded-2xl p-2.5 transition-colors ${
-                        isClient
-                          ? onlyDocument
-                            ? "border border-[#E5E7EB] bg-[#F3F4F6] text-[#1E1E1E] hover:bg-[#E5E7EB]"
-                            : "bg-white/70 text-[#1E1E1E] hover:bg-white"
-                          : onlyDocument
-                            ? "bg-[#0A84FF] text-white hover:bg-[#0077e6]"
-                            : "bg-white/15 text-white hover:bg-white/25"
-                      }`}
-                    >
-                      <div
-                        className={`relative flex h-11 w-10 flex-shrink-0 flex-col items-center justify-center rounded-lg shadow-sm ${documentAccentClass} ${isClient ? "" : "ring-1 ring-white/40"}`}
-                      >
-                        <FileTextIcon className="h-4 w-4 text-white/90" />
-                        <span className="mt-0.5 max-w-full truncate px-0.5 text-[9px] font-bold leading-none tracking-wide text-white">
-                          {documentLabel}
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className={`line-clamp-2 break-words text-sm font-medium leading-snug ${
-                            isClient ? "text-[#111827]" : "text-white"
-                          }`}
-                        >
-                          {documentFilename || "Documento"}
-                        </p>
-                        <p
-                          className={`mt-0.5 text-xs ${
-                            isClient ? "text-[#6B7280]" : "text-blue-100"
-                          }`}
-                        >
-                          {documentMeta}
-                        </p>
-                      </div>
-                      <div
-                        className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
-                          isClient
-                            ? "bg-white text-[#0A84FF] shadow-sm group-hover/doc:bg-[#0A84FF] group-hover/doc:text-white"
-                            : "bg-white/20 text-white group-hover/doc:bg-white group-hover/doc:text-[#0A84FF]"
-                        }`}
-                        aria-hidden="true"
-                      >
-                        <DownloadIcon className="h-4 w-4" />
-                      </div>
-                    </a>
                   )}
 
                   {mediaType === "sticker" && (
