@@ -6,11 +6,12 @@ import {
   CheckCheck,
   ChevronDown,
   DownloadIcon,
-  FileIcon,
+  FileTextIcon,
   Trash2,
 } from "lucide-react";
 import type { Message as UiMessage } from "../../types";
 import { AudioTranscriptStatus } from "./AudioTranscriptStatus";
+import { AudioPlayer } from "./AudioPlayer";
 import { useMediaUrl } from "../../lib/mediaUrls";
 
 interface MessageBubbleProps {
@@ -197,7 +198,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   );
   const documentSize = formatBytes(documentFileSize);
   const documentMeta = documentSize
-    ? `${documentLabel} - ${documentSize}`
+    ? `${documentLabel} · ${documentSize}`
     : documentLabel;
   const documentAccentClass = getDocumentAccentClass(documentLabel);
 
@@ -392,21 +393,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
                   {mediaType === "audio" && (
                     <div className="space-y-1">
-                      <div
-                        className={`
-                          flex items-center gap-3 rounded-2xl px-3 py-2
-                          ${isClient ? "bg-[#E5E7EB]" : "bg-[#0A84FF]"}
-                          text-[#1E1E1E]
-                        `}
-                      >
-                        <audio
-                          controls
-                          className="w-56 max-w-full h-9 bg-transparent outline-none"
-                          src={mediaUrl}
-                        >
-                          Seu navegador não suporta o player de áudio.
-                        </audio>
-                      </div>
+                      <AudioPlayer src={mediaUrl} outgoing={!isClient} />
                       <AudioTranscriptStatus
                         status={transcriptStatus}
                         transcriptText={transcriptText}
@@ -432,20 +419,49 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                       href={mediaUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-3 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-[#1E1E1E] transition hover:bg-[#F3F4F6]"
+                      title={`Abrir ${documentFilename || "documento"}`}
+                      className={`group/doc flex w-64 max-w-full items-center gap-3 rounded-2xl p-2.5 transition-colors ${
+                        isClient
+                          ? onlyDocument
+                            ? "border border-[#E5E7EB] bg-[#F3F4F6] text-[#1E1E1E] hover:bg-[#E5E7EB]"
+                            : "bg-white/70 text-[#1E1E1E] hover:bg-white"
+                          : onlyDocument
+                            ? "bg-[#0A84FF] text-white hover:bg-[#0077e6]"
+                            : "bg-white/15 text-white hover:bg-white/25"
+                      }`}
                     >
                       <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-lg ${documentAccentClass}`}
+                        className={`relative flex h-11 w-10 flex-shrink-0 flex-col items-center justify-center rounded-lg shadow-sm ${documentAccentClass} ${isClient ? "" : "ring-1 ring-white/40"}`}
                       >
-                        <FileIcon className="h-5 w-5 text-white" />
+                        <FileTextIcon className="h-4 w-4 text-white/90" />
+                        <span className="mt-0.5 max-w-full truncate px-0.5 text-[9px] font-bold leading-none tracking-wide text-white">
+                          {documentLabel}
+                        </span>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-[#111827] truncate">
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={`line-clamp-2 break-words text-sm font-medium leading-snug ${
+                            isClient ? "text-[#111827]" : "text-white"
+                          }`}
+                        >
                           {documentFilename || "Documento"}
                         </p>
-                        <p className="text-xs text-[#6B7280]">{documentMeta}</p>
+                        <p
+                          className={`mt-0.5 text-xs ${
+                            isClient ? "text-[#6B7280]" : "text-blue-100"
+                          }`}
+                        >
+                          {documentMeta}
+                        </p>
                       </div>
-                      <div className="ml-auto flex h-8 w-8 items-center justify-center rounded-full border border-[#D1D5DB] text-[#6B7280]">
+                      <div
+                        className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
+                          isClient
+                            ? "bg-white text-[#0A84FF] shadow-sm group-hover/doc:bg-[#0A84FF] group-hover/doc:text-white"
+                            : "bg-white/20 text-white group-hover/doc:bg-white group-hover/doc:text-[#0A84FF]"
+                        }`}
+                        aria-hidden="true"
+                      >
                         <DownloadIcon className="h-4 w-4" />
                       </div>
                     </a>
