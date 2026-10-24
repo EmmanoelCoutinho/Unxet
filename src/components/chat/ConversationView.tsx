@@ -1659,7 +1659,10 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
       {conversation?.status === "open" && (
         <MessageInput
+          // Outra conversa: começa sem anexos na fila
+          key={id}
           compact={isFloating}
+          captionsSupported={conversation.channel === "whatsapp"}
           onSend={handleSendMessage}
           allowContacts={conversation.channel === "whatsapp"}
           disabled={!canReply}
