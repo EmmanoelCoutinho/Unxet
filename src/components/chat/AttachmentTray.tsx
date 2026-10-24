@@ -1,5 +1,5 @@
 import React from "react";
-import { FileTextIcon, Loader2Icon, XIcon } from "lucide-react";
+import { FileTextIcon, XIcon } from "lucide-react";
 
 export type PendingAttachment = {
   id: string;
@@ -20,7 +20,7 @@ const formatSize = (bytes: number) => {
 type AttachmentTrayProps = {
   items: PendingAttachment[];
   onRemove: (id: string) => void;
-  /** Enquanto envia: "Enviando 2 de 3…" e sem remover. */
+  /** Enquanto envia, os anexos não podem ser removidos. */
   sending?: { done: number; total: number } | null;
   /** Legenda vai junto do primeiro arquivo; em outros canais, como mensagem separada. */
   captionHint: string;
@@ -81,20 +81,13 @@ export const AttachmentTray: React.FC<AttachmentTrayProps> = ({
           ),
         )}
       </div>
-      <p className="mt-1 flex items-center gap-1.5 px-0.5 text-[11px] text-[#6B7280]">
-        {sending ? (
-          <>
-            <Loader2Icon className="h-3.5 w-3.5 animate-spin text-[#0A84FF]" />
-            Enviando {Math.min(sending.done + 1, sending.total)} de {sending.total}…
-          </>
-        ) : (
-          <>
-            {items.length === 1 ? "1 arquivo pronto" : `${items.length} arquivos prontos`}
-            {" · "}
-            {captionHint}
-          </>
-        )}
-      </p>
+      {!sending && (
+        <p className="mt-1 px-0.5 text-[11px] text-[#6B7280]">
+          {items.length === 1 ? "1 arquivo pronto" : `${items.length} arquivos prontos`}
+          {" · "}
+          {captionHint}
+        </p>
+      )}
     </div>
   );
 };
