@@ -212,6 +212,22 @@ export const formatDuration = (ms: number) => {
 export const ratePercent = (part: number, whole: number) =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;
 
+/**
+ * Texto como o cliente recebe, para a prévia na tela. Mesma regra do envio
+ * (renderScheduledText em supabase/functions/_shared/scheduledMessages.ts):
+ * {nome} vira o nome; sem nome, a marcação some e a pontuação é ajustada.
+ */
+export const previewMessageText = (template: string, name: string | null | undefined) => {
+  const text = String(template ?? "");
+  const value = typeof name === "string" ? name.trim() : "";
+  if (/\p{L}/u.test(value)) return text.replace(/\{nome\}/gi, value);
+  return text
+    .replace(/[ \t]*\{nome\}/gi, "")
+    .replace(/^[ \t]*[,;:][ \t]*/gm, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+};
+
 /** "1.500,50" / "1500.5" / "R$ 80" -> número; vazio -> null; inválido -> NaN */
 export const parseMoneyInput = (input: string): number | null => {
   const raw = input.replace(/[R$\s]/g, "");
