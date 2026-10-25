@@ -1,6 +1,7 @@
 import React from "react";
 import { AlarmClockIcon, HourglassIcon, MegaphoneIcon, MessageCircleIcon } from "lucide-react";
 import type { Deal } from "../types/leads";
+import { ContactAvatar } from "./ContactAvatar";
 import {
   daysSince,
   formatCompactCurrency,
@@ -53,25 +54,30 @@ export const DealCard: React.FC<{
         dragging ? "opacity-40" : ""
       } ${stalled ? "border-amber-200" : "border-slate-200"}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 text-sm font-semibold leading-5 text-slate-900 [overflow-wrap:anywhere]">
-          {deal.title}
-        </p>
-        {deal.value !== null && (
-          <span className="flex-shrink-0 text-xs font-semibold text-green-700">
-            {formatCompactCurrency(deal.value)}
-          </span>
-        )}
-      </div>
+      <div className="flex items-start gap-2.5">
+        <ContactAvatar contact={deal.contact} label={contactLabel(deal.contact)} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="min-w-0 text-sm font-semibold leading-5 text-slate-900 [overflow-wrap:anywhere]">
+              {deal.title}
+            </p>
+            {deal.value !== null && (
+              <span className="flex-shrink-0 text-xs font-semibold leading-5 text-green-700">
+                {formatCompactCurrency(deal.value)}
+              </span>
+            )}
+          </div>
 
-      <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-slate-500">
-        {deal.source === "campaign" ? (
-          <MegaphoneIcon className="h-3 w-3 flex-shrink-0 text-violet-500" aria-label="Veio de campanha" />
-        ) : deal.source === "conversation" ? (
-          <MessageCircleIcon className="h-3 w-3 flex-shrink-0 text-slate-400" aria-label="Veio de conversa" />
-        ) : null}
-        <span className="truncate">{contactLabel(deal.contact)}</span>
-      </p>
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
+            {deal.source === "campaign" ? (
+              <MegaphoneIcon className="h-3 w-3 flex-shrink-0 text-violet-500" aria-label="Veio de campanha" />
+            ) : deal.source === "conversation" ? (
+              <MessageCircleIcon className="h-3 w-3 flex-shrink-0 text-slate-400" aria-label="Veio de conversa" />
+            ) : null}
+            <span className="truncate">{contactLabel(deal.contact)}</span>
+          </p>
+        </div>
+      </div>
 
       {dealTags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">

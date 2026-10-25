@@ -36,6 +36,7 @@ import type { Deal, LossReason, Pipeline, PipelineStage, TaskType } from "../typ
 import { daysSince, formatDue, isOverdue, localDateTimeToIso } from "../utils/board";
 import { TASK_TYPE_LABEL, describeDealEvent } from "../utils/events";
 import { contactLabel } from "./DealCard";
+import { ContactAvatar } from "./ContactAvatar";
 import { FIELD_CLASS, LABEL_CLASS } from "./LeadModal";
 import type { OwnerOption } from "./NewDealModal";
 
@@ -257,6 +258,7 @@ const DealDetails: React.FC<{
       {/* Cabeçalho */}
       <div className="border-b border-slate-100 px-5 py-4">
         <div className="flex items-start justify-between gap-3">
+          <ContactAvatar contact={deal.contact} label={contactLabel(deal.contact)} size="md" />
           <div className="min-w-0 flex-1">
             {editingTitle ? (
               <input
