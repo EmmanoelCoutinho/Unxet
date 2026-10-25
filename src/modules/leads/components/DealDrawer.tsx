@@ -303,27 +303,37 @@ const DealDetails: React.FC<{
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="ghost" onClick={openChat} className="border border-slate-200">
-            <span className="flex items-center gap-1.5">
-              <MessageCircleIcon className="h-4 w-4" />
-              Abrir conversa
-            </span>
-          </Button>
+          <button
+            type="button"
+            onClick={openChat}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <MessageCircleIcon className="h-4 w-4" />
+            Abrir conversa
+          </button>
+          {/* Encerrar: leva para a etapa de Ganho ou Perdido do funil */}
           {stage?.kind === "open" && pipeline && (
             <>
               {pipeline.stages
                 .filter((s) => s.kind !== "open")
                 .map((s) => (
-                  <Button
+                  <button
                     key={s.id}
                     type="button"
-                    size="sm"
-                    variant="ghost"
                     onClick={() => onMove(deal, s)}
-                    className={`border ${s.kind === "won" ? "border-green-200 text-green-700" : "border-red-200 text-red-600"}`}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                      s.kind === "won"
+                        ? "border-green-200 text-green-700 hover:border-green-300 hover:bg-green-50"
+                        : "border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50"
+                    }`}
                   >
-                    {s.kind === "won" ? "Ganhou" : "Perdeu"}
-                  </Button>
+                    {s.kind === "won" ? (
+                      <CheckIcon className="h-4 w-4" />
+                    ) : (
+                      <XIcon className="h-4 w-4" />
+                    )}
+                    {s.kind === "won" ? "Marcar como ganha" : "Marcar como perdida"}
+                  </button>
                 ))}
             </>
           )}
@@ -334,11 +344,36 @@ const DealDetails: React.FC<{
         {/* Etapas */}
         {pipeline && (
           <div>
+            {deal.status !== "open" && (
+              <div
+                className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+                  deal.status === "won"
+                    ? "border-green-200 bg-green-50 text-green-800"
+                    : "border-red-200 bg-red-50 text-red-800"
+                }`}
+              >
+                <p className="font-semibold">
+                  {deal.status === "won" ? "Negociação ganha" : "Negociação perdida"} em{" "}
+                  {shortDateTime(deal.closedAt ?? deal.updatedAt)}
+                </p>
+                {deal.status === "lost" && (lostReason || deal.lostNote) && (
+                  <p className="mt-0.5 text-xs">
+                    {lostReason?.name}
+                    {lostReason && deal.lostNote ? " · " : ""}
+                    {deal.lostNote}
+                  </p>
+                )}
+                <p className="mt-1 text-xs opacity-80">
+                  Para reabrir, escolha uma etapa abaixo.
+                </p>
+              </div>
+            )}
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               Etapa · {pipeline.name}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {pipeline.stages.map((s) => {
+              {/* Ganho/Perdido ficam nos botões "Marcar como..." */}
+              {pipeline.stages.filter((s) => s.kind === "open").map((s) => {
                 const current = s.id === deal.stageId;
                 return (
                   <button
@@ -357,13 +392,15 @@ const DealDetails: React.FC<{
                 );
               })}
             </div>
-            <p className="mt-2 text-xs text-slate-500">
-              {deal.status === "open"
-                ? `Nesta etapa há ${daysSince(deal.stageEnteredAt) === 0 ? "menos de 1 dia" : `${daysSince(deal.stageEnteredAt)} dia(s)`}.`
-                : deal.status === "won"
-                  ? `Ganha em ${shortDateTime(deal.closedAt ?? deal.updatedAt)}.`
-                  : `Perdida em ${shortDateTime(deal.closedAt ?? deal.updatedAt)}${lostReason ? `: ${lostReason.name}` : ""}${deal.lostNote ? ` (${deal.lostNote})` : ""}.`}
-            </p>
+            {deal.status === "open" && (
+              <p className="mt-2 text-xs text-slate-500">
+                Nesta etapa há{" "}
+                {daysSince(deal.stageEnteredAt) === 0
+                  ? "menos de 1 dia"
+                  : `${daysSince(deal.stageEnteredAt)} dia(s)`}
+                .
+              </p>
+            )}
           </div>
         )}
 
