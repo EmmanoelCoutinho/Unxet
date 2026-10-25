@@ -32,6 +32,7 @@ import {
 import { Button } from "../ui/Button";
 import { ChatHeader } from "./ChatHeader";
 import { ConversationCampaignBanner } from "../../modules/scheduledMessages/components/ConversationCampaignBanner";
+import { ConversationDealBar } from "../../modules/leads/components/ConversationDealBar";
 import { MessageBubble } from "./MessageBubble";
 import { SystemEventBubble } from "./SystemEventBubble";
 import { MessageInput } from "./MessageInput";
@@ -687,6 +688,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         connectionLabel: (data as any).channel_connections
           ? whatsappConnectionLabel((data as any).channel_connections)
           : undefined,
+        contactId: contactRow?.id ?? (data as any).contact_id ?? undefined,
         contactName:
           contactRow?.name ?? contactRow?.phone ?? "Contato sem nome",
         contactNumber: contactRow?.phone ?? "",
@@ -1508,6 +1510,16 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         <ConversationCampaignBanner
           conversationId={conversation.id}
           tagsKey={selectedTags.map((t) => t.id).join(",")}
+          compact={isFloating}
+        />
+      )}
+
+      {conversation?.id && conversation.contactId && hasFeature("scheduled_messages") && (
+        <ConversationDealBar
+          conversationId={conversation.id}
+          contactId={conversation.contactId}
+          contactName={conversation.contactName}
+          contactPhone={conversation.contactNumber ?? null}
           compact={isFloating}
         />
       )}

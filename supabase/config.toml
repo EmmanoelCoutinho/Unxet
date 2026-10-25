@@ -405,6 +405,9 @@ verify_jwt = false
 [functions.scheduled-messages-dispatch]
 verify_jwt = false
 
+[functions.deal-task-reminders]
+verify_jwt = false
+
 [functions.send-whatsapp-message]
 verify_jwt = true
 

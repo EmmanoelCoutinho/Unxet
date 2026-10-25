@@ -6,6 +6,7 @@ import {
   BanIcon,
   CalendarClockIcon,
   CheckIcon,
+  KanbanSquareIcon,
   MegaphoneIcon,
   MessageSquareTextIcon,
   PlusIcon,
@@ -73,6 +74,7 @@ import {
   toTimeInputValue,
 } from "../modules/scheduledMessages/utils/schedule";
 import { CAMPAIGNS_PATH } from "../modules/scheduledMessages/paths";
+import { useLeadActions } from "../modules/leads/hooks/useLeads";
 
 const MAX_NAME_LENGTH = 120;
 
@@ -1132,6 +1134,27 @@ const CampaignResult: React.FC<{
     }
   };
 
+  const leadActions = useLeadActions();
+  const navigate = useNavigate();
+  const handleToFunnel = async () => {
+    try {
+      const count = await leadActions.campaignToDeals({
+        campaignId: scheduledMessage.id,
+        onlyReplied: true,
+      });
+      if (count === 0) {
+        toast.info("Quem respondeu já está no funil.");
+        return;
+      }
+      toast.success(
+        `${plural(count, "negociação criada", "negociações criadas")} em “Novo lead”.`,
+      );
+      navigate("/inbox/leads");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Não foi possível levar ao funil.");
+    }
+  };
+
   const finished = status !== "processing" && status !== "scheduled";
   const showMissing =
     finished && missing.toRetry + missing.permanent + missing.uncertain > 0;
@@ -1222,6 +1245,28 @@ const CampaignResult: React.FC<{
             ? `Colocar a etiqueta “${conversionTag.name}” na conversa marca a adesão.`
             : "A adesão é marcada pelo botão “Aderiu” na conversa."}
         </p>
+        {stats.replied > 0 && (
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-5 text-blue-900">
+              <span className="block text-sm font-semibold">Acompanhar no funil de vendas</span>
+              Cria uma negociação para cada cliente que respondeu (quem já tem
+              negociação aberta fica de fora). Quando a adesão for marcada, a
+              negociação vai sozinha para “Ganho”.
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleToFunnel}
+              disabled={leadActions.movingFromCampaign}
+              className="flex-shrink-0 rounded-full border border-blue-200 bg-white"
+            >
+              <span className="flex items-center gap-2 text-blue-700">
+                <KanbanSquareIcon className="h-4 w-4" />
+                Levar ao funil ({stats.replied})
+              </span>
+            </Button>
+          </div>
+        )}
       </Card>
 
       <Card className="rounded-2xl border border-slate-200 p-5">

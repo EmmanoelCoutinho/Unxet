@@ -156,6 +156,8 @@ export const listCampaignSummaries = async (
     .from("scheduled_message_summaries")
     .select(SUMMARY_SELECT)
     .eq("clinic_id", clinicId)
+    // Mensagens agendadas pelo cartão do funil ficam só no cartão
+    .is("deal_id", null)
     .order("scheduled_at", { ascending: false })
     .limit(LIST_LIMIT);
 

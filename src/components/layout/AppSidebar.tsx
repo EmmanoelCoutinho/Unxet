@@ -5,6 +5,7 @@ import {
   BotIcon,
   Building2Icon,
   FileBarChartIcon,
+  KanbanSquareIcon,
   MegaphoneIcon,
   MessageCircleIcon,
   MessageSquareTextIcon,
@@ -100,6 +101,13 @@ const allSidebarItems: SidebarItem[] = [
     label: "Mensagens rápidas",
     icon: MessageSquareTextIcon,
     path: "/inbox/quick-messages",
+  },
+  {
+    label: "Funil de vendas",
+    icon: KanbanSquareIcon,
+    path: "/inbox/leads",
+    extraPaths: ["/inbox/leads"],
+    planFeature: "scheduled_messages",
   },
   {
     label: "Campanhas",

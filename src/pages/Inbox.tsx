@@ -27,8 +27,12 @@ export const Inbox: React.FC = () => {
   const location = useLocation();
   // Abaixo de lg mostramos um painel por vez: a lista em /inbox e as demais telas no lugar dela
   const isInboxRoot = location.pathname.replace(/\/+$/, "") === "/inbox";
-  // O chat interno tem a própria lista; a de conversas com clientes some ali
-  const isInternalChat = location.pathname.startsWith("/inbox/team");
+  // O chat interno tem a própria lista e o funil de vendas precisa da largura
+  // toda: a lista de conversas com clientes some nessas telas (as conversas
+  // abertas por elas aparecem nas caixas flutuantes)
+  const isInternalChat =
+    location.pathname.startsWith("/inbox/team") ||
+    location.pathname.startsWith("/inbox/leads");
 
   const activeConversationId = useMatch("/inbox/chat/:id")?.params.id ?? null;
 
