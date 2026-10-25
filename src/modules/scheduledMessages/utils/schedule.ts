@@ -1,10 +1,16 @@
 import type {
+  CampaignStats,
   ScheduledMessageStatus,
   ScheduledRecipient,
   ScheduledRecipientStatus,
 } from "../types/scheduledMessages";
 
-export const MAX_RECIPIENTS = 100;
+export const MAX_RECIPIENTS = 300;
+// Ritmo do scheduled-messages-dispatch (2 por minuto por empresa). Mudou lá,
+// muda aqui: é a base da previsão de término mostrada na tela.
+export const CAMPAIGN_SENDS_PER_MINUTE = 2;
+export const REPLY_WINDOW_OPTIONS = [3, 7, 15, 30] as const;
+export const DEFAULT_REPLY_WINDOW_DAYS = 7;
 export const MAX_MESSAGE_LENGTH = 4000;
 // Folga para a pessoa terminar de preencher sem o horário "vencer" no caminho
 export const MIN_LEAD_MS = 60 * 1000;
@@ -86,8 +92,8 @@ export const formatScheduleDateTime = (iso: string) => {
 export const MESSAGE_STATUS_LABEL: Record<ScheduledMessageStatus, string> = {
   scheduled: "Agendada",
   processing: "Enviando",
-  sent: "Enviada",
-  partial: "Enviada com falhas",
+  sent: "Concluída",
+  partial: "Concluída com falhas",
   failed: "Falhou",
   cancelled: "Cancelada",
 };
@@ -103,8 +109,131 @@ export const RECIPIENT_STATUS_LABEL: Record<ScheduledRecipientStatus, string> = 
 export const isEditable = (status: ScheduledMessageStatus) =>
   status === "scheduled";
 
+/**
+ * Situação para mostrar na tela. "Enviar agora" (ou um horário que já
+ * chegou) fica como "scheduled" até o disparador pegar, em até 1 minuto:
+ * para quem olha, já está enviando.
+ */
+export const effectiveStatus = (
+  item: { status: ScheduledMessageStatus; scheduledAt: string },
+  now = Date.now(),
+): ScheduledMessageStatus =>
+  item.status === "scheduled" && new Date(item.scheduledAt).getTime() <= now
+    ? "processing"
+    : item.status;
+
 export const isCancellable = (status: ScheduledMessageStatus) =>
   status === "scheduled" || status === "processing";
+
+/** Números do funil a partir dos destinatários (tela de detalhe). */
+export const campaignStats = (
+  recipients: Pick<
+    ScheduledRecipient,
+    | "status"
+    | "deliveredAt"
+    | "readAt"
+    | "repliedAt"
+    | "convertedAt"
+    | "conversionValue"
+  >[],
+): CampaignStats => {
+  const stats: CampaignStats = {
+    total: recipients.length,
+    sent: 0,
+    failed: 0,
+    waiting: 0,
+    cancelled: 0,
+    delivered: 0,
+    read: 0,
+    replied: 0,
+    converted: 0,
+    revenue: 0,
+  };
+  for (const r of recipients) {
+    if (r.status === "sent") stats.sent++;
+    else if (r.status === "failed") stats.failed++;
+    else if (r.status === "cancelled") stats.cancelled++;
+    else stats.waiting++;
+    if (r.status === "sent" && (r.deliveredAt || r.readAt)) stats.delivered++;
+    if (r.status === "sent" && r.readAt) stats.read++;
+    if (r.repliedAt) stats.replied++;
+    if (r.convertedAt) {
+      stats.converted++;
+      stats.revenue += r.conversionValue ?? 0;
+    }
+  }
+  return stats;
+};
+
+/**
+ * Quem não recebeu, separado pelo que dá para fazer. Mesma regra do
+ * campaign_retry no banco: falha segura e cancelado voltam para a fila.
+ */
+export const retrySummary = (
+  recipients: Pick<ScheduledRecipient, "status" | "failureKind">[],
+) => {
+  let retryable = 0;
+  let cancelled = 0;
+  let permanent = 0;
+  let uncertain = 0;
+  for (const r of recipients) {
+    if (r.status === "cancelled") cancelled++;
+    else if (r.status === "failed") {
+      if (r.failureKind === "permanent") permanent++;
+      else if (r.failureKind === "uncertain") uncertain++;
+      else retryable++;
+    }
+  }
+  return { retryable, cancelled, permanent, uncertain, toRetry: retryable + cancelled };
+};
+
+/** Quanto do envio já terminou (enviadas, falhas e canceladas), de 0 a 100. */
+export const progressPercent = (stats: Pick<CampaignStats, "total" | "waiting">) => {
+  if (stats.total <= 0) return 0;
+  const done = stats.total - stats.waiting;
+  return Math.min(100, Math.max(0, Math.floor((done / stats.total) * 100)));
+};
+
+/** Tempo aproximado para enviar `count` mensagens no ritmo seguro, em ms. */
+export const estimateSendDurationMs = (count: number) =>
+  Math.max(0, Math.ceil(count / CAMPAIGN_SENDS_PER_MINUTE)) * 60 * 1000;
+
+/** "menos de 1 min", "25 min", "2h30" */
+export const formatDuration = (ms: number) => {
+  const minutes = Math.round(ms / 60000);
+  if (minutes < 1) return "menos de 1 min";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours}h` : `${hours}h${String(rest).padStart(2, "0")}`;
+};
+
+/** Porcentagem inteira de `part` sobre `whole` (0 quando não há base). */
+export const ratePercent = (part: number, whole: number) =>
+  whole > 0 ? Math.round((part / whole) * 100) : 0;
+
+/** "1.500,50" / "1500.5" / "R$ 80" -> número; vazio -> null; inválido -> NaN */
+export const parseMoneyInput = (input: string): number | null => {
+  const raw = input.replace(/[R$\s]/g, "");
+  if (!raw) return null;
+  // Com vírgula, o padrão é o brasileiro (ponto separa milhar)
+  const normalized = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : raw;
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return Number.NaN;
+  return Number(normalized);
+};
+
+export const formatCurrency = (value: number) =>
+  value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/** Título da campanha; programações antigas não têm nome e usam o começo do texto. */
+export const campaignTitle = (item: { name: string | null; message: string }) => {
+  const name = item.name?.trim();
+  if (name) return name;
+  const firstLine = item.message.trim().split(/\r?\n/)[0] ?? "";
+  return firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine || "Sem nome";
+};
 
 export const summarizeRecipients = (
   recipients: Pick<ScheduledRecipient, "status">[],

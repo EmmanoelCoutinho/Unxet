@@ -7,8 +7,13 @@
  *
  * A cada rodada pega até PER_CLINIC destinatários por empresa
  * (claim_scheduled_message_recipients já os marca como "sending") e envia pelo
- * número de WhatsApp (QR Code / Evolution) escolhido na programação, um de cada vez e com
- * uma pausa entre eles. Empresas diferentes são processadas em paralelo.
+ * número de WhatsApp (QR Code / Evolution) escolhido na campanha, um de cada vez e com
+ * uma pausa longa e aleatória entre eles. Empresas diferentes são processadas em paralelo.
+ *
+ * Ritmo (foco em não derrubar o número do cliente): 2 por empresa a cada
+ * minuto, com 22 a 32 s entre os dois da rodada e um atraso inicial de até 8 s.
+ * Na prática sai uma mensagem a cada ~30 s (nunca menos de ~15 s), cerca de
+ * 120 por hora: 300 destinatários levam umas 2h30.
  *
  * Cada mensagem enviada fica registrada na conversa do cliente; se ele nunca
  * conversou com a empresa, a conversa nasce encerrada (não entra na fila) e é
@@ -22,11 +27,13 @@ import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/co
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
-// 6 por empresa a cada minuto: a rodada termina antes da próxima chamada do cron
-const PER_CLINIC = 6;
+// 2 por empresa a cada minuto: a rodada (até ~45 s) termina antes da próxima
+// chamada do cron. Mesmo ritmo de CAMPAIGN_SENDS_PER_MINUTE no frontend.
+const PER_CLINIC = 2;
 const MAX_PER_RUN = 60;
-const SEND_DELAY_MIN_MS = 3000;
-const SEND_DELAY_MAX_MS = 6000;
+const START_JITTER_MAX_MS = 8000;
+const SEND_DELAY_MIN_MS = 22000;
+const SEND_DELAY_MAX_MS = 32000;
 const REQUEST_TIMEOUT_MS = 20000;
 const sleep = (ms)=>new Promise((resolve)=>setTimeout(resolve, ms));
 const onlyDigits = (value)=>String(value ?? "").replace(/\D/g, "");
@@ -140,7 +147,7 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
   if (createErr) throw createErr;
   return created;
 }
-/** Grava a mensagem já enviada na conversa do cliente. Retorna o id da conversa. */ async function recordSentMessage(supabase, params) {
+/** Grava a mensagem já enviada na conversa do cliente. Retorna os ids da conversa e da mensagem. */ async function recordSentMessage(supabase, params) {
   const { recipient, connection, number, text, providerResponse } = params;
   const sentAt = new Date().toISOString();
   const contact = await findOrCreateContact(supabase, recipient.clinic_id, recipient, number);
@@ -153,7 +160,7 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
   }
   const conversation = await findOrCreateConversation(supabase, recipient.clinic_id, contact.id, connection.id, sentAt);
   if (!conversation?.id) throw new Error("Conversa não resolvida");
-  const { error: msgErr } = await supabase.from("messages").insert({
+  const { data: savedMessage, error: msgErr } = await supabase.from("messages").insert({
     conversation_id: conversation.id,
     direction: "outbound",
     type: "text",
@@ -172,7 +179,7 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
     created_at: sentAt,
     // Fora das métricas de tempo de resposta do atendente
     is_automated: true
-  });
+  }).select("id").maybeSingle();
   if (msgErr) throw msgErr;
   const conversationUpdates = {
     updated_at: sentAt,
@@ -181,7 +188,10 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
   };
   if (!conversation.first_outbound_at) conversationUpdates.first_outbound_at = sentAt;
   await supabase.from("conversations").update(conversationUpdates).eq("id", conversation.id);
-  return conversation.id;
+  return {
+    conversationId: conversation.id,
+    messageId: savedMessage?.id ?? null
+  };
 }
 /** Envia para um destinatário. Retorna o que gravar na linha dele. */ async function sendToRecipient(supabase, connection, recipient) {
   const number = await resolvePhoneNumber(connection, onlyDigits(recipient.phone));
@@ -230,14 +240,15 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
   // A mensagem já saiu: falha ao gravar o histórico não pode virar "falhou"
   // (a pessoa reenviaria e o cliente receberia em dobro)
   let conversationId = null;
+  let messageId = null;
   try {
-    conversationId = await recordSentMessage(supabase, {
+    ({ conversationId, messageId } = await recordSentMessage(supabase, {
       recipient,
       connection,
       number,
       text,
       providerResponse
-    });
+    }));
   } catch (err) {
     console.error("[SCHEDULED_RECORD_ERROR]", {
       recipientId: recipient.recipient_id,
@@ -248,6 +259,8 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
     status: "sent",
     sent_at: new Date().toISOString(),
     conversation_id: conversationId,
+    // Liga ao "entregue" e "lida" que o webhook grava na mensagem
+    message_id: messageId,
     error: conversationId ? null : "Enviada, mas não foi possível registrar na conversa."
   };
 }
@@ -269,6 +282,8 @@ async function processClinic(supabase, clinicId, recipients) {
     return connections.get(key);
   };
   const suspended = await clinicIsSuspended(supabase, clinicId);
+  // Empresas diferentes não disparam todas no mesmo segundo
+  await sleep(sendDelayMs(0, START_JITTER_MAX_MS));
   for(let index = 0; index < recipients.length; index++){
     const recipient = recipients[index];
     // Cancelada enquanto a rodada estava em andamento

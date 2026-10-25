@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import {
   AlertTriangleIcon,
   BanIcon,
-  CalendarClockIcon,
   EyeIcon,
+  MegaphoneIcon,
   PencilIcon,
   PlusIcon,
   Trash2Icon,
@@ -20,48 +20,49 @@ import { Button } from "../components/ui/Button";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { MessageStatusBadge } from "../modules/scheduledMessages/components/StatusBadge";
 import {
+  CampaignFunnelInline,
+  CampaignProgress,
+} from "../modules/scheduledMessages/components/CampaignInsights";
+import {
   useQrWhatsappConnected,
   useScheduledMessageActions,
   useScheduledMessages,
 } from "../modules/scheduledMessages/hooks/useScheduledMessages";
 import type {
-  ScheduledMessage,
+  CampaignSummary,
   ScheduledMessageStatus,
 } from "../modules/scheduledMessages/types/scheduledMessages";
 import {
+  campaignTitle,
+  effectiveStatus,
+  formatPhone,
   formatScheduleDateTime,
   isCancellable,
   isEditable,
-  recipientLabel,
-  summarizeRecipients,
 } from "../modules/scheduledMessages/utils/schedule";
+import { CAMPAIGNS_PATH } from "../modules/scheduledMessages/paths";
 
 type Filter = "all" | "upcoming" | "sent" | "problems" | "cancelled";
 
 const FILTERS: { key: Filter; label: string; statuses: ScheduledMessageStatus[] }[] = [
   { key: "all", label: "Todas", statuses: [] },
-  { key: "upcoming", label: "Agendadas", statuses: ["scheduled", "processing"] },
-  { key: "sent", label: "Enviadas", statuses: ["sent"] },
+  { key: "upcoming", label: "Agendadas e enviando", statuses: ["scheduled", "processing"] },
+  { key: "sent", label: "Concluídas", statuses: ["sent"] },
   { key: "problems", label: "Com falha", statuses: ["partial", "failed"] },
   { key: "cancelled", label: "Canceladas", statuses: ["cancelled"] },
 ];
 
-type PendingAction = { type: "cancel" | "delete"; item: ScheduledMessage };
+type PendingAction = { type: "cancel" | "delete"; item: CampaignSummary };
 
-const describeRecipients = (item: ScheduledMessage) => {
-  const names = item.recipients.slice(0, 2).map(recipientLabel);
-  const rest = item.recipients.length - names.length;
+// Nome sem letra é telefone gravado como nome
+const previewLabel = (value: string) =>
+  /\p{L}/u.test(value) ? value : formatPhone(value);
+
+const describeRecipients = (item: CampaignSummary) => {
+  const names = item.previewNames.map(previewLabel);
+  const rest = item.stats.total - names.length;
+  if (names.length === 0) return "Sem destinatários";
   return rest > 0 ? `${names.join(", ")} e mais ${rest}` : names.join(" e ");
-};
-
-const describeProgress = (item: ScheduledMessage) => {
-  const { total, sent, failed } = summarizeRecipients(item.recipients);
-  if (item.status === "scheduled") {
-    return total === 1 ? "1 destinatário" : `${total} destinatários`;
-  }
-  const parts = [`${sent} de ${total} enviada${total === 1 ? "" : "s"}`];
-  if (failed > 0) parts.push(`${failed} com falha`);
-  return parts.join(" · ");
 };
 
 export const ScheduledMessagesPage: React.FC = () => {
@@ -74,7 +75,7 @@ export const ScheduledMessagesPage: React.FC = () => {
     useScheduledMessages(clinicId);
   const { cancel, remove, acting } = useScheduledMessageActions();
   const qrConnected = useQrWhatsappConnected(clinicId);
-  // Só o admin vê programações de outras pessoas
+  // Só o admin vê campanhas de outras pessoas
   const userNames = useClinicUserNames(clinicId, isAdmin);
 
   const [filter, setFilter] = useState<Filter>("all");
@@ -102,8 +103,8 @@ export const ScheduledMessagesPage: React.FC = () => {
     return filter === "upcoming" ? [...filtered].reverse() : filtered;
   }, [scheduledMessages, filter]);
 
-  const goToNew = () => navigate("/inbox/scheduled-messages/new");
-  const goToItem = (id: string) => navigate(`/inbox/scheduled-messages/${id}`);
+  const goToNew = () => navigate(`${CAMPAIGNS_PATH}/new`);
+  const goToItem = (id: string) => navigate(`${CAMPAIGNS_PATH}/${id}`);
 
   const confirmAction = async () => {
     if (!pendingAction) return;
@@ -112,10 +113,10 @@ export const ScheduledMessagesPage: React.FC = () => {
     try {
       if (type === "cancel") {
         await cancel(item.id);
-        toast.success("Programação cancelada.");
+        toast.success("Campanha cancelada.");
       } else {
         await remove(item.id);
-        toast.success("Programação excluída.");
+        toast.success("Campanha excluída.");
       }
       setPendingAction(null);
     } catch (err: any) {
@@ -129,15 +130,12 @@ export const ScheduledMessagesPage: React.FC = () => {
       <div className="border-b bg-white px-4 py-6 sm:px-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <PreTitleIcon icon={CalendarClockIcon} />
+            <PreTitleIcon icon={MegaphoneIcon} />
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">
-                Mensagens programadas
-              </h1>
+              <h1 className="text-2xl font-semibold text-gray-900">Campanhas</h1>
               <p className="mt-1 text-sm text-gray-500">
-                {isAdmin
-                  ? "Mensagens de WhatsApp agendadas pela equipe para sair em um dia e horário definidos."
-                  : "Agende mensagens de WhatsApp para sair em um dia e horário definidos."}
+                Envie uma mensagem para vários clientes, agora ou num horário
+                marcado, e acompanhe quem leu, respondeu e aderiu.
               </p>
             </div>
           </div>
@@ -145,7 +143,7 @@ export const ScheduledMessagesPage: React.FC = () => {
           <Button type="button" onClick={goToNew} className="rounded-full">
             <span className="flex items-center gap-2">
               <PlusIcon className="h-4 w-4" />
-              Nova programação
+              Nova campanha
             </span>
           </Button>
         </div>
@@ -174,8 +172,8 @@ export const ScheduledMessagesPage: React.FC = () => {
           <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
             <AlertTriangleIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
             <p>
-              O WhatsApp por QR Code da empresa está desconectado. As
-              programações só saem se ele estiver conectado no horário do envio.
+              O WhatsApp por QR Code da empresa está desconectado. As campanhas
+              só saem se ele estiver conectado no horário do envio.
               {isAdmin && (
                 <>
                   {" "}
@@ -219,29 +217,31 @@ export const ScheduledMessagesPage: React.FC = () => {
         ) : scheduledMessages.length === 0 ? (
           <Card className="rounded-2xl p-5 text-center sm:p-8">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
-              <CalendarClockIcon className="h-6 w-6 text-slate-500" />
+              <MegaphoneIcon className="h-6 w-6 text-slate-500" />
             </div>
             <h2 className="mt-4 text-lg font-semibold text-gray-900">
-              Nenhuma mensagem programada
+              Nenhuma campanha ainda
             </h2>
             <p className="mt-2 text-sm text-gray-500">
-              Escolha os clientes, escreva a mensagem e defina quando ela deve
-              ser enviada.
+              Ex.: "Promoção do Dia das Crianças, 50% de desconto". Escolha os
+              clientes, escreva a mensagem e envie agora ou agende.
             </p>
             <Button type="button" onClick={goToNew} className="mt-6 rounded-full">
-              Criar primeira programação
+              Criar primeira campanha
             </Button>
           </Card>
         ) : visible.length === 0 ? (
           <p className="py-10 text-center text-sm text-slate-500">
-            Nenhuma programação neste filtro.
+            Nenhuma campanha neste filtro.
           </p>
         ) : (
           <div className="space-y-3">
             {visible.map((item) => {
-              const editable = isEditable(item.status);
+              const status = effectiveStatus(item);
+              const editable = isEditable(status);
               const createdByOther =
                 isAdmin && item.createdBy !== authUser?.id;
+              const started = status !== "scheduled";
 
               return (
                 <Card
@@ -249,26 +249,47 @@ export const ScheduledMessagesPage: React.FC = () => {
                   className="rounded-2xl border border-slate-200 p-5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => goToItem(item.id)}
+                      className="min-w-0 flex-1 text-left"
+                    >
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                        <MessageStatusBadge status={item.status} />
-                        <span className="text-sm font-medium text-slate-900">
-                          {formatScheduleDateTime(item.scheduledAt)}
+                        <MessageStatusBadge status={status} />
+                        <span className="truncate text-base font-semibold text-slate-900">
+                          {campaignTitle(item)}
                         </span>
                       </div>
-
-                      <p className="mt-3 line-clamp-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
-                        {item.message}
+                      <p className="mt-1 text-xs text-slate-500">
+                        {status === "scheduled" ? "Agendada para " : "Enviada a partir de "}
+                        {formatScheduleDateTime(item.scheduledAt)}
                       </p>
+
+                      {item.name && (
+                        <p className="mt-2 line-clamp-1 whitespace-pre-wrap text-sm text-slate-600">
+                          {item.message}
+                        </p>
+                      )}
+
+                      {started && item.stats.total > 0 && (
+                        <div className="mt-3 max-w-xl">
+                          <CampaignProgress
+                            stats={item.stats}
+                            status={status}
+                            compact
+                          />
+                        </div>
+                      )}
 
                       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                         <span className="flex min-w-0 items-center gap-1.5">
                           <UsersIcon className="h-3.5 w-3.5 flex-shrink-0" />
                           <span className="truncate">
+                            {item.stats.total} destinatário
+                            {item.stats.total === 1 ? "" : "s"} ·{" "}
                             {describeRecipients(item)}
                           </span>
                         </span>
-                        <span>{describeProgress(item)}</span>
                         {createdByOther && (
                           <span>
                             Criada por{" "}
@@ -277,7 +298,13 @@ export const ScheduledMessagesPage: React.FC = () => {
                           </span>
                         )}
                       </div>
-                    </div>
+
+                      {started && item.stats.sent > 0 && (
+                        <div className="mt-2">
+                          <CampaignFunnelInline stats={item.stats} />
+                        </div>
+                      )}
+                    </button>
 
                     <div className="flex items-center gap-1">
                       <Button
@@ -292,7 +319,7 @@ export const ScheduledMessagesPage: React.FC = () => {
                           ) : (
                             <EyeIcon className="h-4 w-4" />
                           )}
-                          {editable ? "Editar" : "Detalhes"}
+                          {editable ? "Editar" : "Resultado"}
                         </span>
                       </Button>
                       {isCancellable(item.status) && (
@@ -310,7 +337,7 @@ export const ScheduledMessagesPage: React.FC = () => {
                           </span>
                         </Button>
                       )}
-                      {item.status !== "processing" && (
+                      {status !== "processing" && (
                         <Button
                           type="button"
                           variant="ghost"
@@ -318,7 +345,7 @@ export const ScheduledMessagesPage: React.FC = () => {
                           onClick={() =>
                             setPendingAction({ type: "delete", item })
                           }
-                          aria-label="Excluir programação"
+                          aria-label="Excluir campanha"
                         >
                           <span className="flex items-center gap-2 text-red-600">
                             <Trash2Icon className="h-4 w-4" />
@@ -342,15 +369,15 @@ export const ScheduledMessagesPage: React.FC = () => {
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
                   {pendingAction.type === "cancel"
-                    ? "Cancelar programação"
-                    : "Excluir programação"}
+                    ? "Cancelar campanha"
+                    : "Excluir campanha"}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
                   {pendingAction.type === "delete"
-                    ? "A programação e o histórico de envio dela serão apagados. As mensagens já enviadas continuam nas conversas."
+                    ? "A campanha e o resultado dela serão apagados. As mensagens já enviadas continuam nas conversas."
                     : pendingAction.item.status === "processing"
                       ? "Quem já recebeu a mensagem continua como enviado; os demais não receberão."
-                      : "A mensagem não será enviada. A programação fica no histórico como cancelada."}
+                      : "A mensagem não será enviada. A campanha fica no histórico como cancelada."}
                 </p>
               </div>
               <button
@@ -366,6 +393,9 @@ export const ScheduledMessagesPage: React.FC = () => {
             <div className="mt-5 space-y-5">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                 <p className="font-medium text-slate-900">
+                  {campaignTitle(pendingAction.item)}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
                   {formatScheduleDateTime(pendingAction.item.scheduledAt)}
                 </p>
                 <p className="mt-2 line-clamp-3 whitespace-pre-wrap">
@@ -389,7 +419,7 @@ export const ScheduledMessagesPage: React.FC = () => {
                   {acting
                     ? "Aguarde..."
                     : pendingAction.type === "cancel"
-                      ? "Cancelar programação"
+                      ? "Cancelar campanha"
                       : "Excluir"}
                 </Button>
               </div>
