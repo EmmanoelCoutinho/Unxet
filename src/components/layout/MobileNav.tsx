@@ -1,10 +1,12 @@
 import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
-import { XIcon } from "lucide-react";
+import { ChevronDownIcon, XIcon } from "lucide-react";
 import {
   formatUnreadBadge,
+  groupSidebarItems,
   isSidebarItemActive,
+  useClosedSidebarGroups,
   useSidebarNavigation,
   type SidebarItem,
 } from "./AppSidebar";
@@ -26,6 +28,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
   const location = useLocation();
   const { items, settings } = useSidebarNavigation();
   const internalUnread = useInternalUnreadTotal();
+  const { closed, toggle } = useClosedSidebarGroups();
 
   // Fecha ao trocar de rota
   useEffect(() => {
@@ -122,8 +125,39 @@ export const MobileNav: React.FC<MobileNavProps> = ({
           </button>
         </div>
 
-        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
-          {items.map(renderItem)}
+        <nav aria-label="Menu principal" className="min-h-0 flex-1 space-y-4 overflow-y-auto px-2 py-3">
+          {groupSidebarItems(items).map((group) => {
+            const isClosed = closed.includes(group.id);
+            const hasActive = group.items.some((item) =>
+              isSidebarItemActive(item, location.pathname),
+            );
+            const hasUnread =
+              internalUnread > 0 && group.items.some((item) => item.showsInternalUnread);
+            return (
+              <div key={group.id}>
+                <button
+                  type="button"
+                  onClick={() => toggle(group.id)}
+                  aria-expanded={!isClosed}
+                  className="flex h-9 w-full items-center justify-between gap-2 rounded-md px-3 text-xs font-semibold uppercase tracking-wider text-gray-500 active:bg-gray-100"
+                >
+                  <span className="flex items-center gap-2">
+                    {group.label}
+                    {isClosed && (hasActive || hasUnread) && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#0A84FF]" aria-label="Tem item ativo ou mensagem nova" />
+                    )}
+                  </span>
+                  <ChevronDownIcon
+                    className={`h-4 w-4 transition-transform ${isClosed ? "-rotate-90" : ""}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {!isClosed && (
+                  <div className="mt-0.5 space-y-1">{group.items.map(renderItem)}</div>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         {settings && (

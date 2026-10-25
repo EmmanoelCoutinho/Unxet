@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useCallback, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ActivityIcon,
   BotIcon,
   Building2Icon,
+  ChevronDownIcon,
   FileBarChartIcon,
   KanbanSquareIcon,
   MegaphoneIcon,
@@ -21,10 +22,21 @@ import { useClinic } from "../../contexts/ClinicContext";
 import { useIsBelowLg } from "../../hooks/useMediaQuery";
 import { useInternalUnreadTotal } from "../../modules/internalChat/hooks/useInternalChat";
 
+export type SidebarGroupId = "atendimento" | "vendas" | "gestao";
+
+// Categorias do menu, na ordem em que aparecem
+export const SIDEBAR_GROUPS: { id: SidebarGroupId; label: string }[] = [
+  { id: "atendimento", label: "Atendimento" },
+  { id: "vendas", label: "Vendas e marketing" },
+  { id: "gestao", label: "Gestão" },
+];
+
 export type SidebarItem = {
   label: string;
   icon: React.ElementType<{ className?: string }>;
   path: string;
+  // Categoria (Configurações fica fora, no rodapé)
+  group?: SidebarGroupId;
   extraPaths?: string[];
   feature?: FeatureKey;
   // Recurso que depende do plano da empresa (some se o plano não tem)
@@ -41,19 +53,13 @@ export const formatUnreadBadge = (count: number) =>
   count > 99 ? "99+" : String(count);
 
 const allSidebarItems: SidebarItem[] = [
+  // Atendimento
   {
     label: "Atendimentos",
     icon: MessageCircleIcon,
     path: "/inbox",
     extraPaths: ["/inbox/chat"],
-  },
-  {
-    label: "Chat interno",
-    icon: MessagesSquareIcon,
-    path: "/inbox/team",
-    extraPaths: ["/inbox/team"],
-    showsInternalUnread: true,
-    planFeature: "internal_chat",
+    group: "atendimento",
   },
   {
     label: "Painel",
@@ -62,52 +68,40 @@ const allSidebarItems: SidebarItem[] = [
     mobileOnly: true,
     adminOnly: true,
     planFeature: "analytics",
+    group: "atendimento",
   },
   {
-    label: "Relatórios",
-    icon: FileBarChartIcon,
-    path: "/inbox/reports",
-    adminOnly: true,
-    planFeature: "analytics",
+    label: "Chat interno",
+    icon: MessagesSquareIcon,
+    path: "/inbox/team",
+    extraPaths: ["/inbox/team"],
+    showsInternalUnread: true,
+    planFeature: "internal_chat",
+    group: "atendimento",
   },
   {
-    label: "Carteira de Clientes",
-    icon: FiBookOpen,
-    path: "/contacts",
-    adminOnly: true,
+    label: "Mensagens rápidas",
+    icon: MessageSquareTextIcon,
+    path: "/inbox/quick-messages",
+    group: "atendimento",
   },
-  {
-    label: "Atendentes",
-    icon: UsersIcon,
-    path: "/inbox/attendants",
-    adminOnly: true,
-  },
-  {
-    label: "Departamentos",
-    icon: Building2Icon,
-    path: "/inbox/departments",
-    adminOnly: true,
-    planFeature: "departments",
-  },
-  { label: "Etiquetas", icon: TagIcon, path: "/inbox/tags" },
+  { label: "Etiquetas", icon: TagIcon, path: "/inbox/tags", group: "atendimento" },
   {
     label: "Bots",
     icon: BotIcon,
     path: "/inbox/bots",
     adminOnly: true,
     planFeature: "bots",
+    group: "atendimento",
   },
-  {
-    label: "Mensagens rápidas",
-    icon: MessageSquareTextIcon,
-    path: "/inbox/quick-messages",
-  },
+  // Vendas e marketing
   {
     label: "Funil de vendas",
     icon: KanbanSquareIcon,
     path: "/inbox/leads",
     extraPaths: ["/inbox/leads"],
     planFeature: "scheduled_messages",
+    group: "vendas",
   },
   {
     label: "Campanhas",
@@ -115,6 +109,7 @@ const allSidebarItems: SidebarItem[] = [
     path: "/inbox/campaigns",
     extraPaths: ["/inbox/campaigns"],
     planFeature: "scheduled_messages",
+    group: "vendas",
   },
   {
     // Campanhas com templates aprovados pela Meta (WhatsApp oficial)
@@ -123,8 +118,81 @@ const allSidebarItems: SidebarItem[] = [
     path: "/inbox/marketing-campaigns",
     feature: "marketingCampaigns",
     adminOnly: true,
+    group: "vendas",
+  },
+  {
+    label: "Carteira de clientes",
+    icon: FiBookOpen,
+    path: "/contacts",
+    adminOnly: true,
+    group: "vendas",
+  },
+  // Gestão
+  {
+    label: "Relatórios",
+    icon: FileBarChartIcon,
+    path: "/inbox/reports",
+    adminOnly: true,
+    planFeature: "analytics",
+    group: "gestao",
+  },
+  {
+    label: "Atendentes",
+    icon: UsersIcon,
+    path: "/inbox/attendants",
+    adminOnly: true,
+    group: "gestao",
+  },
+  {
+    label: "Departamentos",
+    icon: Building2Icon,
+    path: "/inbox/departments",
+    adminOnly: true,
+    planFeature: "departments",
+    group: "gestao",
   },
 ];
+
+/** Itens já filtrados, separados por categoria (categorias vazias somem). */
+export const groupSidebarItems = (items: SidebarItem[]) =>
+  SIDEBAR_GROUPS.map((group) => ({
+    ...group,
+    items: items.filter((item) => (item.group ?? "atendimento") === group.id),
+  })).filter((group) => group.items.length > 0);
+
+const CLOSED_GROUPS_KEY = "unxet:nav:closed-groups";
+
+const readClosedGroups = (): SidebarGroupId[] => {
+  try {
+    const raw = window.localStorage.getItem(CLOSED_GROUPS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Categorias que a pessoa fechou (vale para o menu do computador e do
+ * celular e fica guardado neste navegador).
+ */
+export const useClosedSidebarGroups = () => {
+  const [closed, setClosed] = useState<SidebarGroupId[]>(readClosedGroups);
+
+  const toggle = useCallback((id: SidebarGroupId) => {
+    setClosed((prev) => {
+      const next = prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id];
+      try {
+        window.localStorage.setItem(CLOSED_GROUPS_KEY, JSON.stringify(next));
+      } catch {
+        // sem armazenamento: só não lembra na próxima visita
+      }
+      return next;
+    });
+  }, []);
+
+  return { closed, toggle };
+};
 
 // Itens de módulos desligados em FEATURES não aparecem na navegação
 export const sidebarItems = allSidebarItems.filter(
@@ -167,6 +235,7 @@ const desktopPanelItem: SidebarItem = {
   extraPaths: ["/inbox/dashboard", "/inbox/chat"],
   adminOnly: true,
   planFeature: "analytics",
+  group: "atendimento",
 };
 
 /**
@@ -194,6 +263,7 @@ export const AppSidebar: React.FC = () => {
   const { items, settings } = useSidebarNavigation();
   const isBelowLg = useIsBelowLg();
   const internalUnread = useInternalUnreadTotal();
+  const { closed, toggle } = useClosedSidebarGroups();
 
   const renderItem = (item: SidebarItem) => {
     const Icon = item.icon;
@@ -258,8 +328,49 @@ export const AppSidebar: React.FC = () => {
           </div>
         </div>
 
-        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
-          {desktopItems(items, isBelowLg).map(renderItem)}
+        {/*
+          Recolhido (só ícones): linhas finas separam as categorias.
+          Aberto (mouse em cima): título da categoria, que fecha/abre os itens.
+        */}
+        <nav aria-label="Menu principal" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-2">
+          {groupSidebarItems(desktopItems(items, isBelowLg)).map((group, index) => {
+            const isClosed = closed.includes(group.id);
+            const hasActive = group.items.some((item) =>
+              isSidebarItemActive(item, location.pathname),
+            );
+            const hasUnread =
+              internalUnread > 0 && group.items.some((item) => item.showsInternalUnread);
+            return (
+              <div key={group.id}>
+                {index > 0 && (
+                  <div className="mx-3 my-2 h-px bg-gray-200 group-hover:hidden" aria-hidden="true" />
+                )}
+                <button
+                  type="button"
+                  onClick={() => toggle(group.id)}
+                  aria-expanded={!isClosed}
+                  className={`hidden h-7 w-full items-center justify-between gap-2 whitespace-nowrap rounded-md px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 group-hover:flex ${
+                    index > 0 ? "mt-3" : ""
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {group.label}
+                    {isClosed && (hasActive || hasUnread) && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#0A84FF]" aria-label="Tem item ativo ou mensagem nova" />
+                    )}
+                  </span>
+                  <ChevronDownIcon
+                    className={`h-3.5 w-3.5 transition-transform ${isClosed ? "-rotate-90" : ""}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {/* Fechada: some só com o menu aberto; recolhido mostra todos os ícones */}
+                <div className={`mt-0.5 space-y-1 ${isClosed ? "group-hover:hidden" : ""}`}>
+                  {group.items.map(renderItem)}
+                </div>
+              </div>
+            );
+          })}
         </nav>
 
         {settings && (
