@@ -208,6 +208,31 @@ export const formatDuration = (ms: number) => {
   return rest === 0 ? `${hours}h` : `${hours}h${String(rest).padStart(2, "0")}`;
 };
 
+/** Totais do topo da lista de campanhas (canceladas também contam o que saiu). */
+export const aggregateCampaigns = (
+  items: { stats: Pick<CampaignStats, "sent" | "replied" | "converted" | "revenue"> }[],
+) => {
+  const totals = { campaigns: items.length, sent: 0, replied: 0, converted: 0, revenue: 0 };
+  for (const { stats } of items) {
+    totals.sent += stats.sent;
+    totals.replied += stats.replied;
+    totals.converted += stats.converted;
+    totals.revenue += stats.revenue;
+  }
+  return totals;
+};
+
+/** "em 15 min", "em 3 h", "em 2 dias" (vazio se já passou). */
+export const startsIn = (iso: string, now = Date.now()) => {
+  const minutes = Math.round((new Date(iso).getTime() - now) / 60000);
+  if (minutes <= 0) return "";
+  if (minutes < 60) return `em ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `em ${hours} h`;
+  const days = Math.round(hours / 24);
+  return `em ${days} ${days === 1 ? "dia" : "dias"}`;
+};
+
 /** Porcentagem inteira de `part` sobre `whole` (0 quando não há base). */
 export const ratePercent = (part: number, whole: number) =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;

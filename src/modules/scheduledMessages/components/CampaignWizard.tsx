@@ -55,6 +55,7 @@ import {
   toTimeInputValue,
 } from "../utils/schedule";
 import { CAMPAIGNS_PATH } from "../paths";
+import { WhatsappPreview } from "./WhatsappPreview";
 
 const MAX_NAME_LENGTH = 120;
 
@@ -1175,30 +1176,12 @@ const MessagePreview: React.FC<{
   });
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-        <p className="text-sm font-semibold text-slate-900">Prévia</p>
-        <p className="text-xs text-slate-500">
-          {recipientsCount > 0 ? plural(recipientsCount, "destinatário", "destinatários") : "Sem destinatários"}
-        </p>
-      </div>
-      {/* Como aparece no WhatsApp do cliente */}
-      <div className="bg-[#EFEAE2] px-4 py-5">
-        <div className="mb-3 flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-300 text-xs font-semibold text-white">
-            {recipientName.trim()[0]?.toUpperCase() ?? "?"}
-          </span>
-          <span className="text-xs font-medium text-slate-600">Como {recipientName} vai ver</span>
-        </div>
-        <div className="ml-auto max-w-[92%] rounded-xl rounded-tr-sm bg-[#D9FDD3] px-3 py-2 shadow-sm">
-          {text.trim() ? (
-            <p className="whitespace-pre-wrap break-words text-sm leading-5 text-slate-900">{text}</p>
-          ) : (
-            <p className="text-sm italic text-slate-500">Sua mensagem aparece aqui.</p>
-          )}
-          <p className="mt-1 text-right text-[11px] text-slate-500">{time}</p>
-        </div>
-      </div>
-    </div>
+    <WhatsappPreview
+      title="Prévia"
+      meta={recipientsCount > 0 ? plural(recipientsCount, "destinatário", "destinatários") : "Sem destinatários"}
+      recipientName={recipientName}
+      text={text}
+      time={time}
+    />
   );
 };
