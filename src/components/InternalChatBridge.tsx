@@ -79,7 +79,7 @@ export function InternalChatBridge() {
             membersRef.current.find((m) => m.userId === message.senderId)
               ?.name ?? "Equipe";
 
-          // Só o nome: a tela pode estar à vista de um paciente
+          // Só o nome: a tela pode estar à vista de um cliente
           toast.info(`${senderName}: nova mensagem no chat interno`, {
             toastId: `internal-chat-${message.threadId}`,
             onClick: () =>

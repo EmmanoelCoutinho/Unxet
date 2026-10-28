@@ -356,7 +356,6 @@ export const CampaignResultView: React.FC<{ scheduledMessage: ScheduledMessage }
             <aside className="space-y-5 lg:sticky lg:top-6">
               <WhatsappPreview
                 title="Mensagem enviada"
-                recipientName={previewName}
                 text={previewMessageText(scheduledMessage.message, previewName)}
                 time={new Date(scheduledMessage.scheduledAt).toLocaleTimeString("pt-BR", {
                   hour: "2-digit",

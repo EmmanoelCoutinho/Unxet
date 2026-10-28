@@ -282,7 +282,6 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
           <aside className={`xl:sticky xl:top-0 xl:block ${previewOnSmall ? "" : "hidden"}`}>
             <MessagePreview
               text={previewMessageText(message, previewName)}
-              recipientName={previewName}
               recipientsCount={recipients.length}
               sendNow={sendNow}
               scheduledAt={scheduledAt}
@@ -1165,11 +1164,10 @@ const ReviewStep: React.FC<{
 
 const MessagePreview: React.FC<{
   text: string;
-  recipientName: string;
   recipientsCount: number;
   sendNow: boolean;
   scheduledAt: Date | null;
-}> = ({ text, recipientName, recipientsCount, sendNow, scheduledAt }) => {
+}> = ({ text, recipientsCount, sendNow, scheduledAt }) => {
   const time = (sendNow || !scheduledAt ? new Date() : scheduledAt).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
@@ -1179,7 +1177,6 @@ const MessagePreview: React.FC<{
     <WhatsappPreview
       title="Prévia"
       meta={recipientsCount > 0 ? plural(recipientsCount, "destinatário", "destinatários") : "Sem destinatários"}
-      recipientName={recipientName}
       text={text}
       time={time}
     />

@@ -469,7 +469,7 @@ export const Tags: React.FC = () => {
                   <Input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
-                    placeholder="Ex: Pós-consulta"
+                    placeholder="Ex: Pós-venda"
                     maxLength={TAG_NAME_MAX_LENGTH}
                     className="mt-2"
                     disabled={isSaving || isDeleting}

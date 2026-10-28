@@ -1,4 +1,5 @@
 import React from "react";
+import { UserIcon } from "lucide-react";
 
 /**
  * Cartão com a mensagem como o cliente vê no WhatsApp (fundo e bolha
@@ -7,11 +8,10 @@ import React from "react";
 export const WhatsappPreview: React.FC<{
   title: string;
   meta?: React.ReactNode;
-  recipientName: string;
   text: string;
   time: string;
   emptyText?: string;
-}> = ({ title, meta, recipientName, text, time, emptyText = "Sua mensagem aparece aqui." }) => (
+}> = ({ title, meta, text, time, emptyText = "Sua mensagem aparece aqui." }) => (
   <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
     <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
       <p className="text-sm font-semibold text-slate-900">{title}</p>
@@ -20,12 +20,12 @@ export const WhatsappPreview: React.FC<{
     <div className="bg-[#EFEAE2] px-4 py-5">
       <div className="mb-3 flex items-center gap-2">
         <span
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-xs font-semibold text-white"
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-white"
           aria-hidden="true"
         >
-          {recipientName.trim()[0]?.toUpperCase() ?? "?"}
+          <UserIcon className="h-4 w-4" />
         </span>
-        <span className="text-xs font-medium text-slate-600">Como {recipientName} vê</span>
+        <span className="text-xs font-medium text-slate-600">Como o cliente vê</span>
       </div>
       <div className="ml-auto max-w-[92%] rounded-xl rounded-tr-sm bg-[#D9FDD3] px-3 py-2 shadow-sm">
         {text.trim() ? (
