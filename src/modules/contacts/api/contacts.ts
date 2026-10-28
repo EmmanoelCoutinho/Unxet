@@ -87,17 +87,30 @@ const loadConversationSummaries = async (
     return new Map<string, ConversationContactSummaryRow>();
   }
 
-  const { data, error } = await supabase
-    .from("conversations")
-    .select("contact_id, channel, status, assigned_user_id, last_message_at")
-    .eq("clinic_id", clinicId)
-    .in("contact_id", contactIds)
-    .order("last_message_at", { ascending: false, nullsFirst: false });
+  // Os ids vão no endereço da requisição: muitos de uma vez passam do limite
+  // do servidor (414) e a carteira aparecia vazia. Busca em lotes.
+  const CHUNK = 100;
+  const chunks: string[][] = [];
+  for (let i = 0; i < contactIds.length; i += CHUNK) {
+    chunks.push(contactIds.slice(i, i + CHUNK));
+  }
 
-  if (error) throw error;
+  const results = await Promise.all(
+    chunks.map(async (ids) => {
+      const { data, error } = await supabase
+        .from("conversations")
+        .select("contact_id, channel, status, assigned_user_id, last_message_at")
+        .eq("clinic_id", clinicId)
+        .in("contact_id", ids)
+        .order("last_message_at", { ascending: false, nullsFirst: false });
+      if (error) throw error;
+      return (data ?? []) as ConversationContactSummaryRow[];
+    }),
+  );
 
+  // Cada cliente está num lote só; dentro dele a conversa mais recente vem antes
   const summaries = new Map<string, ConversationContactSummaryRow>();
-  for (const row of (data ?? []) as ConversationContactSummaryRow[]) {
+  for (const row of results.flat()) {
     if (row.contact_id && !summaries.has(row.contact_id)) {
       summaries.set(row.contact_id, row);
     }
