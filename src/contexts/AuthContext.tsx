@@ -59,10 +59,31 @@ const PROFILE_TTL_MS = 10 * 60 * 1000; // 10 min (ajuste ou coloque 0 para “in
 const SESSION_CHECK_INTERVAL_MS = 60 * 1000;
 const SESSION_CHECK_MIN_GAP_MS = 10 * 1000;
 
-// Erro de rede não conta: só desloga quando o servidor recusa a sessão/usuário
+// Depois disso a conferência desiste e tenta de novo na próxima vez
+const SESSION_CHECK_TIMEOUT_MS = 15 * 1000;
+
+// Só desloga quando o servidor diz que a sessão ou o usuário não existem
+// mais. Erro de rede e token vencido (bad_jwt) não contam: o token vencido é
+// renovado pelo Supabase, e a renovação falha sozinha se a sessão acabou.
+const REVOKED_ERROR_CODES = new Set(["session_not_found", "user_not_found"]);
 const isSessionRevokedError = (error: AuthError) =>
   isAuthSessionMissingError(error) ||
-  (isAuthApiError(error) && (error.status === 401 || error.status === 403));
+  (isAuthApiError(error) && REVOKED_ERROR_CODES.has(error.code ?? ""));
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number) =>
+  new Promise<T | "timeout">((resolve, reject) => {
+    const timer = setTimeout(() => resolve("timeout"), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 
 const sessionChannelName = (userId: string) => `user-session:${userId}`;
 
@@ -142,6 +163,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const mountedRef = useRef(true);
 
+  // Token da sessão atual, para conferir a sessão sem passar pela trava
+  // interna do Supabase (ver verifySession)
+  const accessTokenRef = useRef<string | null>(null);
+
   const refreshProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from("clinic_users")
@@ -188,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!mountedRef.current) return;
 
         const sessionUser = data.session?.user ?? null;
+        accessTokenRef.current = data.session?.access_token ?? null;
         setAuthUser(sessionUser);
 
         if (!sessionUser) {
@@ -214,6 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event, newSession) => {
         const sessionUser = newSession?.user ?? null;
+        accessTokenRef.current = newSession?.access_token ?? null;
         setAuthUser(sessionUser);
 
         if (!sessionUser) {
@@ -244,30 +271,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!authUserId) return;
 
-    let active = true;
     let checking = false;
     let lastCheckAt = 0;
     let revokeReason: RevokeReason | null = null;
 
+    // Passa o token direto para o getUser: sem token, o Supabase espera a
+    // trava da sessão (compartilhada entre as abas) sem limite de tempo. Uma
+    // aba congelada ou uma requisição presa segurava essa trava, e este
+    // aparelho só percebia o logout ao recarregar a página.
     const verifySession = async (force = false) => {
       if (checking) return;
       if (!force && Date.now() - lastCheckAt < SESSION_CHECK_MIN_GAP_MS) return;
+      const token = accessTokenRef.current;
+      if (!token) return;
       checking = true;
       lastCheckAt = Date.now();
 
       try {
-        const { error } = await supabase.auth.getUser();
-        if (!active || !error || !isSessionRevokedError(error)) return;
-
-        // A sessão não existe mais no servidor: limpa só este aparelho
-        await supabase.auth.signOut({ scope: "local" });
+        const result = await withTimeout(
+          supabase.auth.getUser(token),
+          SESSION_CHECK_TIMEOUT_MS,
+        );
+        if (result === "timeout") return;
+        const { error } = result;
+        if (!error || !isSessionRevokedError(error)) return;
+        // A sessão mudou durante a conferência (outro login): nada a fazer
+        if (accessTokenRef.current !== null && accessTokenRef.current !== token) return;
         if (!mountedRef.current) return;
+
+        // A sessão não existe mais no servidor: limpa só este aparelho. A
+        // tela sai primeiro; o signOut usa a trava e pode demorar.
+        accessTokenRef.current = null;
         setAuthUser(null);
         setProfile(null);
         writeStorage(STORAGE_PROFILE_KEY, null);
         toast.error(revokedMessage(revokeReason), {
           toastId: "session-revoked",
         });
+        supabase.auth.signOut({ scope: "local" }).catch((e) => {
+          console.error("Erro ao limpar a sessão encerrada:", e);
+        });
+      } catch (e) {
+        console.error("Erro ao conferir a sessão:", e);
       } finally {
         checking = false;
       }
@@ -297,7 +342,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     return () => {
-      active = false;
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
