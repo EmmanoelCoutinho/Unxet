@@ -22,6 +22,7 @@ import {
   statusLabels,
 } from "./contactLabels";
 import { SecureImage } from "../ui/SecureImage";
+import { ContactScheduledMessages } from "../../modules/scheduledMessages/components/ContactScheduledMessages";
 
 type ContactDetailsProps = {
   contact: Contact | null;
@@ -165,6 +166,12 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
           />
         </div>
       </div>
+
+      <ContactScheduledMessages
+        contactId={contact.id}
+        contactName={contact.name}
+        hasPhone={/\d{10,}/.test(String(contact.phone ?? "").replace(/\D/g, ""))}
+      />
 
       <div className="border-t border-gray-100 p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3">

@@ -96,6 +96,12 @@ const InternalChatPage = lazy(() =>
   })),
 );
 
+const LeadsKanbanPage = lazy(() =>
+  import("./pages/LeadsKanban").then((m) => ({
+    default: m.LeadsKanbanPage,
+  })),
+);
+
 const ScheduledMessagesPage = lazy(() =>
   import("./pages/ScheduledMessages").then((m) => ({
     default: m.ScheduledMessagesPage,
@@ -275,6 +281,7 @@ function RoutedApp() {
             <Route path="departments" element={<AdminOnly><PlanGate feature="departments"><DepartmentsPage /></PlanGate></AdminOnly>} />
             <Route path="attendants" element={<AdminOnly><AttendantsPage /></AdminOnly>} />
             <Route path="quick-messages" element={<QuickMessagesPage />} />
+            <Route path="leads" element={<PlanGate feature="scheduled_messages"><LeadsKanbanPage /></PlanGate>} />
             <Route path="campaigns" element={<PlanGate feature="scheduled_messages"><ScheduledMessagesPage /></PlanGate>} />
             <Route path="campaigns/new" element={<PlanGate feature="scheduled_messages"><ScheduledMessageEditorPage /></PlanGate>} />
             <Route path="campaigns/:id" element={<PlanGate feature="scheduled_messages"><ScheduledMessageEditorPage /></PlanGate>} />

@@ -29,6 +29,8 @@ export type Conversation = {
   departmentId?: string;
   departmentName?: string;
   channel: Channel;
+  // Cliente da carteira (liga a conversa ao funil de vendas)
+  contactId?: string;
   contactName: string;
   contactNumber?: string;
   contactAvatar?: string;
