@@ -9,8 +9,11 @@
  * - Cria a empresa, o departamento padrão "Recepção" e vincula o usuário como
  *   admin da empresa e membro da Recepção (RPC platform_onboard_clinic, tudo
  *   em uma transação), já com o plano e a situação da assinatura escolhidos.
- * - Se a criação da empresa falhar, a conta recém-convidada é excluída para o
- *   e-mail não ficar preso a um cadastro pela metade.
+ * - Pode convidar também as outras contas pedidas pelo cliente (extra_users),
+ *   que entram na Recepção. O total de contas respeita o limite de atendentes
+ *   do plano escolhido.
+ * - Se a criação da empresa falhar, as contas recém-convidadas são excluídas
+ *   para nenhum e-mail ficar preso a um cadastro pela metade.
  */
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -41,7 +44,11 @@ const log = (step: string, payload: Record<string, unknown> = {}) =>
     ...payload
   }));
 
-const EMAIL_IN_USE = "Este e-mail já está vinculado a outra empresa.";
+const emailInUse = (email: string) =>
+  `O e-mail ${email} já está vinculado a outra empresa.`;
+
+// Teto de segurança; o limite de verdade é o do plano escolhido
+const MAX_EXTRA_USERS = 50;
 
 const isValidEmail =(email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -118,60 +125,137 @@ serve(async (req) => {
       return json(400, { error: "Quantidade de números de WhatsApp inválida (de 2 a 50)" });
     }
 
-    log("onboard_start", { requesterId: requester.id, clinicName, email });
+    // Outras contas pedidas pelo cliente: entram na Recepção como atendente
+    // (ou administrador) junto com o primeiro usuário
+    const rawExtra = body?.extra_users ?? [];
+    if (!Array.isArray(rawExtra) || rawExtra.length > MAX_EXTRA_USERS) {
+      return json(400, { error: "Lista de contas inválida" });
+    }
+    const extraUsers = [];
+    const seenEmails = new Set([email]);
+    for (const item of rawExtra) {
+      const extraName = item?.name?.toString().trim() ?? "";
+      const extraEmail = item?.email?.toString().trim().toLowerCase() ?? "";
+      const extraRole = item?.role?.toString().trim() || "agent";
+      if (!extraName) return json(400, { error: "Informe o nome de todas as contas" });
+      if (!isValidEmail(extraEmail)) {
+        return json(400, { error: `E-mail inválido: ${extraEmail || "(vazio)"}`, email: extraEmail });
+      }
+      if (extraRole !== "admin" && extraRole !== "agent") {
+        return json(400, { error: "Papel inválido", email: extraEmail });
+      }
+      if (seenEmails.has(extraEmail)) {
+        return json(400, { error: `O e-mail ${extraEmail} aparece mais de uma vez`, email: extraEmail });
+      }
+      seenEmails.add(extraEmail);
+      extraUsers.push({ name: extraName, email: extraEmail, role: extraRole });
+    }
+
+    // O limite de atendentes do plano vale para o total de contas
+    const { data: plan, error: planErr } = await admin
+      .from("subscription_plans")
+      .select("name, max_attendants")
+      .eq("code", planCode)
+      .maybeSingle();
+    if (planErr || !plan) {
+      log("plan_lookup_failed", { error: planErr?.message, planCode });
+      return json(500, { error: "Não foi possível ler o plano" });
+    }
+    const totalAccounts = 1 + extraUsers.length;
+    if (plan.max_attendants !== null && totalAccounts > plan.max_attendants) {
+      log("plan_attendant_limit", { planCode, totalAccounts });
+      return json(409, {
+        error: `O plano ${plan.name} permite até ${plan.max_attendants} contas, contando o primeiro usuário.`,
+        code: "plan_limit"
+      });
+    }
+
+    log("onboard_start", {
+      requesterId: requester.id,
+      clinicName,
+      email,
+      extraUsers: extraUsers.length
+    });
+
+    const accounts = [
+      { name: userName, email, role: "admin" },
+      ...extraUsers
+    ];
 
     // Cada conta pertence a uma única empresa. Conta ativa o próprio Auth recusa,
     // mas um convite ainda não aceito seria reenviado e devolveria a MESMA conta:
     // barramos aqui para não mexer em quem já é de outra empresa.
-    const { data: existingByEmail, error: existingErr } = await admin
-      .from("clinic_users")
-      .select("user_id")
-      .ilike("email", email.replace(/[\\%_]/g, "\\$&"))
-      .limit(1);
-    if (existingErr) {
-      log("existing_email_check_failed", { error: existingErr.message });
-      return json(500, { error: existingErr.message });
-    }
-    if (existingByEmail?.length) {
-      log("email_already_linked", { email });
-      return json(409, { error: EMAIL_IN_USE });
-    }
-
-    // A conta vem primeiro: e-mail já cadastrado barra tudo antes de criar a empresa.
-    const { data: inviteData, error: inviteErr } =
-      await admin.auth.admin.inviteUserByEmail(email, {
-        redirectTo,
-        data: { name: userName, role: "admin" }
-      });
-    if (inviteErr || !inviteData?.user?.id) {
-      log("invite_failed", { error: inviteErr?.message });
-      return json(400, {
-        error: inviteErr?.message ?? "Não foi possível criar a conta do usuário"
-      });
-    }
-    const userId = inviteData.user.id;
-
-    // Vínculo antigo sem e-mail gravado escapa da checagem acima: a conta já é
-    // de outra empresa e NÃO pode ser vinculada de novo nem excluída no rollback.
-    const { data: existingLink, error: linkErr } = await admin
-      .from("clinic_users")
-      .select("user_id")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (linkErr) {
-      log("existing_link_check_failed", { error: linkErr.message, userId });
-      return json(500, { error: linkErr.message });
-    }
-    if (existingLink) {
-      log("user_already_linked", { userId });
-      return json(409, { error: EMAIL_IN_USE });
+    for (const account of accounts) {
+      const { data: existingByEmail, error: existingErr } = await admin
+        .from("clinic_users")
+        .select("user_id")
+        .ilike("email", account.email.replace(/[\\%_]/g, "\\$&"))
+        .limit(1);
+      if (existingErr) {
+        log("existing_email_check_failed", { error: existingErr.message });
+        return json(500, { error: existingErr.message });
+      }
+      if (existingByEmail?.length) {
+        log("email_already_linked", { email: account.email });
+        return json(409, { error: emailInUse(account.email), email: account.email });
+      }
     }
 
+    // Convites recém-feitos; se algo falhar no caminho, todos são excluídos
+    // para nenhum e-mail ficar preso a um cadastro pela metade
+    const invitedIds: string[] = [];
+    const rollbackInvites = async () => {
+      for (const id of invitedIds) {
+        const { error: rollbackErr } = await admin.auth.admin.deleteUser(id);
+        if (rollbackErr) log("invite_rollback_failed", { error: rollbackErr.message, userId: id });
+      }
+    };
+
+    // As contas vêm primeiro: e-mail já cadastrado barra tudo antes de criar a empresa.
+    for (const account of accounts) {
+      const { data: inviteData, error: inviteErr } =
+        await admin.auth.admin.inviteUserByEmail(account.email, {
+          redirectTo,
+          data: { name: account.name, role: account.role }
+        });
+      if (inviteErr || !inviteData?.user?.id) {
+        log("invite_failed", { error: inviteErr?.message, email: account.email });
+        await rollbackInvites();
+        return json(400, {
+          error: inviteErr?.message ?? "Não foi possível criar a conta do usuário",
+          email: account.email
+        });
+      }
+      const invitedId = inviteData.user.id;
+
+      // Vínculo antigo sem e-mail gravado escapa da checagem acima: a conta já é
+      // de outra empresa e NÃO pode ser vinculada de novo nem excluída no rollback.
+      const { data: existingLink, error: linkErr } = await admin
+        .from("clinic_users")
+        .select("user_id")
+        .eq("user_id", invitedId)
+        .maybeSingle();
+      if (linkErr || existingLink) {
+        log(linkErr ? "existing_link_check_failed" : "user_already_linked", {
+          error: linkErr?.message,
+          userId: invitedId
+        });
+        await rollbackInvites();
+        return linkErr
+          ? json(500, { error: linkErr.message })
+          : json(409, { error: emailInUse(account.email), email: account.email });
+      }
+
+      invitedIds.push(invitedId);
+      account.user_id = invitedId;
+    }
+
+    const [firstAccount, ...extraAccounts] = accounts;
     const { data: created, error: onboardErr } = await admin.rpc(
       "platform_onboard_clinic",
       {
         p_clinic_name: clinicName,
-        p_user_id: userId,
+        p_user_id: firstAccount.user_id,
         p_user_name: userName,
         p_user_email: email,
         p_plan_code: planCode,
@@ -179,23 +263,32 @@ serve(async (req) => {
         p_current_period_end: periodEnd,
         p_billing_cycle: billingCycle,
         p_price: price,
-        p_whatsapp_numbers_addon: whatsappNumbersAddon
+        p_whatsapp_numbers_addon: whatsappNumbersAddon,
+        p_extra_users: extraAccounts.map((account) => ({
+          user_id: account.user_id,
+          name: account.name,
+          email: account.email,
+          role: account.role
+        }))
       }
     );
     if (onboardErr) {
-      log("onboard_rpc_failed", { error: onboardErr.message, userId });
-      const { error: rollbackErr } = await admin.auth.admin.deleteUser(userId);
-      if (rollbackErr) log("invite_rollback_failed", { error: rollbackErr.message, userId });
+      log("onboard_rpc_failed", { error: onboardErr.message, userIds: invitedIds });
+      await rollbackInvites();
       return json(500, { error: "Não foi possível criar a empresa. Tente novamente." });
     }
 
-    log("onboard_ok", { clinicId: created.clinic_id, userId });
+    log("onboard_ok", { clinicId: created.clinic_id, userIds: invitedIds });
     return json(200, {
       ok: true,
       clinic_id: created.clinic_id,
       department_id: created.department_id,
-      user_id: userId,
-      email
+      user_id: firstAccount.user_id,
+      email,
+      extra_users: extraAccounts.map((account) => ({
+        user_id: account.user_id,
+        email: account.email
+      }))
     });
   } catch (error) {
     log("unexpected_error", { error: String(error?.message ?? error) });

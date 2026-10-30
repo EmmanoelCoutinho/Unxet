@@ -1,5 +1,5 @@
-import React, { FormEvent, useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import React, { FormEvent, useEffect, useState } from "react";
+import { CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Card } from "../../../components/ui/Card";
 import { Input } from "../../../components/ui/Input";
@@ -25,29 +25,47 @@ import {
   WHATSAPP_ADDON_MIN,
 } from "../lib/subscriptions";
 import { WhatsappAddonField } from "../components/WhatsappAddonField";
+import {
+  remainingExtraSlots,
+  validateExtraAccounts,
+  type ExtraAccountDraft,
+  type ExtraAccountRole,
+} from "../lib/onboarding";
 
 type OnboardedClinic = {
   clinicName: string;
   planCode: PlanCode;
   userName: string;
   email: string;
+  extraEmails: string[];
 };
+
+type PlanLimit = { code: PlanCode; name: string; max_attendants: number | null };
+
+const newExtraAccount = (): ExtraAccountDraft => ({
+  key: crypto.randomUUID(),
+  name: "",
+  email: "",
+  role: "agent",
+});
 
 const FALLBACK_ERROR = "Não foi possível criar a empresa. Tente novamente.";
 
 // A edge function responde { error } com o motivo; o supabase-js só expõe o Response
 const getOnboardErrorMessage = async (error: any) => {
   let message: string | undefined;
+  let email: string | undefined;
   if (error?.context instanceof Response) {
     const data = await error.context
       .clone()
       .json()
       .catch(() => null);
     if (typeof data?.error === "string") message = data.error;
+    if (typeof data?.email === "string") email = data.email;
   }
 
   if (message && /already been registered|already registered/i.test(message)) {
-    return "Este e-mail já tem uma conta no sistema. Cada pessoa pertence a uma única empresa.";
+    return `${email ? `O e-mail ${email}` : "Este e-mail"} já tem uma conta no sistema. Cada pessoa pertence a uma única empresa. Nada foi criado.`;
   }
   if (message && /error sending invite email/i.test(message)) {
     return "Não foi possível enviar o e-mail de convite. Nada foi criado; tente novamente em alguns minutos.";
@@ -74,8 +92,40 @@ export const OnboardingPage: React.FC = () => {
   const [addonQuantity, setAddonQuantity] = useState(
     String(WHATSAPP_ADDON_DEFAULT),
   );
+  const [extraAccounts, setExtraAccounts] = useState<ExtraAccountDraft[]>([]);
+  const [plans, setPlans] = useState<PlanLimit[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState<OnboardedClinic | null>(null);
+
+  // Limite de contas de cada plano (o servidor confere de novo)
+  useEffect(() => {
+    let active = true;
+    adminSupabase
+      .from("subscription_plans")
+      .select("code, name, max_attendants")
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.error("[Onboarding] erro ao ler os planos:", error);
+          return;
+        }
+        setPlans((data ?? []) as PlanLimit[]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const selectedPlan = plans.find((p) => p.code === planCode) ?? null;
+  const maxAccounts = selectedPlan?.max_attendants ?? null;
+  const remainingSlots = remainingExtraSlots(maxAccounts, extraAccounts.length);
+  const overLimit =
+    maxAccounts !== null && 1 + extraAccounts.length > maxAccounts;
+
+  const updateExtraAccount = (key: string, patch: Partial<ExtraAccountDraft>) =>
+    setExtraAccounts((list) =>
+      list.map((item) => (item.key === key ? { ...item, ...patch } : item)),
+    );
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -101,6 +151,20 @@ export const OnboardingPage: React.FC = () => {
       );
       return;
     }
+    const extrasError = validateExtraAccounts(
+      payload.email,
+      extraAccounts,
+      selectedPlan,
+    );
+    if (extrasError) {
+      toast.error(extrasError);
+      return;
+    }
+    const extraUsers = extraAccounts.map((account) => ({
+      name: account.name.trim(),
+      email: account.email.trim().toLowerCase(),
+      role: account.role,
+    }));
 
     setSubmitting(true);
     try {
@@ -117,13 +181,17 @@ export const OnboardingPage: React.FC = () => {
             billing_cycle: billingCycle,
             price: priceValue,
             whatsapp_numbers_addon: addonValue,
+            extra_users: extraUsers,
             redirect_to: getAuthCallbackUrl(),
           },
         },
       );
       if (error) throw error;
 
-      setCreated(payload);
+      setCreated({
+        ...payload,
+        extraEmails: extraUsers.map((account) => account.email),
+      });
       setClinicName("");
       setUserName("");
       setEmail("");
@@ -134,6 +202,7 @@ export const OnboardingPage: React.FC = () => {
       setPeriodEnd("");
       setAddonEnabled(false);
       setAddonQuantity(String(WHATSAPP_ADDON_DEFAULT));
+      setExtraAccounts([]);
     } catch (err) {
       toast.error(await getOnboardErrorMessage(err));
     } finally {
@@ -146,9 +215,10 @@ export const OnboardingPage: React.FC = () => {
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Onboarding</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Cadastre uma nova empresa e o primeiro usuário dela. O departamento
-          Recepção é criado como padrão e o usuário entra como administrador da
-          empresa, já fazendo parte dele.
+          Cadastre uma nova empresa, o primeiro usuário dela e, se o cliente
+          pediu, as outras contas. O departamento Recepção é criado como padrão
+          e todas as contas já fazem parte dele; o primeiro usuário entra como
+          administrador da empresa.
         </p>
       </div>
 
@@ -164,6 +234,15 @@ export const OnboardingPage: React.FC = () => {
               Enviamos um convite para {created.email}. {created.userName}{" "}
               define a senha pelo link do e-mail e já pode entrar no sistema.
             </p>
+            {created.extraEmails.length > 0 && (
+              <p className="mt-1">
+                Também convidamos{" "}
+                {created.extraEmails.length === 1
+                  ? created.extraEmails[0]
+                  : `${created.extraEmails.length} contas: ${created.extraEmails.join(", ")}`}
+                .
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -302,6 +381,114 @@ export const OnboardingPage: React.FC = () => {
             <p className="text-xs text-gray-500">
               A pessoa recebe um e-mail com o link para definir a própria senha.
             </p>
+          </fieldset>
+
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Outras contas
+            </legend>
+            <p className="text-xs text-gray-500">
+              {maxAccounts === null
+                ? selectedPlan
+                  ? `O plano ${selectedPlan.name} não tem limite de contas. Cada pessoa recebe o próprio convite por e-mail.`
+                  : "Cada pessoa recebe o próprio convite por e-mail."
+                : `O plano ${selectedPlan?.name ?? PLAN_NAMES[planCode]} permite até ${maxAccounts} contas, contando o primeiro usuário. ${
+                    overLimit
+                      ? `Remova ${1 + extraAccounts.length - maxAccounts} para continuar ou escolha outro plano.`
+                      : remainingSlots === 0
+                        ? "Todas as vagas estão em uso."
+                        : `Ainda ${remainingSlots === 1 ? "cabe 1" : `cabem ${remainingSlots}`}.`
+                  }`}
+            </p>
+
+            {extraAccounts.map((account, index) => {
+              const beyondPlan = maxAccounts !== null && index + 2 > maxAccounts;
+              return (
+                <div
+                  key={account.key}
+                  className={[
+                    "rounded-lg border p-3",
+                    beyondPlan ? "border-red-300 bg-red-50" : "border-[#E5E7EB]",
+                  ].join(" ")}
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">
+                      Conta {index + 2}
+                      {beyondPlan && (
+                        <span className="ml-2 text-xs font-normal text-red-600">
+                          fora do limite do plano
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExtraAccounts((list) =>
+                          list.filter((item) => item.key !== account.key),
+                        )
+                      }
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-red-600"
+                      aria-label={`Remover conta ${index + 2}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remover
+                    </button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-[1fr_1fr_10rem]">
+                    <Input
+                      label="Nome"
+                      placeholder="Nome completo"
+                      value={account.name}
+                      onChange={(e) =>
+                        updateExtraAccount(account.key, { name: e.target.value })
+                      }
+                      maxLength={120}
+                      required
+                    />
+                    <Input
+                      label="E-mail"
+                      type="email"
+                      placeholder="pessoa@empresa.com.br"
+                      value={account.email}
+                      onChange={(e) =>
+                        updateExtraAccount(account.key, { email: e.target.value })
+                      }
+                      required
+                    />
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-[#1E1E1E]">
+                        Papel
+                      </label>
+                      <select
+                        value={account.role}
+                        onChange={(e) =>
+                          updateExtraAccount(account.key, {
+                            role: e.target.value as ExtraAccountRole,
+                          })
+                        }
+                        className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+                      >
+                        <option value="agent">Atendente</option>
+                        <option value="admin">Administrador</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() =>
+                setExtraAccounts((list) => [...list, newExtraAccount()])
+              }
+              disabled={remainingSlots === 0}
+              className="border border-dashed border-[#E5E7EB]"
+            >
+              <Plus className="mr-1 inline h-4 w-4" />
+              Adicionar conta
+            </Button>
           </fieldset>
 
           <div className="flex justify-end">
