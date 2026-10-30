@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { MenuIcon } from "lucide-react";
+import { Building2Icon, MenuIcon } from "lucide-react";
 import logo from "../../assets/logo-unxet.png";
 import { useAuth } from "../../contexts/AuthContext";
 import { useClinic } from "../../contexts/ClinicContext";
@@ -82,72 +82,82 @@ export const Header = () => {
             <img src={logo} alt="Unxet logo" className="w-28 sm:w-36" />
           </Link>
         </div>
-        <div className="relative flex min-w-0 items-center justify-end gap-3 sm:gap-4">
+        <div className="relative flex min-w-0 items-center justify-end gap-3">
+          {clinic?.name && (
+            <span
+              className="hidden min-w-0 max-w-[16rem] items-center gap-2 rounded-full border border-[#E5E7EB] bg-[#F9FAFB] py-1.5 pl-2.5 pr-3.5 text-sm font-medium text-gray-700 sm:flex lg:max-w-xs"
+              title={clinic.name}
+            >
+              <Building2Icon className="h-4 w-4 flex-shrink-0 text-[#0A84FF]" />
+              <span className="truncate">{clinic.name}</span>
+            </span>
+          )}
           <button
             ref={buttonRef}
             onClick={() => setOpen((v) => !v)}
-            className="w-9 h-9 flex-shrink-0 rounded-full bg-[#0A84FF] text-white flex items-center justify-center font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0A84FF]"
+            className="w-9 h-9 flex-shrink-0 rounded-full bg-[#0A84FF] text-white flex items-center justify-center font-semibold transition hover:brightness-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0A84FF]"
             aria-haspopup="menu"
             aria-expanded={open}
             aria-label="Abrir menu do usuário"
           >
             {initials}
           </button>
-          {open && (
-            <div
-              ref={menuRef}
-              role="menu"
-              className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] rounded-lg border border-[#E5E7EB] bg-white shadow-lg z-50 overflow-hidden"
-            >
-              <div className="px-4 py-3 bg-[#F9FAFB]">
-                <div className="text-[#1E1E1E] font-medium truncate">
-                  {profile?.name}
-                </div>
-                {clinic?.name && (
-                  <div className="truncate text-xs text-gray-500 sm:hidden">
-                    {clinic.name}
-                  </div>
-                )}
-                {profile?.role && (
-                  <div className="text-sm text-gray-600">
-                    {profile?.role === "admin" ? "Administrador" : "Usuário"}
-                  </div>
-                )}
+          {/* Fica sempre montado para animar a abertura e o fechamento */}
+          <div
+            ref={menuRef}
+            role="menu"
+            aria-hidden={!open}
+            className={`absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] origin-top-right rounded-lg border border-[#E5E7EB] bg-white shadow-lg z-50 overflow-hidden transition-[opacity,transform,visibility] duration-150 ease-out motion-reduce:transition-none ${
+              open
+                ? "visible translate-y-0 scale-100 opacity-100"
+                : "invisible pointer-events-none -translate-y-1 scale-95 opacity-0"
+            }`}
+          >
+            <div className="px-4 py-3 bg-[#F9FAFB]">
+              <div className="text-[#1E1E1E] font-medium truncate">
+                {profile?.name}
               </div>
-              <div className="py-1">
+              {clinic?.name && (
+                <div className="truncate text-xs text-gray-500 sm:hidden">
+                  {clinic.name}
+                </div>
+              )}
+              {profile?.role && (
+                <div className="text-sm text-gray-600">
+                  {profile?.role === "admin" ? "Administrador" : "Usuário"}
+                </div>
+              )}
+            </div>
+            <div className="py-1">
+              <button
+                className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#F3F4F6]"
+                onClick={() => {
+                  setOpen(false);
+                  setProfileOpen(true);
+                }}
+              >
+                Meu perfil
+              </button>
+              {isAdmin && (
                 <button
                   className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#F3F4F6]"
                   onClick={() => {
                     setOpen(false);
-                    setProfileOpen(true);
+                    navigate("/inbox/settings");
                   }}
                 >
-                  Meu perfil
+                  Configurações
                 </button>
-                {isAdmin && (
-                  <button
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#F3F4F6]"
-                    onClick={() => {
-                      setOpen(false);
-                      navigate("/inbox/settings");
-                    }}
-                  >
-                    Configurações
-                  </button>
-                )}
-                <div className="my-1 h-px bg-[#E5E7EB]" />
-                <button
-                  className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
-                  onClick={handleSingOut}
-                >
-                  Sair
-                </button>
-              </div>
+              )}
+              <div className="my-1 h-px bg-[#E5E7EB]" />
+              <button
+                className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                onClick={handleSingOut}
+              >
+                Sair
+              </button>
             </div>
-          )}
-          <span className="hidden min-w-0 max-w-[16rem] truncate sm:block lg:max-w-xs">
-            {clinic?.name}
-          </span>
+          </div>
         </div>
       </div>
       <MobileNav
