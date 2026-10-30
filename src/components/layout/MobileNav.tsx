@@ -85,7 +85,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
       aria-hidden={!open}
     >
       <div
-        className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${
+        className={`absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity duration-300 ease-out motion-reduce:transition-none ${
           open ? "opacity-100" : "opacity-0"
         }`}
         onClick={onClose}
@@ -95,7 +95,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
         role="dialog"
         aria-modal="true"
         aria-label="Menu de navegação"
-        className={`absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-white shadow-xl transition-transform duration-200 ${
+        className={`absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-white shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
