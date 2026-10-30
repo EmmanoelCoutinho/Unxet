@@ -31,6 +31,7 @@ import {
 } from "../../hooks/useClinicUserNames";
 import { Button } from "../ui/Button";
 import { ChatHeader } from "./ChatHeader";
+import { ConversationCampaignBanner } from "../../modules/scheduledMessages/components/ConversationCampaignBanner";
 import { MessageBubble } from "./MessageBubble";
 import { SystemEventBubble } from "./SystemEventBubble";
 import { MessageInput } from "./MessageInput";
@@ -1502,6 +1503,14 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           }
         />
       ) : null}
+
+      {conversation?.id && hasFeature("scheduled_messages") && (
+        <ConversationCampaignBanner
+          conversationId={conversation.id}
+          tagsKey={selectedTags.map((t) => t.id).join(",")}
+          compact={isFloating}
+        />
+      )}
 
       <div
         ref={messagesContainerRef}

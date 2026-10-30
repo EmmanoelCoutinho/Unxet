@@ -2,17 +2,23 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cancelScheduledMessage,
   deleteScheduledMessage,
+  fetchCampaignAudience,
+  getConversationCampaign,
   getScheduledMessage,
   hasConnectedQrWhatsapp,
+  listCampaignSummaries,
+  listCampaignTags,
   listQrWhatsappNumbers,
-  listScheduledMessages,
+  retryCampaign,
   saveScheduledMessage,
   searchWalletContacts,
+  setCampaignConversion,
 } from "../api/scheduledMessages";
 import type {
   SaveScheduledMessageInput,
-  ScheduledMessage,
+  ScheduledMessageStatus,
 } from "../types/scheduledMessages";
+import { effectiveStatus } from "../utils/schedule";
 
 export const scheduledMessageQueryKeys = {
   all: ["scheduled-messages"] as const,
@@ -26,25 +32,39 @@ export const scheduledMessageQueryKeys = {
     [...scheduledMessageQueryKeys.all, "qr-numbers", clinicId] as const,
   walletSearch: (clinicId: string | null, search: string) =>
     [...scheduledMessageQueryKeys.all, "wallet", clinicId, search] as const,
+  tags: (clinicId: string | null) =>
+    [...scheduledMessageQueryKeys.all, "tags", clinicId] as const,
+  conversation: (conversationId: string | null) =>
+    [...scheduledMessageQueryKeys.all, "conversation", conversationId] as const,
 };
 
+// Enquanto envia, a barra de progresso acompanha de perto
+const SENDING_POLL_MS = 5000;
 const POLL_MS = 15000;
 // Perto do horário a tela acompanha a mudança de status sem recarregar
 const POLL_WINDOW_MS = 5 * 60 * 1000;
 
-const needsPolling = (item: ScheduledMessage) =>
-  item.status === "processing" ||
-  (item.status === "scheduled" &&
-    new Date(item.scheduledAt).getTime() - Date.now() < POLL_WINDOW_MS);
+const pollInterval = (
+  items: { status: ScheduledMessageStatus; scheduledAt: string }[],
+) => {
+  if (items.some((item) => effectiveStatus(item) === "processing")) {
+    return SENDING_POLL_MS;
+  }
+  const startsSoon = items.some(
+    (item) =>
+      item.status === "scheduled" &&
+      new Date(item.scheduledAt).getTime() - Date.now() < POLL_WINDOW_MS,
+  );
+  return startsSoon ? POLL_MS : false;
+};
 
 export const useScheduledMessages = (clinicId: string | null) => {
   const query = useQuery({
     queryKey: scheduledMessageQueryKeys.list(clinicId),
-    queryFn: () => listScheduledMessages(clinicId),
+    queryFn: () => listCampaignSummaries(clinicId),
     enabled: Boolean(clinicId),
     staleTime: 0,
-    refetchInterval: (q) =>
-      (q.state.data ?? []).some(needsPolling) ? POLL_MS : false,
+    refetchInterval: (q) => pollInterval(q.state.data ?? []),
   });
 
   return {
@@ -61,8 +81,7 @@ export const useScheduledMessage = (id: string | null) => {
     queryFn: () => getScheduledMessage(id as string),
     enabled: Boolean(id),
     staleTime: 0,
-    refetchInterval: (q) =>
-      q.state.data && needsPolling(q.state.data) ? POLL_MS : false,
+    refetchInterval: (q) => (q.state.data ? pollInterval([q.state.data]) : false),
   });
 
   return {
@@ -90,13 +109,21 @@ export const useScheduledMessageActions = () => {
     mutationFn: (id: string) => deleteScheduledMessage(id),
     onSettled: invalidate,
   });
+  const retryMutation = useMutation({
+    mutationFn: (id: string) => retryCampaign(id),
+    onSettled: invalidate,
+  });
 
   return {
     save: saveMutation.mutateAsync,
     cancel: cancelMutation.mutateAsync,
     remove: deleteMutation.mutateAsync,
+    retry: retryMutation.mutateAsync,
     saving: saveMutation.isPending,
-    acting: cancelMutation.isPending || deleteMutation.isPending,
+    acting:
+      cancelMutation.isPending ||
+      deleteMutation.isPending ||
+      retryMutation.isPending,
   };
 };
 
@@ -138,4 +165,43 @@ export const useWalletContactSearch = (
     loading: query.isLoading,
     error: query.error instanceof Error ? query.error.message : null,
   };
+};
+
+export const useCampaignTags = (clinicId: string | null) => {
+  const query = useQuery({
+    queryKey: scheduledMessageQueryKeys.tags(clinicId),
+    queryFn: () => listCampaignTags(clinicId),
+    enabled: Boolean(clinicId),
+  });
+
+  return { tags: query.data ?? [], loading: query.isLoading };
+};
+
+// Busca sob demanda (botão "Adicionar"), não a cada clique numa etiqueta
+export const useCampaignAudience = () =>
+  useMutation({ mutationFn: (tagIds: string[]) => fetchCampaignAudience(tagIds) });
+
+export const useConversationCampaign = (conversationId: string | null) => {
+  const query = useQuery({
+    queryKey: scheduledMessageQueryKeys.conversation(conversationId),
+    queryFn: () => getConversationCampaign(conversationId as string),
+    enabled: Boolean(conversationId),
+    staleTime: 30 * 1000,
+  });
+
+  return { campaign: query.data ?? null, refetch: query.refetch };
+};
+
+export const useCampaignConversion = (conversationId: string | null) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: setCampaignConversion,
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: scheduledMessageQueryKeys.conversation(conversationId),
+      });
+      queryClient.invalidateQueries({ queryKey: scheduledMessageQueryKeys.all });
+    },
+  });
 };
