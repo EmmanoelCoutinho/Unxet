@@ -17,7 +17,7 @@ import {
 } from "@supabase/supabase-js";
 import { toast } from "react-toastify";
 import { supabase } from "../lib/supabaseClient";
-import { disablePush } from "../lib/pushNotifications";
+import { disablePush, keepOnlyThisDevicePush } from "../lib/pushNotifications";
 import { getAuthCallbackUrl } from "../lib/appUrl";
 
 export type ClinicUser = {
@@ -63,6 +63,41 @@ const SESSION_CHECK_MIN_GAP_MS = 10 * 1000;
 const isSessionRevokedError = (error: AuthError) =>
   isAuthSessionMissingError(error) ||
   (isAuthApiError(error) && (error.status === 401 || error.status === 403));
+
+const sessionChannelName = (userId: string) => `user-session:${userId}`;
+
+// Por que a sessão caiu, quando o aviso pelo canal informa
+type RevokeReason = "other_device";
+
+const revokedMessage = (reason: RevokeReason | null) =>
+  reason === "other_device"
+    ? "Sua conta entrou em outro aparelho, por isso esta sessão foi encerrada."
+    : "Sua sessão foi encerrada. Entre novamente.";
+
+// Encerra as outras sessões da conta e avisa esses aparelhos na hora. Falha
+// aqui não impede o login: a conferência periódica dos outros aparelhos
+// (ver verifySession) é que garante o logout deles.
+const endOtherSessions = async (userId: string) => {
+  const { error } = await supabase.auth.signOut({ scope: "others" });
+  if (error) {
+    console.error("Erro ao encerrar as outras sessões:", error);
+    return;
+  }
+
+  // Os aparelhos deslogados também param de receber notificações
+  await keepOnlyThisDevicePush().catch((e) => {
+    console.error("Erro ao remover o push dos outros aparelhos:", e);
+  });
+
+  const channel = supabase.channel(sessionChannelName(userId));
+  try {
+    await channel.httpSend("revoked", { reason: "other_device" });
+  } catch (e) {
+    console.error("Erro ao avisar os outros aparelhos:", e);
+  } finally {
+    supabase.removeChannel(channel);
+  }
+};
 
 const readStorage =<T,>(key: string): T | null => {
   if (typeof window === "undefined") return null;
@@ -202,7 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Conta excluída com a pessoa logada: o token salvo no aparelho segue válido
+  // Conta excluída ou login em outro aparelho: o token salvo aqui segue válido
   // até expirar, mas a sessão já não existe no servidor. Confere com o servidor
   // e, se a sessão foi encerrada, desloga este aparelho.
   const authUserId = authUser?.id ?? null;
@@ -212,6 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
     let checking = false;
     let lastCheckAt = 0;
+    let revokeReason: RevokeReason | null = null;
 
     const verifySession = async (force = false) => {
       if (checking) return;
@@ -229,7 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthUser(null);
         setProfile(null);
         writeStorage(STORAGE_PROFILE_KEY, null);
-        toast.error("Sua conta foi removida. Fale com o administrador.", {
+        toast.error(revokedMessage(revokeReason), {
           toastId: "session-revoked",
         });
       } finally {
@@ -249,11 +285,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener("focus", onFocus);
     window.addEventListener("online", onFocus);
 
-    // Aviso imediato da edge function delete-attendant. O aviso só dispara a
-    // conferência: quem decide o logout é o servidor de autenticação.
+    // Aviso imediato da edge function delete-attendant e do login em outro
+    // aparelho. O aviso só dispara a conferência: quem decide o logout é o
+    // servidor de autenticação (então um aviso falso não derruba ninguém).
     const channel = supabase
-      .channel(`user-session:${authUserId}`)
-      .on("broadcast", { event: "revoked" }, () => verifySession(true))
+      .channel(sessionChannelName(authUserId))
+      .on("broadcast", { event: "revoked" }, ({ payload }) => {
+        revokeReason = payload?.reason === "other_device" ? "other_device" : null;
+        verifySession(true);
+      })
       .subscribe();
 
     return () => {
@@ -279,6 +319,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const user = data.user ?? null;
+
+    // Uma conta, um aparelho: o login novo encerra as sessões anteriores, para
+    // que várias pessoas não usem a mesma conta ao mesmo tempo
+    if (user) await endOtherSessions(user.id);
+
     setAuthUser(user);
     setLoading(false);
 
@@ -313,7 +358,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await disablePush().catch((error) => {
       console.error("Erro ao desativar notificações no logout:", error);
     });
-    await supabase.auth.signOut();
+    // Só este aparelho: sem "local" o Supabase encerra a sessão em todos, e os
+    // outros aparelhos caíam no aviso de sessão encerrada
+    await supabase.auth.signOut({ scope: "local" });
     setAuthUser(null);
     setProfile(null);
     writeStorage(STORAGE_PROFILE_KEY, null);
