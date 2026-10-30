@@ -103,6 +103,19 @@ export async function disablePush() {
 }
 
 /**
+ * Apaga no servidor as inscrições da conta em outros aparelhos (deslogados
+ * pelo login neste). A deste aparelho, se houver, fica.
+ */
+export async function keepOnlyThisDevicePush() {
+  const registration = await getRegistration();
+  const subscription = await registration?.pushManager.getSubscription();
+  const { error } = await supabase.rpc("keep_only_push_subscription", {
+    p_endpoint: subscription?.endpoint ?? null,
+  });
+  if (error) throw error;
+}
+
+/**
  * Reenvia a inscrição existente ao servidor. Chamado a cada login para
  * recuperar inscrições apagadas e manter as chaves atualizadas.
  */
