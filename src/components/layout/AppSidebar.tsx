@@ -1,3 +1,4 @@
+import { AI_ASSISTANT_ENABLED } from "../../lib/aiAssistantFlag";
 import React, { useCallback, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -95,15 +96,19 @@ const allSidebarItems: SidebarItem[] = [
     planFeature: "bots",
     group: "atendimento",
   },
-  {
-    // Sem o adicional a tela explica o recurso e como contratar
-    label: "Assistente com IA",
-    icon: SparklesIcon,
-    path: "/inbox/ai-assistant",
-    adminOnly: true,
-    planFeature: "bots",
-    group: "atendimento",
-  },
+  ...(AI_ASSISTANT_ENABLED
+    ? [
+        {
+          // Sem o adicional a tela explica o recurso e como contratar
+          label: "Assistente com IA",
+          icon: SparklesIcon,
+          path: "/inbox/ai-assistant",
+          adminOnly: true,
+          planFeature: "bots" as const,
+          group: "atendimento" as const,
+        },
+      ]
+    : []),
   // Vendas e marketing
   {
     label: "Funil de vendas",

@@ -1,3 +1,4 @@
+import { AI_ASSISTANT_ENABLED } from "../lib/aiAssistantFlag";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { Link } from "react-router-dom";
@@ -45,7 +46,8 @@ export const BotNodesEditor = ({
 }) => {
   const confirm = useConfirm();
   const { clinic, subscription } = useClinic();
-  const aiContracted = (subscription?.ai_replies_addon ?? null) !== null;
+  const aiContracted =
+    AI_ASSISTANT_ENABLED && (subscription?.ai_replies_addon ?? null) !== null;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [creatingRoot, setCreatingRoot] = useState(false);

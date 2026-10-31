@@ -1,3 +1,4 @@
+import { AI_ASSISTANT_ENABLED } from "./lib/aiAssistantFlag";
 import React, { ReactNode, Suspense, lazy } from "react";
 import {
   BrowserRouter,
@@ -313,7 +314,9 @@ function RoutedApp() {
               element={<AdminOnly><ConversationAutomationSettingsPage /></AdminOnly>}
             />
             <Route path="bots" element={<AdminOnly><PlanGate feature="bots"><BotsSettingsPage /></PlanGate></AdminOnly>} />
-            <Route path="ai-assistant" element={<AdminOnly><PlanGate feature="bots"><AiAssistantPage /></PlanGate></AdminOnly>} />
+            {AI_ASSISTANT_ENABLED ? (
+              <Route path="ai-assistant" element={<AdminOnly><PlanGate feature="bots"><AiAssistantPage /></PlanGate></AdminOnly>} />
+            ) : null}
             <Route path="bots/new" element={<AdminOnly><PlanGate feature="bots"><BotEditorPage mode="new" /></PlanGate></AdminOnly>} />
             <Route
               path="bots/edit/:botId?"
