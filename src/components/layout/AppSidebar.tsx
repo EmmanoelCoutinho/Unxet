@@ -12,6 +12,7 @@ import {
   MessageSquareTextIcon,
   MessagesSquareIcon,
   Settings2Icon,
+  SparklesIcon,
   TagIcon,
   UsersIcon,
 } from "lucide-react";
@@ -90,6 +91,15 @@ const allSidebarItems: SidebarItem[] = [
     label: "Bots",
     icon: BotIcon,
     path: "/inbox/bots",
+    adminOnly: true,
+    planFeature: "bots",
+    group: "atendimento",
+  },
+  {
+    // Sem o adicional a tela explica o recurso e como contratar
+    label: "Assistente com IA",
+    icon: SparklesIcon,
+    path: "/inbox/ai-assistant",
     adminOnly: true,
     planFeature: "bots",
     group: "atendimento",

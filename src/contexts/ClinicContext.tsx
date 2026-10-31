@@ -41,6 +41,8 @@ export type ClinicSubscription = {
   grace_days: number;
   // Adicional "Vários números de WhatsApp": null = desligado (um número só)
   whatsapp_numbers_addon: number | null;
+  // Adicional "Assistente com IA": respostas da IA por mês, null = desligado
+  ai_replies_addon: number | null;
 };
 
 // Recarrega o plano de tempos em tempos: suspensão e pagamento aparecem sem
@@ -137,16 +139,23 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     setClinic((clinicRow as Clinic) ?? null);
 
     // 3) plano: o banco trava o que importa, aqui é só o que aparece na tela
-    const [{ data: subscriptionRow }, { data: planRows }] = await Promise.all([
-      supabase
-        .from("clinic_subscriptions")
-        .select(
-          "plan_code, status, current_period_end, billing_cycle, grace_days, whatsapp_numbers_addon",
-        )
-        .eq("clinic_id", membershipRow.clinic_id)
-        .maybeSingle(),
-      supabase.from("subscription_plans").select("*"),
-    ]);
+    const [{ data: subscriptionRow }, { data: planRows }, { data: aiRow }] =
+      await Promise.all([
+        supabase
+          .from("clinic_subscriptions")
+          .select(
+            "plan_code, status, current_period_end, billing_cycle, grace_days, whatsapp_numbers_addon",
+          )
+          .eq("clinic_id", membershipRow.clinic_id)
+          .maybeSingle(),
+        supabase.from("subscription_plans").select("*"),
+        // Leitura separada: sem a coluna (migration não aplicada) só a IA some
+        supabase
+          .from("clinic_subscriptions")
+          .select("ai_replies_addon")
+          .eq("clinic_id", membershipRow.clinic_id)
+          .maybeSingle(),
+      ]);
     // Empresa sem assinatura vale como Empresarial (mesma regra do banco)
     const planCode = subscriptionRow?.plan_code ?? "empresarial";
     const plan = (planRows as SubscriptionPlan[] | null)?.find(
@@ -162,6 +171,9 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
             grace_days: subscriptionRow?.grace_days ?? 10,
             whatsapp_numbers_addon:
               subscriptionRow?.whatsapp_numbers_addon ?? null,
+            ai_replies_addon:
+              (aiRow as { ai_replies_addon?: number | null } | null)
+                ?.ai_replies_addon ?? null,
           }
         : null,
     );

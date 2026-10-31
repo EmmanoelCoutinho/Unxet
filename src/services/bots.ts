@@ -117,30 +117,42 @@ export const botsService = {
 
       if (!root) {
         problems.push("Crie a etapa inicial do fluxo.");
-      } else if ((optsRes.data[root.id] ?? []).length === 0) {
+      } else if (
+        root.node_type !== "ai" &&
+        (optsRes.data[root.id] ?? []).length === 0
+      ) {
         problems.push("A etapa inicial precisa ter ao menos uma opção.");
       }
 
       for (const node of nodes) {
         const where = `Etapa "${node.title || node.node_key}"`;
+        // Etapa de IA não tem botões e a abertura é opcional
+        if (node.node_type === "ai") {
+          if (!node.ai_instructions?.trim()) {
+            problems.push(`${where}: escreva o objetivo da IA.`);
+          }
+          continue;
+        }
         if (!node.message?.trim()) problems.push(`${where}: sem mensagem.`);
 
         for (const opt of optsRes.data[node.id] ?? []) {
-          const optWhere = `${where}, opção "${opt.label || opt.option_value}"`;
+          const optWhere = `${where}, botão "${opt.label || opt.option_value}"`;
           if (opt.action_type === "go_to_node" && !opt.next_node_id) {
-            problems.push(`${optWhere}: selecione a próxima etapa.`);
+            problems.push(`${optWhere}: escolha qual etapa abrir.`);
           } else if (
             opt.action_type === "transfer_to_department" &&
             !opt.target_department_id
           ) {
-            problems.push(`${optWhere}: selecione o departamento.`);
+            problems.push(`${optWhere}: escolha o setor.`);
           } else if (opt.action_type === "add_tag" && !opt.tag_id) {
-            problems.push(`${optWhere}: selecione a tag.`);
+            problems.push(`${optWhere}: escolha a etiqueta.`);
           } else if (
+            // Com etiqueta a resposta é opcional (o botão marca e reenvia o menu)
             opt.action_type === "send_message" &&
-            !opt.message_to_send?.trim()
+            !opt.message_to_send?.trim() &&
+            !opt.tag_id
           ) {
-            problems.push(`${optWhere}: escreva a mensagem.`);
+            problems.push(`${optWhere}: escreva a resposta.`);
           }
         }
       }
@@ -380,6 +392,8 @@ export const botsService = {
         message: n.message,
         node_type: n.node_type,
         sort_order: n.sort_order,
+        ai_instructions: n.ai_instructions ?? null,
+        ai_handoff_department_id: n.ai_handoff_department_id ?? null,
       }));
 
       if (nodePayloads.length === 0) return { data: newBot, error: null };

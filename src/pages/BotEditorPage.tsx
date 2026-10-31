@@ -17,11 +17,10 @@ import {
 } from "../types/bots";
 import { BotNodesEditor } from "./BotNodesEditor";
 import { BotBindingsEditor } from "./BotBindingsEditor";
-import { BotSimulator } from "./BotSimulator";
 import { ChevronLeft, Trash } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
-type EditorTab = "general" | "nodes" | "bindings" | "simulator";
+type EditorTab = "general" | "nodes" | "bindings";
 
 type BotFormValues = {
   name: string;
@@ -86,6 +85,20 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
   const botId = !isNew ? (stateBotId ?? persistedBotId) : null;
 
   const [tab, setTab] = useState<EditorTab>("general");
+  // Alterações do fluxo ainda não salvas (o editor some ao trocar de aba)
+  const [flowDirty, setFlowDirty] = useState(false);
+
+  const confirmLeaveFlow = async () => {
+    if (tab !== "nodes" || !flowDirty) return true;
+    const ok = await confirm({
+      title: "Sair sem salvar o fluxo?",
+      description: "As alterações nas etapas e nos botões serão perdidas.",
+      confirmLabel: "Sair sem salvar",
+      tone: "danger",
+    });
+    if (ok) setFlowDirty(false);
+    return ok;
+  };
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -306,7 +319,10 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
     return (
       <button
         type="button"
-        onClick={() => setTab(key)}
+        onClick={async () => {
+          if (key === tab || !(await confirmLeaveFlow())) return;
+          setTab(key);
+        }}
         disabled={disabled}
         className={[
           "shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium transition border-b-2",
@@ -329,7 +345,9 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
             <div className="min-w-0">
               <button
                 type="button"
-                onClick={() => navigate("/inbox/bots")}
+                onClick={async () => {
+                  if (await confirmLeaveFlow()) navigate("/inbox/bots");
+                }}
                 className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800"
               >
                 <ChevronLeft className="h-5 w-5" />
@@ -374,9 +392,8 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
 
           <div className="-mx-4 flex overflow-x-auto border-b px-4 sm:mx-0 sm:px-0">
             {tabButton("general", "Geral")}
-            {tabButton("nodes", "Etapas", !canUseDetailTabs)}
+            {tabButton("nodes", "Fluxo da conversa", !canUseDetailTabs)}
             {tabButton("bindings", "Canais", !canUseDetailTabs)}
-            {tabButton("simulator", "Simulador", !canUseDetailTabs)}
           </div>
         </div>
       </div>
@@ -597,7 +614,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                 Salve o bot primeiro
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Etapas, canais e simulador dependem do ID do bot.
+                O fluxo da conversa e os canais ficam disponíveis depois que o bot é salvo.
               </p>
             </div>
           </Card>
@@ -606,6 +623,8 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
             clinicId={clinicId!}
             botId={bot!.id}
             isAdmin={isAdmin}
+            startMessage={bot!.start_message ?? ""}
+            onDirtyChange={setFlowDirty}
           />
         ) : tab === "bindings" ? (
           <BotBindingsEditor
@@ -614,8 +633,6 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
             botStatus={bot!.status}
             isAdmin={isAdmin}
           />
-        ) : tab === "simulator" ? (
-          <BotSimulator clinicId={clinicId!} botId={bot!.id} bot={bot!} />
         ) : null}
       </div>
     </div>

@@ -1,625 +1,315 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  PlusIcon,
-  SaveIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { Card } from "../components/ui/Card";
+import { Link } from "react-router-dom";
+import { CheckIcon, ListIcon, SparklesIcon, Trash2Icon } from "lucide-react";
 import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
 import { useConfirm } from "../components/ui/ConfirmDialog";
-import { Input } from "../components/ui/Input";
-import { Textarea } from "../components/ui/Textarea";
-import { Toggle } from "../components/ui/Toggle";
-import { Badge } from "../components/ui/Badge";
+import { useClinic } from "../contexts/ClinicContext";
 import { botsService } from "../services/bots";
 import {
-  BOT_MENU_MAX_OPTIONS,
-  BOT_OPTION_ACTION_TYPE_VALUES,
-  BOT_OPTION_LABEL_MAX_LENGTH,
   BOT_ROOT_NODE_KEY,
-  type BotNodeRow,
-  type BotOptionRow,
-  type CreateBotOptionInput,
   type DepartmentRow,
   type TagRow,
-  type UpdateBotOptionInput,
 } from "../types/bots";
-
-type OptionDraft = Omit<BotOptionRow, "id"> & {
-  __draftId: string;
-  clinic_id?: string;
-  bot_node_id?: string;
-};
-
-const makeDraftId = () =>
-  `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-const ensureValueInList = (values: string[], current: string) => {
-  if (!current) return values;
-  return values.includes(current) ? values : [...values, current];
-};
-
-const actionTypeToLabel: Record<string, string> = {
-  go_to_node: "Ir para etapa",
-  transfer_to_department: "Transferir para departamento",
-  add_tag: "Adicionar tag",
-  send_message: "Enviar mensagem",
-  handoff_to_human: "Transferência para atendente",
-  end_flow: "Encerrar fluxo",
-};
-
-const normalizeOptionEndSession = (
-  option: Pick<BotOptionRow, "action_type" | "next_node_id" | "end_session">,
-) => {
-  if (option.next_node_id) return false;
-
-  switch (option.action_type) {
-    case "go_to_node":
-      return false;
-    case "transfer_to_department":
-    case "handoff_to_human":
-    case "end_flow":
-      return true;
-    case "send_message":
-    case "add_tag":
-    default:
-      return Boolean(option.end_session);
-  }
-};
-
-const getEndSessionControlState = (
-  option: Pick<BotOptionRow, "action_type" | "next_node_id">,
-) => {
-  if (option.next_node_id) {
-    return {
-      disabled: true,
-      helper:
-        "Desativado porque uma opção com próxima etapa não pode encerrar a sessão.",
-    };
-  }
-
-  switch (option.action_type) {
-    case "go_to_node":
-      return {
-        disabled: true,
-        helper:
-          "Desativado porque ir para a próxima etapa mantém o fluxo em andamento.",
-      };
-    case "transfer_to_department":
-      return {
-        disabled: true,
-        helper:
-          "Ativado automaticamente porque a transferência para departamento encerra o bot.",
-      };
-    case "handoff_to_human":
-      return {
-        disabled: true,
-        helper:
-          "Ativado automaticamente porque a transferência para atendente encerra o bot.",
-      };
-    case "end_flow":
-      return {
-        disabled: true,
-        helper:
-          "Ativado automaticamente porque esta ação foi definida para encerrar o fluxo.",
-      };
-    case "send_message":
-      return {
-        disabled: false,
-        helper:
-          "Opcional: use quando esta mensagem deve finalizar o bot após o envio.",
-      };
-    case "add_tag":
-    default:
-      return {
-        disabled: false,
-        helper:
-          "Opcional: ative apenas quando adicionar a tag também deve encerrar o atendimento do bot.",
-      };
-  }
-};
-
-const isNodeDirty = (node: BotNodeRow, saved?: BotNodeRow) =>
-  !saved ||
-  node.node_key !== saved.node_key ||
-  node.title !== saved.title ||
-  node.message !== saved.message;
-
-const isOptionDirty = (
-  opt: BotOptionRow | OptionDraft,
-  saved?: BotOptionRow,
-) =>
-  !saved ||
-  opt.option_value !== saved.option_value ||
-  opt.label !== saved.label ||
-  opt.action_type !== saved.action_type ||
-  (opt.next_node_id ?? null) !== (saved.next_node_id ?? null) ||
-  (opt.target_department_id ?? null) !== (saved.target_department_id ?? null) ||
-  (opt.tag_id ?? null) !== (saved.tag_id ?? null) ||
-  (opt.message_to_send ?? "") !== (saved.message_to_send ?? "") ||
-  normalizeOptionEndSession(opt) !== Boolean(saved.end_session);
-
-// Campo obrigatório de cada ação: sem ele o cliente escolhe a opção e nada acontece
-const getOptionActionError = (opt: BotOptionRow | OptionDraft) => {
-  if (opt.action_type === "go_to_node" && !opt.next_node_id) {
-    return "Selecione a próxima etapa.";
-  }
-  if (opt.action_type === "transfer_to_department" && !opt.target_department_id) {
-    return "Selecione o departamento.";
-  }
-  if (opt.action_type === "add_tag" && !opt.tag_id) {
-    return "Selecione a tag.";
-  }
-  if (opt.action_type === "send_message" && !opt.message_to_send?.trim()) {
-    return "Escreva a mensagem que será enviada.";
-  }
-  return null;
-};
-
-const UnsavedBadge = () => (
-  <span className="text-xs font-medium text-[#F97316]">
-    Alterações não salvas
-  </span>
-);
-
-const NodeBadge = ({ node }: { node: BotNodeRow }) => {
-  const isRoot = node.node_key === BOT_ROOT_NODE_KEY;
-  return (
-    <span className="inline-flex items-center gap-2">
-      {isRoot ? <Badge variant="success">Início</Badge> : null}
-      <span className="font-mono text-xs text-slate-500">{node.node_key}</span>
-    </span>
-  );
-};
+import { FlowMap } from "./botFlow/FlowMap";
+import { OptionsCard } from "./botFlow/OptionsCard";
+import { PhonePreview } from "./botFlow/PhonePreview";
+import {
+  buildFlowTree,
+  canAddOption,
+  countChanges,
+  fromRows,
+  getOptionWarning,
+  makeDraftId,
+  nextNodeKey,
+  optionsOf,
+  type FlowOption,
+  type FlowStage,
+  type FlowState,
+} from "./botFlow/flowModel";
+import { saveFlow } from "./botFlow/saveFlow";
 
 export const BotNodesEditor = ({
   clinicId,
   botId,
   isAdmin,
+  startMessage,
+  onDirtyChange,
 }: {
   clinicId: string;
   botId: string;
   isAdmin: boolean;
+  startMessage: string;
+  onDirtyChange?: (dirty: boolean) => void;
 }) => {
   const confirm = useConfirm();
+  const { clinic, subscription } = useClinic();
+  const aiContracted = (subscription?.ai_replies_addon ?? null) !== null;
   const [loading, setLoading] = useState(true);
-  const [nodes, setNodes] = useState<BotNodeRow[]>([]);
-  // Último estado gravado no banco, para sinalizar o que ainda não foi salvo
-  const [savedNodesById, setSavedNodesById] = useState<
-    Record<string, BotNodeRow>
-  >({});
-  const [savedOptionsById, setSavedOptionsById] = useState<
-    Record<string, BotOptionRow>
-  >({});
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const editorRef = useRef<HTMLDivElement>(null);
+  const [saving, setSaving] = useState(false);
+  const [creatingRoot, setCreatingRoot] = useState(false);
+  // Último estado gravado e o estado em edição
+  const [saved, setSaved] = useState<FlowState | null>(null);
+  const [flow, setFlow] = useState<FlowState | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [openOptionId, setOpenOptionId] = useState<string | null>(null);
+  const [tagOpenIds, setTagOpenIds] = useState<Set<string>>(new Set());
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [tags, setTags] = useState<TagRow[]>([]);
 
-  const [savingNodeId, setSavingNodeId] = useState<string | null>(null);
-  const [deletingNodeId, setDeletingNodeId] = useState<string | null>(null);
-  const [optionsByNodeId, setOptionsByNodeId] = useState<
-    Record<string, Array<BotOptionRow | OptionDraft>>
-  >({});
-  const [optionsLoadingNodeId, setOptionsLoadingNodeId] = useState<
-    string | null
-  >(null);
-  const [savingOptionId, setSavingOptionId] = useState<string | null>(null);
-
-  const rootNode = useMemo(
-    () => nodes.find((n) => n.node_key === BOT_ROOT_NODE_KEY) ?? null,
-    [nodes],
-  );
-
-  const selectedNode = useMemo(
-    () => nodes.find((n) => n.id === selectedNodeId) ?? null,
-    [nodes, selectedNodeId],
-  );
-
-  const nodeList = useMemo(() => {
-    return [...nodes].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-  }, [nodes]);
-
-  const selectedOptions = useMemo(() => {
-    if (!selectedNodeId) return [];
-    return optionsByNodeId[selectedNodeId] ?? [];
-  }, [optionsByNodeId, selectedNodeId]);
-
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    const [nodesRes, depsRes, tagsRes] = await Promise.all([
-      botsService.listNodes(botId),
-      botsService.listDepartments(clinicId),
-      botsService.listTags(clinicId),
-    ]);
-    setLoading(false);
-
-    if (nodesRes.error) return toast.error(nodesRes.error.message);
-    if (depsRes.error) toast.error(depsRes.error.message);
-    if (tagsRes.error) toast.error(tagsRes.error.message);
-
-    const list = nodesRes.data;
-    setNodes(list);
-    setSavedNodesById(Object.fromEntries(list.map((n) => [n.id, n])));
-    setDepartments(depsRes.data ?? []);
-    setTags(tagsRes.data ?? []);
-
-    const nextSelected =
-      selectedNodeId && list.some((n) => n.id === selectedNodeId)
-        ? selectedNodeId
-        : (list[0]?.id ?? null);
-    setSelectedNodeId(nextSelected);
-  }, [botId, clinicId, selectedNodeId]);
-
-  useEffect(() => {
-    fetchAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [botId]);
-
-  const loadOptions = useCallback(
-    async (nodeId: string) => {
-      if (optionsByNodeId[nodeId]) return;
-      setOptionsLoadingNodeId(nodeId);
-      const res = await botsService.listOptions(nodeId);
-      setOptionsLoadingNodeId(null);
-      if (res.error) {
-        toast.error(res.error.message);
+  const load = useCallback(
+    async (keepSelected?: string | null) => {
+      setLoading(true);
+      const [nodesRes, depsRes, tagsRes] = await Promise.all([
+        botsService.listNodes(botId),
+        botsService.listDepartments(clinicId),
+        botsService.listTags(clinicId),
+      ]);
+      if (depsRes.error) toast.error(depsRes.error.message);
+      if (tagsRes.error) toast.error(tagsRes.error.message);
+      setDepartments(depsRes.data ?? []);
+      setTags(tagsRes.data ?? []);
+      if (nodesRes.error) {
+        setLoading(false);
+        toast.error(nodesRes.error.message);
         return;
       }
-      setOptionsByNodeId((prev) => ({ ...prev, [nodeId]: res.data }));
-      setSavedOptionsById((prev) => ({
-        ...prev,
-        ...Object.fromEntries(res.data.map((o) => [o.id, o])),
-      }));
+
+      const optsRes = await botsService.listOptionsByNodeIds(
+        nodesRes.data.map((n) => n.id),
+      );
+      setLoading(false);
+      if (optsRes.error) {
+        toast.error(optsRes.error.message);
+        return;
+      }
+
+      const next = fromRows(nodesRes.data, optsRes.data);
+      setSaved(next);
+      setFlow(next);
+      setOpenOptionId(null);
+      setTagOpenIds(new Set());
+      setSelectedId(
+        keepSelected && next.stages.some((s) => s.id === keepSelected)
+          ? keepSelected
+          : (next.stages.find((s) => s.isRoot)?.id ?? next.stages[0]?.id ?? null),
+      );
     },
-    [optionsByNodeId],
+    [botId, clinicId],
   );
 
   useEffect(() => {
-    if (!selectedNodeId) return;
-    loadOptions(selectedNodeId);
-  }, [loadOptions, selectedNodeId]);
+    load();
+  }, [load]);
 
-  const updateNodeLocal = (nodeId: string, patch: Partial<BotNodeRow>) => {
-    setNodes((prev) =>
-      prev.map((n) =>
-        n.id === nodeId ? ({ ...n, ...patch } as BotNodeRow) : n,
+  const changes = saved && flow ? countChanges(saved, flow) : 0;
+
+  useEffect(() => {
+    onDirtyChange?.(changes > 0);
+  }, [changes, onDirtyChange]);
+
+  useEffect(() => {
+    if (changes === 0) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [changes]);
+
+  const root = flow?.stages.find((s) => s.isRoot) ?? null;
+  const current =
+    flow?.stages.find((s) => s.id === selectedId) ?? root ?? null;
+  const currentOptions = useMemo(
+    () => (flow && current ? optionsOf(flow, current.id) : []),
+    [flow, current],
+  );
+
+  const editable = isAdmin && !saving;
+
+  const mutate = (fn: (draft: FlowState) => FlowState) =>
+    setFlow((prev) => (prev ? fn(prev) : prev));
+
+  const selectStage = (id: string) => {
+    setSelectedId(id);
+    setOpenOptionId(null);
+  };
+
+  const makeStage = (name: string): FlowStage => ({
+    id: makeDraftId("stage"),
+    isNew: true,
+    isRoot: false,
+    kind: "menu",
+    aiInstructions: "",
+    aiDepartmentId: "",
+    name,
+    message: "",
+    // Inclui as chaves das etapas removidas ainda não salvas
+    nodeKey: nextNodeKey([...(saved?.stages ?? []), ...(flow?.stages ?? [])]),
+  });
+
+  const updateStage = (patch: Partial<FlowStage>) => {
+    if (!current) return;
+    mutate((f) => ({
+      ...f,
+      stages: f.stages.map((s) => (s.id === current.id ? { ...s, ...patch } : s)),
+    }));
+  };
+
+  const handleChangeKind = async (kind: FlowStage["kind"]) => {
+    if (!current || !flow || current.kind === kind) return;
+    const buttons = optionsOf(flow, current.id).length;
+    if (kind === "ai" && buttons > 0) {
+      const ok = await confirm({
+        title: "Trocar para atendimento com IA?",
+        description:
+          buttons === 1
+            ? "O botão desta etapa sai: quem conduz a conversa a partir daqui é a IA."
+            : `Os ${buttons} botões desta etapa saem: quem conduz a conversa a partir daqui é a IA.`,
+        confirmLabel: "Trocar para IA",
+      });
+      if (!ok) return;
+    }
+    const stageId = current.id;
+    mutate((f) => ({
+      stages: f.stages.map((s) => (s.id === stageId ? { ...s, kind } : s)),
+      options:
+        kind === "ai" ? f.options.filter((o) => o.stageId !== stageId) : f.options,
+    }));
+    setOpenOptionId(null);
+  };
+
+  const handleNewStage = () => {
+    const stage = makeStage("Nova etapa");
+    mutate((f) => ({ ...f, stages: [...f.stages, stage] }));
+    selectStage(stage.id);
+  };
+
+  const handleDeleteStage = async () => {
+    if (!current || current.isRoot) return;
+    const ok = await confirm({
+      title: `Excluir a etapa "${current.name || "sem nome"}"?`,
+      description:
+        "Os botões dela também saem, e os botões que abriam esta etapa ficam sem destino.",
+      confirmLabel: "Excluir etapa",
+      tone: "danger",
+    });
+    if (!ok) return;
+    const removedId = current.id;
+    mutate((f) => ({
+      stages: f.stages.filter((s) => s.id !== removedId),
+      options: f.options
+        .filter((o) => o.stageId !== removedId)
+        .map((o) => (o.target === removedId ? { ...o, target: "" } : o)),
+    }));
+    if (root) selectStage(root.id);
+  };
+
+  const changeOption = (id: string, patch: Partial<FlowOption>) =>
+    mutate((f) => ({
+      ...f,
+      options: f.options.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+    }));
+
+  const handleAddOption = () => {
+    if (!flow || !current || !canAddOption(flow, current.id)) return;
+    const option: FlowOption = {
+      id: makeDraftId("option"),
+      isNew: true,
+      stageId: current.id,
+      label: "",
+      action: "",
+      target: "",
+      departmentId: "",
+      reply: "",
+      tagId: "",
+      savedValue: "",
+    };
+    mutate((f) => ({ ...f, options: [...f.options, option] }));
+    setOpenOptionId(option.id);
+  };
+
+  const handleMoveOption = (id: string, dir: -1 | 1) =>
+    mutate((f) => {
+      const option = f.options.find((o) => o.id === id);
+      if (!option) return f;
+      const siblings = f.options.filter((o) => o.stageId === option.stageId);
+      const neighbor = siblings[siblings.indexOf(option) + dir];
+      if (!neighbor) return f;
+      const next = [...f.options];
+      const a = next.indexOf(option);
+      const b = next.indexOf(neighbor);
+      [next[a], next[b]] = [next[b], next[a]];
+      return { ...f, options: next };
+    });
+
+  const handleRemoveOption = (id: string) => {
+    mutate((f) => ({ ...f, options: f.options.filter((o) => o.id !== id) }));
+    if (openOptionId === id) setOpenOptionId(null);
+  };
+
+  const handleCreateStageFor = (optionId: string) => {
+    const option = flow?.options.find((o) => o.id === optionId);
+    if (!option) return;
+    const stage = makeStage(option.label.trim() || "Nova etapa");
+    mutate((f) => ({
+      stages: [...f.stages, stage],
+      options: f.options.map((o) =>
+        o.id === optionId ? { ...o, target: stage.id } : o,
       ),
-    );
+    }));
   };
 
   const handleCreateRoot = async () => {
-    if (rootNode) return;
-    if (!isAdmin) return toast.error("Você não tem permissão para esta ação.");
-
-    setSavingNodeId("root");
+    if (!isAdmin) return;
+    setCreatingRoot(true);
     const res = await botsService.createNode({
       bot_id: botId,
       clinic_id: clinicId,
       node_key: BOT_ROOT_NODE_KEY,
-      title: "Etapa inicial",
-      message: "Escolha uma opção:",
+      title: "Boas-vindas",
+      message: "Olá! Como podemos ajudar?",
       node_type: "menu",
       sort_order: 1,
     });
-    setSavingNodeId(null);
-
+    setCreatingRoot(false);
     if (res.error) return toast.error(res.error.message);
-    setNodes((prev) => [res.data, ...prev]);
-    setSavedNodesById((prev) => ({ ...prev, [res.data.id]: res.data }));
-    setSelectedNodeId(res.data.id);
-    toast.success("Etapa inicial criada.");
+    await load(res.data.id);
   };
 
-  const handleCreateNode = async () => {
-    if (!isAdmin) return toast.error("Você não tem permissão para esta ação.");
-    const nextSort =
-      nodes.reduce((max, n) => Math.max(max, n.sort_order ?? 0), 0) + 1;
+  const handleSave = async () => {
+    if (!flow || !saved || !isAdmin) return;
 
-    // A chave é única por bot; depois de exclusões o número pode repetir
-    const usedKeys = new Set(nodes.map((n) => n.node_key));
-    let keyNumber = nextSort;
-    while (usedKeys.has(`node_${keyNumber}`)) keyNumber++;
-
-    setSavingNodeId("new");
-    const res = await botsService.createNode({
-      bot_id: botId,
-      clinic_id: clinicId,
-      node_key: `node_${keyNumber}`,
-      title: `Etapa ${keyNumber}`,
-      message: "",
-      node_type: "menu",
-      sort_order: nextSort,
-    });
-    setSavingNodeId(null);
-
-    if (res.error) return toast.error(res.error.message);
-    setNodes((prev) => [...prev, res.data]);
-    // Sem snapshot salvo de propósito: a etapa nasce sem mensagem e precisa ser salva
-    setSelectedNodeId(res.data.id);
-    toast.success("Etapa criada. Escreva a mensagem e salve.");
-  };
-
-  const handleSaveNode = async (node: BotNodeRow) => {
-    if (!isAdmin) return toast.error("Você não tem permissão para esta ação.");
-    if (!node.title.trim()) return toast.error("Título é obrigatório.");
-    if (!node.message.trim()) return toast.error("Mensagem é obrigatória.");
-    if (!node.node_key.trim())
-      return toast.error("A chave da etapa é obrigatória.");
-
-    if (
-      node.node_key === BOT_ROOT_NODE_KEY &&
-      nodes.some((n) => n.id !== node.id && n.node_key === BOT_ROOT_NODE_KEY)
-    ) {
-      return toast.error('Já existe uma etapa com chave "root".');
-    }
-
-    setSavingNodeId(node.id);
-    const res = await botsService.updateNode(node.id, {
-      node_key: node.node_key.trim(),
-      title: node.title.trim(),
-      message: node.message.trim(),
-      node_type: "menu",
-      sort_order: node.sort_order,
-    });
-    setSavingNodeId(null);
-    if (res.error) return toast.error(res.error.message);
-    setNodes((prev) => prev.map((n) => (n.id === node.id ? res.data : n)));
-    setSavedNodesById((prev) => ({ ...prev, [node.id]: res.data }));
-    toast.success("Etapa salva.");
-  };
-
-  const handleDeleteNode = async (node: BotNodeRow) => {
-    if (!isAdmin) return toast.error("Você não tem permissão para esta ação.");
-    if (node.node_key === BOT_ROOT_NODE_KEY) {
-      return toast.error("A etapa inicial não pode ser removida.");
-    }
-    const ok = await confirm({
-      title: `Remover a etapa "${node.title}"?`,
-      description:
-        "As opções dela são apagadas e as opções de outras etapas que levam até ela ficam sem destino.",
-      confirmLabel: "Remover etapa",
-      tone: "danger",
-    });
-    if (!ok) return;
-
-    setDeletingNodeId(node.id);
-    const res = await botsService.deleteNode(node.id);
-    setDeletingNodeId(null);
-    if (res.error) return toast.error(res.error.message);
-
-    setNodes((prev) => prev.filter((n) => n.id !== node.id));
-    // O banco zera next_node_id das opções que apontavam para a etapa removida
-    const clearTarget = <T extends BotOptionRow | OptionDraft>(o: T): T =>
-      o.next_node_id === node.id ? { ...o, next_node_id: null } : o;
-    setOptionsByNodeId((prev) => {
-      const copy: typeof prev = {};
-      for (const [nodeId, list] of Object.entries(prev)) {
-        if (nodeId === node.id) continue;
-        copy[nodeId] = list.map(clearTarget);
-      }
-      return copy;
-    });
-    setSavedOptionsById((prev) =>
-      Object.fromEntries(
-        Object.entries(prev).map(([id, o]) => [id, clearTarget(o)]),
-      ),
-    );
-    setSelectedNodeId(rootNode?.id ?? null);
-    toast.success("Etapa removida.");
-  };
-
-  const swapSortOrder = async (a: BotNodeRow, b: BotNodeRow) => {
-    if (!isAdmin) return toast.error("Você não tem permissão para esta ação.");
-    const aOrder = a.sort_order;
-    const bOrder = b.sort_order;
-    updateNodeLocal(a.id, { sort_order: bOrder });
-    updateNodeLocal(b.id, { sort_order: aOrder });
-
-    const [r1, r2] = await Promise.all([
-      botsService.updateNode(a.id, {
-        sort_order: bOrder,
-      }),
-      botsService.updateNode(b.id, {
-        sort_order: aOrder,
-      }),
-    ]);
-
-    if (r1.error || r2.error) {
+    for (const stage of flow.stages) {
+      const opts = optionsOf(flow, stage.id);
+      const index = opts.findIndex((o) => getOptionWarning(o) !== null);
+      if (index === -1) continue;
+      const warning = getOptionWarning(opts[index]);
+      selectStage(stage.id);
+      setOpenOptionId(opts[index].id);
       toast.error(
-        (r1.error ?? r2.error)?.message ?? "Falha ao reordenar etapas.",
+        `Etapa "${stage.name || "sem nome"}", botão ${index + 1}: ${warning}.`,
       );
-      await fetchAll();
       return;
     }
 
-    setNodes((prev) =>
-      [...prev].sort((x, y) => (x.sort_order ?? 0) - (y.sort_order ?? 0)),
-    );
-  };
-
-  const updateOptionLocal = (
-    nodeId: string,
-    optionKey: string,
-    patch: Partial<OptionDraft | BotOptionRow>,
-  ) => {
-    setOptionsByNodeId((prev) => {
-      const list = prev[nodeId] ?? [];
-      const next = list.map((opt) => {
-        const idKey =
-          (opt as OptionDraft).__draftId ?? (opt as BotOptionRow).id;
-        if (idKey !== optionKey) return opt;
-        const nextOption = { ...opt, ...patch } as BotOptionRow | OptionDraft;
-        return {
-          ...nextOption,
-          end_session: normalizeOptionEndSession(nextOption),
-        } as BotOptionRow | OptionDraft;
-      });
-      return { ...prev, [nodeId]: next };
-    });
-  };
-
-  const handleAddOptionDraft = (nodeId: string) => {
-    if (!isAdmin) return toast.error("Você não tem permissão para esta ação.");
-    const current = optionsByNodeId[nodeId] ?? [];
-    const nextSort =
-      current.reduce((max, o) => Math.max(max, o.sort_order ?? 0), 0) + 1;
-    // Primeiro número livre: o valor é único dentro da etapa
-    const usedValues = new Set(current.map((o) => o.option_value.trim()));
-    let valueNumber = 1;
-    while (usedValues.has(String(valueNumber))) valueNumber++;
-    const nextValue = String(valueNumber);
-
-    const draft: OptionDraft = {
-      __draftId: makeDraftId(),
-      bot_node_id: nodeId,
-      clinic_id: clinicId,
-      option_value: nextValue,
-      label: "",
-      action_type: "go_to_node",
-      next_node_id: null,
-      target_department_id: null,
-      tag_id: null,
-      message_to_send: null,
-      end_session: false,
-      sort_order: nextSort,
-    };
-
-    setOptionsByNodeId((prev) => ({ ...prev, [nodeId]: [...current, draft] }));
-  };
-
-  const handleSaveOption = async (
-    nodeId: string,
-    opt: BotOptionRow | OptionDraft,
-  ) => {
-    if (!isAdmin) return toast.error("Você não tem permissão para esta ação.");
-    if (!opt.option_value.trim())
-      return toast.error("Informe o valor da opção (ex.: 1).");
-    if (!opt.label.trim()) return toast.error("Informe o texto da opção.");
-    if (!opt.action_type) return toast.error("Selecione a ação da opção.");
-
-    const actionError = getOptionActionError(opt);
-    if (actionError) return toast.error(actionError);
-
-    const optionValue = opt.option_value.trim().toLowerCase();
-    const duplicated = (optionsByNodeId[nodeId] ?? []).some(
-      (o) =>
-        o !== opt && o.option_value.trim().toLowerCase() === optionValue,
-    );
-    if (duplicated) {
-      return toast.error("Já existe uma opção com esse valor nesta etapa.");
-    }
-
-    const optionKey =
-      (opt as BotOptionRow).id ?? (opt as OptionDraft).__draftId;
-    setSavingOptionId(optionKey);
-
-    const createPayload: CreateBotOptionInput = {
-      clinic_id: clinicId,
-      bot_node_id: nodeId,
-      option_value: opt.option_value.trim(),
-      label: opt.label.trim(),
-      action_type: opt.action_type,
-      next_node_id:
-        opt.action_type === "go_to_node" ? (opt.next_node_id ?? null) : null,
-      target_department_id:
-        opt.action_type === "transfer_to_department"
-          ? (opt.target_department_id ?? null)
-          : null,
-      tag_id: opt.action_type === "add_tag" ? (opt.tag_id ?? null) : null,
-      message_to_send:
-        opt.action_type === "go_to_node"
-          ? null
-          : opt.message_to_send?.trim() || null,
-      end_session: normalizeOptionEndSession(opt),
-      sort_order: opt.sort_order ?? 1,
-    };
-
-    const updatePayload: UpdateBotOptionInput = {
-      option_value: createPayload.option_value,
-      label: createPayload.label,
-      action_type: createPayload.action_type,
-      next_node_id: createPayload.next_node_id,
-      target_department_id: createPayload.target_department_id,
-      tag_id: createPayload.tag_id,
-      message_to_send: createPayload.message_to_send,
-      end_session: createPayload.end_session,
-      sort_order: createPayload.sort_order,
-    };
-
-    const res = (opt as BotOptionRow).id
-      ? await botsService.updateOption((opt as BotOptionRow).id, updatePayload)
-      : await botsService.createOption(createPayload);
-
-    setSavingOptionId(null);
-    if (res.error) return toast.error(res.error.message);
-
-    const saved = res.data;
-    setSavedOptionsById((prev) => ({ ...prev, [saved.id]: saved }));
-    setOptionsByNodeId((prev) => {
-      const list = prev[nodeId] ?? [];
-      const next = list.map((o) => {
-        if ((o as BotOptionRow).id && (o as BotOptionRow).id === saved.id) {
-          return saved;
-        }
-        if (
-          !(o as BotOptionRow).id &&
-          (o as OptionDraft).__draftId === (opt as OptionDraft).__draftId
-        ) {
-          return saved;
-        }
-        return o;
-      });
-      return { ...prev, [nodeId]: next };
-    });
-
-    toast.success("Opção salva.");
-  };
-
-  const handleDeleteOption = async (
-    nodeId: string,
-    opt: BotOptionRow | OptionDraft,
-  ) => {
-    if (!isAdmin) return toast.error("Você não tem permissão para esta ação.");
-    const label = opt.label?.trim() ? `"${opt.label.trim()}"` : "esta opção";
-    const ok = await confirm({
-      title: `Remover ${label}?`,
-      confirmLabel: "Remover",
-      tone: "danger",
-    });
-    if (!ok) return;
-
-    if (!(opt as BotOptionRow).id) {
-      setOptionsByNodeId((prev) => {
-        const list = prev[nodeId] ?? [];
-        const next = list.filter(
-          (o) =>
-            (o as OptionDraft).__draftId !== (opt as OptionDraft).__draftId,
-        );
-        return { ...prev, [nodeId]: next };
-      });
-      return;
-    }
-
-    setSavingOptionId((opt as BotOptionRow).id);
-    const res = await botsService.deleteOption((opt as BotOptionRow).id);
-    setSavingOptionId(null);
-    if (res.error) return toast.error(res.error.message);
-
-    setOptionsByNodeId((prev) => {
-      const list = prev[nodeId] ?? [];
-      const next = list.filter(
-        (o) => (o as BotOptionRow).id !== (opt as BotOptionRow).id,
+    setSaving(true);
+    const res = await saveFlow({ clinicId, botId, saved, current: flow });
+    setSaving(false);
+    const keep = selectedId ? (res.stageIds[selectedId] ?? selectedId) : null;
+    if (res.error) {
+      toast.error(
+        `Não foi possível salvar tudo: ${res.error.message} O fluxo foi recarregado com o que ficou salvo.`,
       );
-      return { ...prev, [nodeId]: next };
-    });
-    toast.success("Opção removida.");
+    } else {
+      toast.success("Fluxo salvo.");
+    }
+    await load(keep);
   };
 
-  if (loading) {
+  if (loading && !flow) {
     return (
       <div className="space-y-3">
         {[1, 2, 3].map((i) => (
@@ -632,515 +322,311 @@ export const BotNodesEditor = ({
     );
   }
 
-  return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px,1fr]">
-      <Card className="p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <div className="text-sm font-semibold text-slate-900">Etapas</div>
-            <div className="mt-0.5 text-xs text-slate-500">
-              Etapa inicial obrigatória:{" "}
-              <span className="font-mono">{BOT_ROOT_NODE_KEY}</span>
-            </div>
-          </div>
+  if (!flow || !root || !current) {
+    return (
+      <Card className="p-4 sm:p-6">
+        <h2 className="text-lg font-semibold text-slate-900">
+          Comece pela primeira mensagem
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          É o que o bot envia quando o cliente chama pela primeira vez.
+        </p>
+        <Button
+          variant="primary"
+          size="sm"
+          className="mt-4"
+          onClick={handleCreateRoot}
+          isLoading={creatingRoot}
+          disabled={!isAdmin}
+        >
+          Criar primeira etapa
+        </Button>
+      </Card>
+    );
+  }
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCreateNode}
-            disabled={!isAdmin || savingNodeId !== null}
-          >
-            <span className="flex items-center gap-2">
-              <PlusIcon className="h-4 w-4" />
-              Etapa
+  const { orphans } = buildFlowTree(flow);
+  const isOrphan = !current.isRoot && orphans.includes(current.id);
+  const incoming = flow.options
+    .filter(
+      (o) =>
+        o.action === "stage" &&
+        o.target === current.id &&
+        o.stageId !== current.id,
+    )
+    .map((o) => ({
+      option: o,
+      from: flow.stages.find((s) => s.id === o.stageId),
+    }));
+
+  return (
+    <div className="flex flex-col gap-4">
+      {isAdmin ? (
+        <div className="sticky top-0 z-10 -mx-1 flex items-center justify-end gap-3 bg-gray-50/95 px-1 py-2 backdrop-blur">
+          {changes > 0 ? (
+            <span className="text-[13px] font-medium text-orange-700">
+              {changes === 1
+                ? "1 alteração não salva"
+                : `${changes} alterações não salvas`}
             </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[13px] text-green-700">
+              <CheckIcon className="h-4 w-4" strokeWidth={2.4} />
+              Tudo salvo
+            </span>
+          )}
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSave}
+            isLoading={saving}
+            disabled={changes === 0 || saving}
+          >
+            Salvar
           </Button>
         </div>
+      ) : null}
 
-        {!rootNode ? (
-          <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-3 text-sm text-yellow-800">
-            <div className="font-medium">Etapa inicial ausente</div>
-            <div className="mt-1">
-              Para ativar o bot, é necessário ter uma etapa com chave{" "}
-              <span className="font-mono">"root"</span>.
+      <div className="grid items-start gap-4 lg:grid-cols-[260px_minmax(0,1fr)] min-[1400px]:grid-cols-[260px_minmax(0,1fr)_340px]">
+        <FlowMap
+          state={flow}
+          selectedId={current.id}
+          disabled={!editable}
+          onSelect={selectStage}
+          onNewStage={handleNewStage}
+        />
+
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex flex-col gap-3.5 rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <label htmlFor="stage-name" className="sr-only">
+                  Nome da etapa
+                </label>
+                <input
+                  id="stage-name"
+                  value={current.name}
+                  disabled={!editable}
+                  onChange={(e) => updateStage({ name: e.target.value })}
+                  placeholder="Dê um nome para a etapa"
+                  title="Só a sua equipe vê este nome"
+                  className="-ml-2 w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-xl font-bold text-slate-900 hover:border-slate-200 focus:border-blue-500 focus:outline-none focus:ring-[3px] focus:ring-blue-500/20 disabled:hover:border-transparent"
+                />
+                <div className="flex flex-wrap items-center gap-1 text-[13px] text-slate-500">
+                  {current.isRoot ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-green-600" />
+                      Primeira mensagem que o cliente recebe
+                    </span>
+                  ) : null}
+                  {incoming.length > 0 ? (
+                    <>
+                      <span>
+                        {current.isRoot
+                          ? "· Também aberta pelo botão"
+                          : "Aberta pelo botão"}
+                      </span>
+                      {incoming.map(({ option, from }, i) => (
+                        <span key={option.id}>
+                          <button
+                            type="button"
+                            onClick={() => from && selectStage(from.id)}
+                            className="text-blue-700 hover:text-blue-900"
+                          >
+                            “{option.label.trim() || "sem texto"}” em{" "}
+                            {from?.name || "sem nome"}
+                          </button>
+                          {i < incoming.length - 1 ? "," : ""}
+                        </span>
+                      ))}
+                    </>
+                  ) : null}
+                  {isOrphan ? (
+                    <span className="text-orange-700">
+                      Nenhum botão leva até aqui ainda
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              {!current.isRoot && isAdmin ? (
+                <button
+                  type="button"
+                  onClick={handleDeleteStage}
+                  disabled={!editable}
+                  aria-label="Excluir etapa"
+                  title="Excluir etapa"
+                  className="flex h-9 w-9 flex-none items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                >
+                  <Trash2Icon className="h-[17px] w-[17px]" />
+                </button>
+              ) : null}
             </div>
-            <div className="mt-3">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleCreateRoot}
-                disabled={!isAdmin || savingNodeId !== null}
+
+            {aiContracted || current.kind === "ai" ? (
+              <div
+                role="radiogroup"
+                aria-label="Tipo da etapa"
+                className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1"
               >
-                Criar etapa inicial
-              </Button>
+                {(
+                  [
+                    { kind: "menu", label: "Mensagem com botões", Icon: ListIcon },
+                    { kind: "ai", label: "Atendimento com IA", Icon: SparklesIcon },
+                  ] as const
+                ).map(({ kind, label, Icon }) => {
+                  const active = current.kind === kind;
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      disabled={!editable || (kind === "ai" && !aiContracted)}
+                      onClick={() => handleChangeKind(kind)}
+                      className={[
+                        "flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-semibold transition disabled:cursor-not-allowed",
+                        active
+                          ? "bg-white text-slate-900 shadow-sm"
+                          : "text-slate-500 hover:text-slate-800 disabled:opacity-50",
+                      ].join(" ")}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {current.kind === "ai" && !aiContracted ? (
+              <p className="rounded-lg bg-orange-50 px-3 py-2 text-[13px] text-orange-800">
+                O adicional de IA não está ativo: quando o cliente chegar nesta
+                etapa, a conversa vai direto para a equipe.
+              </p>
+            ) : null}
+
+            <div>
+              <label
+                htmlFor="stage-message"
+                className="mb-1.5 block text-[13px] font-semibold text-slate-700"
+              >
+                {current.kind === "ai" ? "Mensagem de abertura (opcional)" : "Mensagem"}
+              </label>
+              {current.kind === "ai" ? (
+                <p className="mb-2 text-xs leading-relaxed text-slate-500">
+                  Enviada ao chegar nesta etapa. Sem ela, a IA responde direto o
+                  que o cliente escreveu.
+                </p>
+              ) : null}
+              <textarea
+                id="stage-message"
+                rows={3}
+                value={current.message}
+                disabled={!editable}
+                onChange={(e) => updateStage({ message: e.target.value })}
+                placeholder={
+                  current.kind === "ai"
+                    ? "Ex.: Oi! Sou a assistente da loja. Como posso ajudar?"
+                    : "Escreva o que o bot diz nesta etapa…"
+                }
+                className="w-full resize-y rounded-[10px] border border-slate-100 bg-slate-50 p-3 text-sm leading-relaxed text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-blue-500/20"
+              />
             </div>
           </div>
-        ) : null}
 
-        <div className="mt-4 space-y-2">
-          {nodeList.length === 0 ? (
-            <div className="text-sm text-slate-500">Nenhuma etapa criada.</div>
-          ) : (
-            nodeList.map((n, idx) => {
-              const active = n.id === selectedNodeId;
-              const canMoveUp = idx > 0;
-              const canMoveDown = idx < nodeList.length - 1;
-
-              return (
-                <div
-                  key={n.id}
-                  className={[
-                    "rounded-lg border px-3 py-2",
-                    active
-                      ? "border-blue-200 bg-blue-50"
-                      : "border-slate-200 bg-white hover:bg-slate-50",
-                  ].join(" ")}
+          {current.kind === "ai" ? (
+            <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+              <div>
+                <label
+                  htmlFor="stage-ai-instructions"
+                  className="mb-1.5 block text-[13px] font-semibold text-slate-700"
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedNodeId(n.id);
-                      // Abaixo de lg o editor fica embaixo da lista
-                      if (window.matchMedia?.("(max-width: 1023px)").matches) {
-                        requestAnimationFrame(() =>
-                          editorRef.current?.scrollIntoView({
-                            behavior: "smooth",
-                            block: "start",
-                          }),
-                        );
-                      }
-                    }}
-                    className="w-full text-left"
+                  Objetivo da IA nesta etapa
+                </label>
+                <p className="mb-2 text-xs leading-relaxed text-slate-500">
+                  O que ela deve fazer aqui. As informações da empresa ficam em{" "}
+                  <Link to="/inbox/ai-assistant" className="text-blue-700 hover:text-blue-900">
+                    Assistente com IA
+                  </Link>
+                  .
+                </p>
+                <textarea
+                  id="stage-ai-instructions"
+                  rows={4}
+                  maxLength={4000}
+                  value={current.aiInstructions}
+                  disabled={!editable}
+                  onChange={(e) => updateStage({ aiInstructions: e.target.value })}
+                  placeholder="Ex.: Tire dúvidas sobre os serviços. Se o cliente quiser agendar, pergunte nome e melhor horário e passe para a equipe."
+                  className="w-full resize-y rounded-[10px] border border-slate-100 bg-slate-50 p-3 text-sm leading-relaxed text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-blue-500/20"
+                />
+              </div>
+              {departments.length > 0 ? (
+                <div>
+                  <label
+                    htmlFor="stage-ai-department"
+                    className="mb-1.5 block text-[13px] font-semibold text-slate-700"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-slate-900">
-                          {n.title || "(sem título)"}
-                          {isNodeDirty(n, savedNodesById[n.id]) ? (
-                            <span
-                              className="ml-1 text-[#F97316]"
-                              title="Alterações não salvas"
-                            >
-                              •
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="mt-1">
-                          <NodeBadge node={n} />
-                        </div>
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        #{n.sort_order}
-                      </div>
-                    </div>
-                  </button>
-
-                  <div className="mt-2 flex items-center justify-end gap-1">
-                    <button
-                      type="button"
-                      title="Subir"
-                      disabled={!isAdmin || !canMoveUp}
-                      onClick={() => swapSortOrder(n, nodeList[idx - 1]!)}
-                      className="rounded-md p-1 text-slate-500 hover:bg-white disabled:opacity-50"
-                    >
-                      <ArrowUpIcon className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Descer"
-                      disabled={!isAdmin || !canMoveDown}
-                      onClick={() => swapSortOrder(n, nodeList[idx + 1]!)}
-                      className="rounded-md p-1 text-slate-500 hover:bg-white disabled:opacity-50"
-                    >
-                      <ArrowDownIcon className="h-4 w-4" />
-                    </button>
-                  </div>
+                    Quando precisar de uma pessoa, passar para
+                  </label>
+                  <select
+                    id="stage-ai-department"
+                    value={current.aiDepartmentId}
+                    disabled={!editable}
+                    onChange={(e) => updateStage({ aiDepartmentId: e.target.value })}
+                    className="w-full rounded-[10px] border border-slate-200 bg-white p-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-[3px] focus:ring-blue-500/20"
+                  >
+                    <option value="">Fila geral da equipe</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              );
-            })
+              ) : null}
+              <p className="text-xs leading-relaxed text-slate-500">
+                A IA passa a conversa para a equipe quando o cliente pede uma
+                pessoa, quando não sabe a resposta ou quando o objetivo foi
+                cumprido. Se o cliente se despedir, ela encerra.
+              </p>
+            </div>
+          ) : (
+          <OptionsCard
+            options={currentOptions}
+            openOptionId={openOptionId}
+            tagOpenIds={tagOpenIds}
+            disabled={!editable}
+            currentStageId={current.id}
+            lookups={{ stages: flow.stages, departments, tags }}
+            onToggle={(id) =>
+              setOpenOptionId((prev) => (prev === id ? null : id))
+            }
+            onChange={changeOption}
+            onMove={handleMoveOption}
+            onRemove={handleRemoveOption}
+            onAdd={handleAddOption}
+            onCreateStage={handleCreateStageFor}
+            onOpenStage={selectStage}
+            onOpenTag={(id) =>
+              setTagOpenIds((prev) => new Set(prev).add(id))
+            }
+          />
           )}
         </div>
-      </Card>
 
-      <div ref={editorRef} className="min-w-0 scroll-mt-4 space-y-4">
-        {selectedNode ? (
-          <>
-            <Card className="p-4 sm:p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    Editor da etapa
-                  </h2>
-                  <div className="mt-1">
-                    <NodeBadge node={selectedNode} />
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  {isNodeDirty(selectedNode, savedNodesById[selectedNode.id]) ? (
-                    <UnsavedBadge />
-                  ) : null}
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => handleSaveNode(selectedNode)}
-                    disabled={!isAdmin || savingNodeId === selectedNode.id}
-                    isLoading={savingNodeId === selectedNode.id}
-                  >
-                    <span className="flex items-center gap-2">
-                      <SaveIcon className="h-4 w-4" />
-                      Salvar etapa
-                    </span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-600 hover:bg-red-50"
-                    onClick={() => handleDeleteNode(selectedNode)}
-                    disabled={
-                      !isAdmin ||
-                      deletingNodeId === selectedNode.id ||
-                      selectedNode.node_key === BOT_ROOT_NODE_KEY
-                    }
-                  >
-                    <span className="flex items-center gap-2">
-                      <Trash2Icon className="h-4 w-4" />
-                      Remover
-                    </span>
-                  </Button>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <Input
-                  label="Chave da etapa"
-                  value={selectedNode.node_key}
-                  disabled={
-                    !isAdmin || selectedNode.node_key === BOT_ROOT_NODE_KEY
-                  }
-                  onChange={(e) =>
-                    updateNodeLocal(selectedNode.id, {
-                      node_key: e.target.value,
-                    })
-                  }
-                />
-                <Input
-                  label="Título"
-                  value={selectedNode.title}
-                  disabled={!isAdmin}
-                  onChange={(e) =>
-                    updateNodeLocal(selectedNode.id, { title: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="mt-4">
-                <Textarea
-                  label="Mensagem"
-                  value={selectedNode.message}
-                  disabled={!isAdmin}
-                  onChange={(e) =>
-                    updateNodeLocal(selectedNode.id, {
-                      message: e.target.value,
-                    })
-                  }
-                  placeholder="Texto enviado quando o cliente chega nesta etapa."
-                />
-              </div>
-            </Card>
-
-            <Card className="p-4 sm:p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    Opções da etapa
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Configure as opções numeradas e suas ações. Cada opção é
-                    salva separadamente.
-                  </p>
-                </div>
-
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => handleAddOptionDraft(selectedNode.id)}
-                  disabled={!isAdmin}
-                >
-                  <span className="flex items-center gap-2">
-                    <PlusIcon className="h-4 w-4" />
-                    Nova opção
-                  </span>
-                </Button>
-              </div>
-
-              {optionsLoadingNodeId === selectedNode.id ? (
-                <div className="mt-4 space-y-3">
-                  {[1, 2].map((i) => (
-                    <div
-                      key={i}
-                      className="h-24 animate-pulse rounded-lg border border-slate-200 bg-white"
-                    />
-                  ))}
-                </div>
-              ) : selectedOptions.length === 0 ? (
-                <div className="mt-4 text-sm text-slate-500">
-                  Nenhuma opção cadastrada. Sem opções, o bot envia a mensagem
-                  desta etapa e encerra o atendimento automático.
-                </div>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {selectedOptions.length > BOT_MENU_MAX_OPTIONS ? (
-                    <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
-                      O menu do WhatsApp (API oficial) mostra no máximo{" "}
-                      {BOT_MENU_MAX_OPTIONS} opções. As demais não aparecem
-                      para o cliente — divida em mais etapas.
-                    </div>
-                  ) : null}
-                  {selectedOptions
-                    .slice()
-                    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-                    .map((opt) => {
-                      const optId =
-                        (opt as OptionDraft).__draftId ??
-                        (opt as BotOptionRow).id;
-                      const saving = savingOptionId === optId;
-                      const actionValues = ensureValueInList(
-                        [...BOT_OPTION_ACTION_TYPE_VALUES],
-                        String(opt.action_type ?? ""),
-                      );
-                      const showNextNode = opt.action_type === "go_to_node";
-                      const showDepartment =
-                        opt.action_type === "transfer_to_department";
-                      const showTag = opt.action_type === "add_tag";
-                      const showMessage = opt.action_type !== "go_to_node";
-                      const dirty = isOptionDirty(
-                        opt,
-                        savedOptionsById[(opt as BotOptionRow).id],
-                      );
-                      const labelTooLong =
-                        opt.label.trim().length > BOT_OPTION_LABEL_MAX_LENGTH;
-                      const normalizedEndSession =
-                        normalizeOptionEndSession(opt);
-                      const endSessionControl = getEndSessionControlState(opt);
-
-                      return (
-                        <div
-                          key={optId}
-                          className="rounded-xl border border-slate-200 bg-white p-4"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="text-sm font-semibold text-slate-900">
-                              Opção #{opt.sort_order}
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                              {dirty ? <UnsavedBadge /> : null}
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() =>
-                                  handleSaveOption(selectedNode.id, opt)
-                                }
-                                disabled={!isAdmin || saving}
-                                isLoading={saving}
-                              >
-                                Salvar
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-600 hover:bg-red-50"
-                                onClick={() =>
-                                  handleDeleteOption(selectedNode.id, opt)
-                                }
-                                disabled={!isAdmin || saving}
-                              >
-                                Remover
-                              </Button>
-                            </div>
-                          </div>
-
-                          <div className="mt-4 grid gap-4 md:grid-cols-3">
-                            <Input
-                              label="Valor da opção"
-                              value={opt.option_value}
-                              disabled={!isAdmin}
-                              onChange={(e) =>
-                                updateOptionLocal(selectedNode.id, optId, {
-                                  option_value: e.target.value,
-                                })
-                              }
-                            />
-                            <div>
-                              <Input
-                                label="Texto da opção"
-                                value={opt.label}
-                                disabled={!isAdmin}
-                                onChange={(e) =>
-                                  updateOptionLocal(selectedNode.id, optId, {
-                                    label: e.target.value,
-                                  })
-                                }
-                              />
-                              {labelTooLong ? (
-                                <div className="mt-1 text-xs text-[#F97316]">
-                                  No menu do WhatsApp (API oficial) o texto é
-                                  cortado em {BOT_OPTION_LABEL_MAX_LENGTH}{" "}
-                                  caracteres.
-                                </div>
-                              ) : null}
-                            </div>
-                            <div className="w-full">
-                              <label className="mb-1 block text-sm font-medium text-[#1E1E1E]">
-                                Ação
-                              </label>
-                              <select
-                                value={opt.action_type}
-                                disabled={!isAdmin}
-                                onChange={(e) =>
-                                  updateOptionLocal(selectedNode.id, optId, {
-                                    action_type: e.target.value,
-                                  })
-                                }
-                                className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
-                              >
-                                {actionValues.map((v) => (
-                                  <option key={v} value={v}>
-                                    {actionTypeToLabel[v] ?? v}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-
-                          <div className="mt-4 grid gap-4 md:grid-cols-2">
-                            {showNextNode ? (
-                              <div className="w-full">
-                                <label className="mb-1 block text-sm font-medium text-[#1E1E1E]">
-                                  Próxima etapa
-                                </label>
-                                <select
-                                  value={opt.next_node_id ?? ""}
-                                  disabled={!isAdmin}
-                                  onChange={(e) =>
-                                    updateOptionLocal(selectedNode.id, optId, {
-                                      next_node_id: e.target.value || null,
-                                    })
-                                  }
-                                  className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
-                                >
-                                  <option value="">Selecione...</option>
-                                  {nodeList.map((n) => (
-                                    <option key={n.id} value={n.id}>
-                                      {n.title} ({n.node_key})
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            ) : null}
-
-                            {showDepartment ? (
-                              <div className="w-full">
-                                <label className="mb-1 block text-sm font-medium text-[#1E1E1E]">
-                                  Departamento
-                                </label>
-                                <select
-                                  value={opt.target_department_id ?? ""}
-                                  disabled={!isAdmin}
-                                  onChange={(e) =>
-                                    updateOptionLocal(selectedNode.id, optId, {
-                                      target_department_id:
-                                        e.target.value || null,
-                                    })
-                                  }
-                                  className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
-                                >
-                                  <option value="">Selecione...</option>
-                                  {departments.map((d) => (
-                                    <option key={d.id} value={d.id}>
-                                      {d.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            ) : null}
-
-                            {showTag ? (
-                              <div className="w-full">
-                                <label className="mb-1 block text-sm font-medium text-[#1E1E1E]">
-                                  Tag
-                                </label>
-                                <select
-                                  value={opt.tag_id ?? ""}
-                                  disabled={!isAdmin}
-                                  onChange={(e) =>
-                                    updateOptionLocal(selectedNode.id, optId, {
-                                      tag_id: e.target.value || null,
-                                    })
-                                  }
-                                  className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
-                                >
-                                  <option value="">Selecione...</option>
-                                  {tags.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                      {t.name ?? "(sem nome)"}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            ) : null}
-
-                            <Toggle
-                              label="Encerrar sessão"
-                              helper={endSessionControl.helper}
-                              checked={normalizedEndSession}
-                              onChange={(checked) =>
-                                updateOptionLocal(selectedNode.id, optId, {
-                                  end_session: checked,
-                                })
-                              }
-                              disabled={!isAdmin || endSessionControl.disabled}
-                            />
-                          </div>
-
-                          {showMessage ? (
-                            <div className="mt-4">
-                              <Textarea
-                                label={
-                                  opt.action_type === "send_message"
-                                    ? "Mensagem enviada"
-                                    : "Mensagem enviada ao escolher (opcional)"
-                                }
-                                value={opt.message_to_send ?? ""}
-                                disabled={!isAdmin}
-                                onChange={(e) =>
-                                  updateOptionLocal(selectedNode.id, optId, {
-                                    message_to_send: e.target.value,
-                                  })
-                                }
-                                placeholder={
-                                  opt.action_type === "add_tag"
-                                    ? "Ex.: Anotado! Em breve um atendente fala com você."
-                                    : "Ex.: Certo! Vou te encaminhar para um atendente."
-                                }
-                              />
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </Card>
-          </>
-        ) : (
-          <Card className="p-4 sm:p-6">
-            <div className="text-sm text-slate-600">
-              Selecione uma etapa para editar.
-            </div>
-          </Card>
-        )}
+        <div className="lg:col-span-2 min-[1400px]:sticky min-[1400px]:top-16 min-[1400px]:col-span-1">
+          <PhonePreview
+            state={flow}
+            stageId={current.id}
+            rootStageId={root.id}
+            companyName={clinic?.name?.trim() || "Sua empresa"}
+            startMessage={startMessage}
+            departments={departments}
+            tags={tags}
+            onNavigate={(id) => setSelectedId(id)}
+          />
+        </div>
       </div>
     </div>
   );

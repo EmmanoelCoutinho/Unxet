@@ -3,9 +3,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
 import { clinicHasFeature } from "../_shared/plan.ts";
 import { classifyUnmatchedInput } from "../_shared/botInput.ts";
+import Anthropic from "npm:@anthropic-ai/sdk@1.3.0";
+import { AI_TOOL_END, AI_TOOL_TRANSFER, buildChatTurns, buildSystemPrompt } from "../_shared/aiAssistant.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+// Modelo da etapa de IA. Pode ser trocado por variável de ambiente sem deploy de código.
+const AI_MODEL = Deno.env.get("AI_MODEL") ?? "claude-opus-5-5";
+const AI_MAX_HISTORY_MESSAGES = 40;
+const AI_TRANSFER_TEXT = "Vou passar sua conversa para alguém da nossa equipe. Aguarde um momento, por favor.";
 const CHANNEL_WHATSAPP = "whatsapp";
 const STATUS_OPEN = "open";
 const STATUS_PENDING = "pending";
@@ -285,7 +292,9 @@ serve(async (req)=>{
         contact,
         channelConnection,
         session: activeSession,
-        node: rootNode
+        node: rootNode,
+        // IA sem mensagem de abertura responde já à primeira mensagem do cliente
+        aiInboundAt: inboundMessage.created_at
       });
       return json(200, {
         ok: true,
@@ -316,6 +325,36 @@ serve(async (req)=>{
       });
     }
     await touchSession(supabase, activeSession.id);
+    if (currentNode.node_type === "ai") {
+      // Clique em botão responde na hora; texto espera o cliente terminar de escrever
+      const turn = isInteractiveMessage ? await claimInboundForSession(supabase, activeSession.id, inboundMessage.created_at) : await waitForCustomerPause({
+        supabase,
+        conversationId: body.conversationId,
+        session: activeSession,
+        inboundMessage
+      });
+      if (turn.skipped) {
+        return json(200, {
+          ok: true,
+          skipped: turn.skipped
+        });
+      }
+      await runAiReply({
+        supabase,
+        clinicId: body.clinicId,
+        conversationId: body.conversationId,
+        channelConnectionId: body.channelConnectionId,
+        bot,
+        channelConnection,
+        session: activeSession,
+        node: currentNode,
+        claimedAt: inboundMessage.created_at
+      });
+      return json(200, {
+        ok: true,
+        action: "ai_reply"
+      });
+    }
     if (currentNode.node_type !== "menu") {
       await revealConversation(supabase, body.conversationId);
       return json(200, {
@@ -685,7 +724,7 @@ async function getBot(supabase, clinicId, botId) {
   return data ?? null;
 }
 async function getRootNode(supabase, clinicId, botId) {
-  const { data, error } = await supabase.from("bot_nodes").select("id, bot_id, clinic_id, node_key, title, message, node_type, sort_order").eq("clinic_id", clinicId).eq("bot_id", botId).eq("node_key", "root").maybeSingle();
+  const { data, error } = await supabase.from("bot_nodes").select("id, bot_id, clinic_id, node_key, title, message, node_type, sort_order, ai_instructions, ai_handoff_department_id").eq("clinic_id", clinicId).eq("bot_id", botId).eq("node_key", "root").maybeSingle();
   if (error) {
     console.error("getRootNode error:", error);
     return null;
@@ -693,7 +732,7 @@ async function getRootNode(supabase, clinicId, botId) {
   return data ?? null;
 }
 async function getNodeById(supabase, clinicId, nodeId) {
-  const { data, error } = await supabase.from("bot_nodes").select("id, bot_id, clinic_id, node_key, title, message, node_type, sort_order").eq("clinic_id", clinicId).eq("id", nodeId).maybeSingle();
+  const { data, error } = await supabase.from("bot_nodes").select("id, bot_id, clinic_id, node_key, title, message, node_type, sort_order, ai_instructions, ai_handoff_department_id").eq("clinic_id", clinicId).eq("id", nodeId).maybeSingle();
   if (error) {
     console.error("getNodeById error:", error);
     return null;
@@ -860,9 +899,340 @@ function buildInteractiveMenuPayload(node, options) {
     ]
   };
 }
+// ---------------------------------------------------------------------------
+// Etapa de IA
+// ---------------------------------------------------------------------------
+/**
+ * Espera o cliente terminar de escrever antes de a IA responder. Se chegou
+ * mensagem mais nova, a execução dela responde por todas.
+ */ async function waitForCustomerPause(params) {
+  const { supabase, conversationId, session, inboundMessage } = params;
+  await sleep(BATCH_QUIET_MS);
+  const { data: newer, error } = await supabase.from("messages").select("id").eq("conversation_id", conversationId).eq("direction", DIRECTION_INBOUND).gt("created_at", inboundMessage.created_at).limit(1);
+  if (error) {
+    console.error("waitForCustomerPause newer message error:", error);
+  } else if ((newer?.length ?? 0) > 0) {
+    return {
+      skipped: "newer_message_pending"
+    };
+  }
+  return claimInboundForSession(supabase, session.id, inboundMessage.created_at);
+}
+async function getAiSettings(supabase, clinicId) {
+  const { data, error } = await supabase.from("clinic_ai_settings").select("assistant_name, tone, use_emojis, business_info, faq, rules, custom_instructions").eq("clinic_id", clinicId).maybeSingle();
+  if (error) {
+    console.error("getAiSettings error:", error);
+    return null;
+  }
+  return data ?? null;
+}
+async function getClinicName(supabase, clinicId) {
+  const { data } = await supabase.from("clinics").select("name").eq("id", clinicId).maybeSingle();
+  return data?.name ?? "";
+}
+async function getDepartmentName(supabase, clinicId, departmentId) {
+  if (!departmentId) return null;
+  const { data } = await supabase.from("departments").select("name").eq("id", departmentId).eq("clinic_id", clinicId).maybeSingle();
+  return data?.name ?? null;
+}
+async function getAiHistory(supabase, conversationId, sessionStartedAt) {
+  // A mensagem que abriu a sessão chega segundos antes dela
+  const since = new Date(new Date(sessionStartedAt).getTime() - 60_000).toISOString();
+  const { data, error } = await supabase.from("messages").select("direction, type, text, transcript_text, created_at").eq("conversation_id", conversationId).gte("created_at", since).order("created_at", {
+    ascending: false
+  }).limit(AI_MAX_HISTORY_MESSAGES);
+  if (error) {
+    console.error("getAiHistory error:", error);
+    return [];
+  }
+  return (data ?? []).reverse();
+}
+// A resposta só sai se ninguém assumiu a conversa e nenhuma mensagem mais
+// nova do cliente já está sendo respondida por outra execução
+async function isStillAiTurn(supabase, sessionId, conversationId, claimedAt) {
+  const [{ data: session }, { data: conversation }] = await Promise.all([
+    supabase.from("conversation_bot_sessions").select("status, last_handled_inbound_at").eq("id", sessionId).maybeSingle(),
+    supabase.from("conversations").select("status").eq("id", conversationId).maybeSingle()
+  ]);
+  if (!session || session.status !== SESSION_STATUS_ACTIVE) return false;
+  if (conversation?.status === STATUS_OPEN) return false;
+  if (claimedAt && session.last_handled_inbound_at && new Date(session.last_handled_inbound_at).getTime() > new Date(claimedAt).getTime()) {
+    return false;
+  }
+  return true;
+}
+const AI_TOOLS = [
+  {
+    name: AI_TOOL_TRANSFER,
+    description: "Passa a conversa para uma pessoa da equipe da empresa. O bot para de responder depois disso.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        motivo: {
+          type: "string",
+          description: "Resumo curto para o atendente: o que o cliente quer e o que já foi conversado."
+        }
+      },
+      required: [
+        "motivo"
+      ],
+      additionalProperties: false
+    }
+  },
+  {
+    name: AI_TOOL_END,
+    description: "Encerra o atendimento quando o cliente se despediu ou não precisa de mais nada.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+      additionalProperties: false
+    }
+  }
+];
+// Modelos com fallback no servidor quando a resposta é recusada
+function supportsServerFallback(model) {
+  return /^claude-(opus-5|sonnet-5-5|fable-5)/.test(model);
+}
+async function callClaude(system, turns) {
+  const client = new Anthropic({
+    apiKey: ANTHROPIC_API_KEY,
+    timeout: 60_000,
+    maxRetries: 1
+  });
+  const request = {
+    model: AI_MODEL,
+    max_tokens: 8000,
+    // Conversa de atendimento: pouco raciocínio, resposta rápida
+    output_config: {
+      effort: "low"
+    },
+    system: [
+      {
+        type: "text",
+        text: system,
+        cache_control: {
+          type: "ephemeral"
+        }
+      }
+    ],
+    tools: AI_TOOLS,
+    messages: turns
+  };
+  if (supportsServerFallback(AI_MODEL)) {
+    return client.beta.messages.create({
+      ...request,
+      betas: [
+        "server-side-fallback-2026-07-01"
+      ],
+      fallbacks: "default"
+    });
+  }
+  return client.messages.create(request);
+}
+async function recordAiTokens(supabase, clinicId, usage) {
+  if (!usage) return;
+  const input = (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
+  const { error } = await supabase.rpc("clinic_ai_record_tokens", {
+    p_clinic_id: clinicId,
+    p_input_tokens: input,
+    p_output_tokens: usage.output_tokens ?? 0
+  });
+  if (error) console.error("clinic_ai_record_tokens error:", error);
+}
+/**
+ * A IA responde ao cliente. Ela pode passar para a equipe ou encerrar; se
+ * algo falhar (sem adicional, limite do mês, erro da API), a conversa vai
+ * para a equipe em vez de deixar o cliente sem resposta.
+ */ async function runAiReply(params) {
+  const { supabase, clinicId, conversationId, channelConnectionId, bot, channelConnection, session, node, claimedAt } = params;
+  const nodeContext = {
+    nodeId: node.id,
+    nodeKey: node.node_key,
+    nodeType: "ai"
+  };
+  const send = (text)=>sendBotText({
+      supabase,
+      clinicId,
+      channelConnectionId,
+      conversationId,
+      channelConnection,
+      bot,
+      text,
+      session,
+      nodeContext
+    });
+  const handoff = async (reason, text, summary = null)=>{
+    if (text) {
+      try {
+        await send(text);
+      } catch (err) {
+        // Sem o aviso a conversa ainda precisa chegar a um atendente
+        console.error("ai handoff send error:", err);
+      }
+    }
+    await handoffConversation(supabase, conversationId, node.ai_handoff_department_id ?? null);
+    await insertConversationEvent(supabase, conversationId, "bot_handoff_to_human", {
+      bot_id: bot.id,
+      conversation_bot_session_id: session.id,
+      reason,
+      ai_summary: summary
+    });
+    await insertBotEvent(supabase, {
+      clinicId,
+      conversationId,
+      botId: bot.id,
+      conversationBotSessionId: session.id,
+      nodeId: node.id,
+      eventType: "human_handoff",
+      payload: {
+        reason,
+        ai_summary: summary,
+        target_department_id: node.ai_handoff_department_id ?? null
+      }
+    });
+    await finishSession({
+      supabase,
+      sessionId: session.id,
+      status: SESSION_STATUS_COMPLETED,
+      endedReason: "handoff"
+    });
+    await insertBotEvent(supabase, {
+      clinicId,
+      conversationId,
+      botId: bot.id,
+      conversationBotSessionId: session.id,
+      nodeId: node.id,
+      eventType: "session_completed",
+      payload: {
+        reason: "handoff"
+      }
+    });
+  };
+  if (!ANTHROPIC_API_KEY) {
+    console.error("runAiReply: ANTHROPIC_API_KEY não configurada");
+    return handoff("ai_not_configured", UNRECOGNIZED_HANDOFF_TEXT);
+  }
+  const { data: allowed, error: quotaErr } = await supabase.rpc("clinic_ai_try_consume", {
+    p_clinic_id: clinicId
+  });
+  if (quotaErr) console.error("clinic_ai_try_consume error:", quotaErr);
+  if (allowed !== true) {
+    logStep("ai_unavailable", {
+      clinicId,
+      conversationId
+    });
+    return handoff("ai_unavailable", UNRECOGNIZED_HANDOFF_TEXT);
+  }
+  const [settings, companyName, departmentName, history] = await Promise.all([
+    getAiSettings(supabase, clinicId),
+    getClinicName(supabase, clinicId),
+    getDepartmentName(supabase, clinicId, node.ai_handoff_department_id),
+    getAiHistory(supabase, conversationId, session.started_at)
+  ]);
+  const turns = buildChatTurns(history);
+  if (turns.length === 0) return;
+  const system = buildSystemPrompt({
+    companyName,
+    settings,
+    node,
+    departmentName
+  });
+  let response;
+  try {
+    response = await callClaude(system, turns);
+  } catch (err) {
+    console.error("runAiReply Claude error:", err);
+    if (!await isStillAiTurn(supabase, session.id, conversationId, claimedAt)) return;
+    return handoff("ai_error", UNRECOGNIZED_HANDOFF_TEXT);
+  }
+  await recordAiTokens(supabase, clinicId, response.usage);
+  logStep("ai_response", {
+    conversationId,
+    model: response.model,
+    stopReason: response.stop_reason
+  });
+  if (!await isStillAiTurn(supabase, session.id, conversationId, claimedAt)) {
+    logStep("ai_reply_dropped", {
+      conversationId
+    });
+    return;
+  }
+  if (response.stop_reason === "refusal") {
+    return handoff("ai_refusal", AI_TRANSFER_TEXT);
+  }
+  const text = response.content.filter((block)=>block.type === "text").map((block)=>block.text).join("\n").trim();
+  const toolUse = response.content.find((block)=>block.type === "tool_use");
+  if (toolUse?.name === AI_TOOL_TRANSFER) {
+    const summary = typeof toolUse.input?.motivo === "string" ? toolUse.input.motivo : null;
+    return handoff("ai_transfer", text || AI_TRANSFER_TEXT, summary);
+  }
+  if (!text) {
+    return handoff("ai_empty", AI_TRANSFER_TEXT);
+  }
+  await send(text);
+  if (toolUse?.name === AI_TOOL_END) {
+    await insertConversationEvent(supabase, conversationId, "bot_flow_ended", {
+      bot_id: bot.id,
+      conversation_bot_session_id: session.id,
+      reason: "ai_end"
+    });
+    await finishSession({
+      supabase,
+      sessionId: session.id,
+      status: SESSION_STATUS_COMPLETED,
+      endedReason: "flow_end"
+    });
+    await insertBotEvent(supabase, {
+      clinicId,
+      conversationId,
+      botId: bot.id,
+      conversationBotSessionId: session.id,
+      nodeId: node.id,
+      eventType: "session_completed",
+      payload: {
+        reason: "flow_end",
+        cause: "ai_end"
+      }
+    });
+  }
+}
 async function executeNode(params) {
   const { supabase, clinicId, conversationId, channelConnectionId, bot, channelConnection, session, node } = params;
   await updateSessionNode(supabase, session.id, node.id);
+  if (node.node_type === "ai") {
+    // Com mensagem de abertura, a IA espera o cliente responder
+    if (node.message?.trim()) {
+      await sendBotText({
+        supabase,
+        clinicId,
+        channelConnectionId,
+        conversationId,
+        channelConnection,
+        bot,
+        text: node.message.trim(),
+        session,
+        nodeContext: {
+          nodeId: node.id,
+          nodeKey: node.node_key,
+          nodeType: "ai"
+        }
+      });
+      return;
+    }
+    // Primeira mensagem da conversa: marca como respondida para não ser
+    // respondida de novo junto com a próxima
+    if (params.aiInboundAt) {
+      await claimInboundForSession(supabase, session.id, params.aiInboundAt);
+    }
+    await runAiReply({
+      ...params,
+      claimedAt: params.aiInboundAt ?? null
+    });
+    return;
+  }
   if (node.node_type === "menu") {
     const options = await getOptionsByNodeId(supabase, node.id);
     const interactivePayload = buildInteractiveMenuPayload(node, options);
@@ -1263,7 +1633,33 @@ async function executeOptionAction(params) {
       }
     });
   }
-  if (option.action_type === "go_to_node" || option.action_type === "send_message") {
+  // A etiqueta vale para qualquer ação: no editor ela é um extra do botão
+  if (option.tag_id || option.action_type === "add_tag") {
+    if (option.tag_id) {
+      const { error } = await supabase.from("conversation_tags").upsert({
+        conversation_id: conversationId,
+        tag_id: option.tag_id
+      }, {
+        onConflict: "conversation_id,tag_id"
+      });
+      if (error) {
+        console.error("add_tag error:", error);
+      }
+    }
+    await insertBotEvent(supabase, {
+      clinicId,
+      conversationId,
+      botId: bot.id,
+      conversationBotSessionId: session.id,
+      nodeId: option.bot_node_id,
+      optionId: option.id,
+      eventType: "tag_added",
+      payload: {
+        tag_id: option.tag_id
+      }
+    });
+  }
+  if (option.action_type === "go_to_node" || option.action_type === "send_message" || option.action_type === "add_tag") {
     return null;
   }
   if (option.action_type === "transfer_to_department") {
@@ -1302,32 +1698,6 @@ async function executeOptionAction(params) {
       shouldFinishSession: true,
       endedReason: "handoff"
     };
-  }
-  if (option.action_type === "add_tag") {
-    if (option.tag_id) {
-      const { error } = await supabase.from("conversation_tags").upsert({
-        conversation_id: conversationId,
-        tag_id: option.tag_id
-      }, {
-        onConflict: "conversation_id,tag_id"
-      });
-      if (error) {
-        console.error("add_tag error:", error);
-      }
-    }
-    await insertBotEvent(supabase, {
-      clinicId,
-      conversationId,
-      botId: bot.id,
-      conversationBotSessionId: session.id,
-      nodeId: option.bot_node_id,
-      optionId: option.id,
-      eventType: "tag_added",
-      payload: {
-        tag_id: option.tag_id
-      }
-    });
-    return null;
   }
   if (option.action_type === "handoff_to_human") {
     await handoffConversation(supabase, conversationId, option.target_department_id);

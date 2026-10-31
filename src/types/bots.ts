@@ -11,6 +11,7 @@ export const BOT_NODE_TYPE_VALUES = [
   "message",
   "handoff",
   "end",
+  "ai",
 ] as const;
 export type BotNodeType = (typeof BOT_NODE_TYPE_VALUES)[number] | OpenString;
 
@@ -81,6 +82,9 @@ export type BotNodeRow = {
   message: string;
   node_type: BotNodeType;
   sort_order: number;
+  // Etapa de IA: objetivo da etapa e setor que recebe a conversa
+  ai_instructions?: string | null;
+  ai_handoff_department_id?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -93,12 +97,20 @@ export type CreateBotNodeInput = {
   message: string;
   node_type: BotNodeType;
   sort_order: number;
+  ai_instructions?: string | null;
+  ai_handoff_department_id?: string | null;
 };
 
 export type UpdateBotNodeInput = Partial<
   Pick<
     BotNodeRow,
-    "node_key" | "title" | "message" | "node_type" | "sort_order"
+    | "node_key"
+    | "title"
+    | "message"
+    | "node_type"
+    | "sort_order"
+    | "ai_instructions"
+    | "ai_handoff_department_id"
   >
 >;
 
