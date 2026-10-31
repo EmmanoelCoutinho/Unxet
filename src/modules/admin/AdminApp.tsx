@@ -1,3 +1,4 @@
+import { AI_ASSISTANT_ENABLED } from "../../lib/aiAssistantFlag";
 import React from "react";
 import { NavLink, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { LogOut } from "lucide-react";
@@ -8,12 +9,14 @@ import { MetricsPage } from "./pages/MetricsPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { MaintenancePage } from "./pages/MaintenancePage";
 import { SubscribersPage } from "./pages/SubscribersPage";
+import { AiAddonPage } from "./pages/AiAddonPage";
 
 // Novas abas do painel entram aqui e nas rotas abaixo
 const ADMIN_TABS = [
   { to: "/admin/overview", label: "Visão geral" },
   { to: "/admin/subscribers", label: "Assinantes" },
   { to: "/admin/onboarding", label: "Onboarding" },
+  ...(AI_ASSISTANT_ENABLED ? [{ to: "/admin/ai", label: "IA" }] : []),
   { to: "/admin/maintenance", label: "Manutenção" },
 ];
 
@@ -88,6 +91,9 @@ const AdminRoutes: React.FC = () => {
         <Route path="overview" element={<MetricsPage />} />
         <Route path="subscribers" element={<SubscribersPage />} />
         <Route path="onboarding" element={<OnboardingPage />} />
+        {AI_ASSISTANT_ENABLED ? (
+          <Route path="ai" element={<AiAddonPage />} />
+        ) : null}
         <Route path="maintenance" element={<MaintenancePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/admin/overview" replace />} />
