@@ -119,6 +119,10 @@ export const QuickMessagesPage: React.FC = () => {
                 Administradores gerenciam os atalhos da Empresa. Agentes podem
                 apenas consultar e usar na conversa.
               </p>
+              <p className="mt-1 text-sm text-gray-500">
+                Na conversa, digite <span className="font-semibold">/</span> no
+                campo de mensagem para escolher uma delas sem abrir o menu.
+              </p>
             </div>
           </div>
 
