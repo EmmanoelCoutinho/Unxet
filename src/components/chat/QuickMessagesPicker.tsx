@@ -34,7 +34,8 @@ export const QuickMessagesPicker: React.FC<QuickMessagesPickerProps> = ({
               Mensagens rápidas
             </h3>
             <p className="mt-1 text-sm text-slate-500">
-              Escolha uma mensagem para preencher o campo de envio.
+              Escolha uma mensagem para preencher o campo de envio. Dica:
+              digite / no campo para abrir esta lista mais rápido.
             </p>
           </div>
           <button

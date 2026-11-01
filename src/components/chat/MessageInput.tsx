@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   SendIcon,
   PaperclipIcon,
@@ -16,6 +16,11 @@ import { supabase } from "../../lib/supabaseClient";
 import { useClinic } from "../../contexts/ClinicContext";
 import { EmojiPicker } from "./EmojiPicker";
 import { QuickMessagesPicker } from "./QuickMessagesPicker";
+import { QuickMessageSlashMenu } from "./QuickMessageSlashMenu";
+import {
+  filterQuickMessages,
+  findSlashToken,
+} from "../../lib/quickMessageSlash";
 import type { QuickMessage } from "../../services/quickMessages";
 import { compressImageFile } from "../../lib/imageUtils";
 import type { SharedContact } from "../../lib/sharedContact";
@@ -137,6 +142,54 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const message = draft ?? internalMessage;
   const setMessage = onDraftChange ?? setInternalMessage;
 
+  // Atalho "/" para mensagens rápidas sem abrir o menu de anexos
+  const [caret, setCaret] = useState(0);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [dismissedSlashAt, setDismissedSlashAt] = useState<number | null>(
+    null,
+  );
+  const slashToken = useMemo(
+    () =>
+      disabled || !inputFocused ? null : findSlashToken(message, caret),
+    [disabled, inputFocused, message, caret],
+  );
+  const slashMatches = useMemo(
+    () => (slashToken ? filterQuickMessages(quickMessages, slashToken.query) : []),
+    [quickMessages, slashToken],
+  );
+  // Sem resultado para o que foi digitado, o menu some para não atrapalhar
+  const slashOpen = Boolean(
+    slashToken &&
+      dismissedSlashAt !== slashToken.start &&
+      (quickMessagesLoading ||
+        slashMatches.length > 0 ||
+        (quickMessages.length === 0 && !slashToken.query)),
+  );
+
+  useEffect(() => {
+    setSlashIndex(0);
+  }, [slashToken?.start, slashToken?.query]);
+
+  useEffect(() => {
+    if (!slashToken) setDismissedSlashAt(null);
+  }, [slashToken]);
+
+  const applySlashQuickMessage = (item: QuickMessage) => {
+    if (!slashToken) return;
+    const next =
+      message.slice(0, slashToken.start) + item.message + message.slice(caret);
+    const nextCaret = slashToken.start + item.message.length;
+    setMessage(next);
+    setCaret(nextCaret);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(nextCaret, nextCaret);
+    });
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -246,6 +299,31 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (disabled) return;
+
+    if (slashOpen && slashToken) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setDismissedSlashAt(slashToken.start);
+        return;
+      }
+      if (slashMatches.length > 0 && !quickMessagesLoading) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          const step = e.key === "ArrowDown" ? 1 : -1;
+          setSlashIndex(
+            (current) =>
+              (current + step + slashMatches.length) % slashMatches.length,
+          );
+          return;
+        }
+        if ((e.key === "Enter" && !e.shiftKey) || e.key === "Tab") {
+          e.preventDefault();
+          const item = slashMatches[slashIndex] ?? slashMatches[0];
+          if (item) applySlashQuickMessage(item);
+          return;
+        }
+      }
+    }
 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -1105,8 +1183,19 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             void addFiles(files);
           }}
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => {
+            setMessage(e.target.value);
+            setCaret(e.target.selectionStart ?? e.target.value.length);
+          }}
+          onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+          onFocus={(e) => {
+            setInputFocused(true);
+            setCaret(e.currentTarget.selectionStart ?? 0);
+          }}
+          onBlur={() => setInputFocused(false)}
           onKeyDown={handleKeyDown}
+          aria-expanded={slashOpen}
+          aria-autocomplete="list"
           placeholder={placeholderText}
           rows={1}
           disabled={disabled}
@@ -1135,6 +1224,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             <MicIcon className="w-4 h-4" />
           )}
         </Button>
+
+        {slashOpen && (
+          <QuickMessageSlashMenu
+            items={slashMatches}
+            loading={quickMessagesLoading}
+            activeIndex={slashIndex}
+            onHover={setSlashIndex}
+            onSelect={applySlashQuickMessage}
+          />
+        )}
 
         <EmojiPicker
           open={showEmojis && !disabled}
