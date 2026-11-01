@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "react-toastify";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../contexts/AuthContext";
@@ -128,7 +129,9 @@ export const ProfileModal: React.FC<{
     setResetSent(true);
   };
 
-  return (
+  // Portal no body: renderizada dentro do header (fixed z-30), a modal ficaria
+  // presa no empilhamento dele e a sidebar continuaria clicável por cima.
+  return createPortal(
     <div className="fixed inset-0 z-[9999]">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
@@ -197,6 +200,7 @@ export const ProfileModal: React.FC<{
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
