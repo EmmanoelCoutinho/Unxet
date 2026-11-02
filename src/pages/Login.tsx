@@ -96,12 +96,6 @@ export const Login: React.FC = () => {
         </form>
 
         <LegalConsent action="Ao entrar" className="mt-4" />
-
-        <div className="mt-6 text-center">
-          <a href="#" className="text-sm text-[#0A84FF] hover:underline">
-            Problemas para entrar?
-          </a>
-        </div>
       </Card>
     </div>
   );
