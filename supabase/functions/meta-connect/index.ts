@@ -365,6 +365,61 @@ serve(async (req)=>{
         }
       });
     }
+    // ✅ Desconecta Messenger e Instagram da empresa: tira a inscrição do app nos
+    // webhooks da Página (para de receber mensagens), apaga o token salvo e marca
+    // as conexões como desconectadas. As conversas antigas continuam no Unxet.
+    if (action === "disconnect") {
+      const { data: rows, error: rowsErr } = await supabase
+        .from("channel_connections")
+        .select("id, meta_page_id, access_token")
+        .eq("clinic_id", clinicId)
+        .eq("provider", "meta")
+        .in("channel", ["messenger", "instagram"])
+        .is("archived_at", null);
+      if (rowsErr) return json(500, {
+        error: "DB read failed",
+        details: rowsErr
+      });
+      if (!rows || rows.length === 0) return json(200, {
+        disconnected: 0
+      });
+
+      // Uma Página pode ter Messenger e Instagram com o mesmo token: tira a inscrição uma vez
+      const pages = new Map();
+      for (const row of rows) {
+        const token = String(row.access_token ?? "").trim();
+        if (row.meta_page_id && token && !pages.has(row.meta_page_id)) pages.set(row.meta_page_id, token);
+      }
+      let unsubscribed = true;
+      for (const [pageId, token] of pages) {
+        const url = new URL(`https://graph.facebook.com/v21.0/${encodeURIComponent(pageId)}/subscribed_apps`);
+        url.searchParams.set("access_token", token);
+        const resp = await fetch(url.toString(), { method: "DELETE" });
+        const respBody = await resp.json().catch(()=>({}));
+        console.log("UNSUBSCRIBE PAGE:", pageId, resp.status, JSON.stringify(respBody));
+        // Token já expirado ou revogado: a Meta não entrega mais nada mesmo; segue desconectando
+        if (!resp.ok) unsubscribed = false;
+      }
+
+      const now = new Date().toISOString();
+      const { error: updErr } = await supabase
+        .from("channel_connections")
+        .update({
+          status: "disconnected",
+          access_token: null,
+          last_disconnection_at: now,
+          updated_at: now
+        })
+        .in("id", rows.map((r)=>r.id));
+      if (updErr) return json(500, {
+        error: "DB update failed",
+        details: updErr
+      });
+      return json(200, {
+        disconnected: rows.length,
+        unsubscribed
+      });
+    }
     // ✅ Dados das contas conectadas (nome, foto, @, seguidores) para os cards da
     // tela de Integrações. Lidos na hora com o token salvo: as fotos da Meta são
     // links temporários e o nome da Página ou o @ podem mudar.

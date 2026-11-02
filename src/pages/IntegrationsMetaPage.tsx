@@ -21,6 +21,7 @@ import {
   type DepartmentOption,
 } from "../components/settings/EvolutionConnectionsPanel";
 import { formatConnectionPhone } from "../lib/whatsappConnections";
+import { useConfirm } from "../components/ui/ConfirmDialog";
 import {
   MetaAccountSummary,
   type MetaAccountDetails,
@@ -210,6 +211,8 @@ export const MetaIntegrationsPage: React.FC = () => {
   // ---- Um número só (tela de sempre) ---------------------------------------
   const [qrLoading, setQrLoading] = useState(false);
   const [disconnectLoading, setDisconnectLoading] = useState(false);
+  const [metaDisconnectLoading, setMetaDisconnectLoading] = useState(false);
+  const confirm = useConfirm();
   const whatsappEvolution = evolutionConnections[0] ?? null;
 
   const whatsappEvolutionConnectedLabel = useMemo(() => {
@@ -397,6 +400,39 @@ export const MetaIntegrationsPage: React.FC = () => {
     await fetchConnections();
     setQrLoading(false);
   }, [clinicId, fetchConnections, whatsappEvolution]);
+
+  const metaSocialConnected =
+    messenger?.status === "connected" || instagram?.status === "connected";
+
+  // Desconecta Messenger e Instagram juntos: os dois usam a mesma Página e o mesmo token
+  const disconnectMetaSocial = useCallback(async () => {
+    if (!clinicId) return;
+    const ok = await confirm({
+      title: "Desconectar Instagram e Facebook?",
+      description:
+        "O Unxet para de receber e enviar mensagens pela Página e pelo Instagram conectados. As conversas antigas continuam no histórico. Para voltar, é só conectar de novo.",
+      confirmLabel: "Desconectar",
+      tone: "danger",
+    });
+    if (!ok) return;
+
+    setErrorMsg(null);
+    setMetaDisconnectLoading(true);
+    const { error } = await supabase.functions.invoke("meta-connect", {
+      body: { action: "disconnect", clinicId },
+    });
+    if (error) {
+      setErrorMsg(
+        await functionErrorMessage(
+          error,
+          "Não foi possível desconectar o Instagram e o Facebook.",
+        ),
+      );
+    } else {
+      await fetchConnections();
+    }
+    setMetaDisconnectLoading(false);
+  }, [clinicId, confirm, fetchConnections]);
 
   const disconnectEvolutionConnection = useCallback(async () => {
     if (!whatsappEvolution?.id) {
@@ -904,6 +940,21 @@ export const MetaIntegrationsPage: React.FC = () => {
                     Conectar Instagram e Facebook
                   </span>
                 </Button>
+                {metaSocialConnected ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={disconnectMetaSocial}
+                    isLoading={metaDisconnectLoading}
+                    disabled={!clinicId}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <span className="flex items-center gap-2">
+                      <LogOutIcon className="h-4 w-4" />
+                      Desconectar
+                    </span>
+                  </Button>
+                ) : null}
               </div>
 
               {!socialChannelsAllowed ? (

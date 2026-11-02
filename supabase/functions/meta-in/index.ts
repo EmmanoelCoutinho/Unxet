@@ -480,10 +480,11 @@ async function getAutomationSettings(opts) {
     reopen_on_inbound_enabled: data?.reopen_on_inbound_enabled === false ? false : true
   };
 }
+// Conexões desconectadas pela empresa não recebem mais mensagens
 async function resolveClinicId(opts) {
   const { supabase, channel, metaInboxId, rid } = opts;
   if (channel === CHANNEL_MESSENGER) {
-    const { data, error } = await supabase.from("channel_connections").select("clinic_id").eq("provider", "meta").eq("channel", "messenger").eq("meta_page_id", metaInboxId).maybeSingle();
+    const { data, error } = await supabase.from("channel_connections").select("clinic_id").eq("provider", "meta").eq("channel", "messenger").eq("meta_page_id", metaInboxId).neq("status", "disconnected").maybeSingle();
     if (error) {
       logSbError(rid, "resolveClinicId.channel_connections.messenger", error, {
         metaInboxId
@@ -493,7 +494,7 @@ async function resolveClinicId(opts) {
     }
   }
   if (channel === CHANNEL_INSTAGRAM) {
-    const { data, error } = await supabase.from("channel_connections").select("clinic_id").eq("provider", "meta").eq("channel", "instagram").eq("meta_ig_user_id", metaInboxId).maybeSingle();
+    const { data, error } = await supabase.from("channel_connections").select("clinic_id").eq("provider", "meta").eq("channel", "instagram").eq("meta_ig_user_id", metaInboxId).neq("status", "disconnected").maybeSingle();
     if (error) {
       logSbError(rid, "resolveClinicId.channel_connections.instagram.ig_user", error, {
         metaInboxId
@@ -501,7 +502,7 @@ async function resolveClinicId(opts) {
     } else if (data?.clinic_id) {
       return data.clinic_id;
     }
-    const { data: byPage, error: byPageErr } = await supabase.from("channel_connections").select("clinic_id").eq("provider", "meta").eq("channel", "instagram").eq("meta_page_id", metaInboxId).maybeSingle();
+    const { data: byPage, error: byPageErr } = await supabase.from("channel_connections").select("clinic_id").eq("provider", "meta").eq("channel", "instagram").eq("meta_page_id", metaInboxId).neq("status", "disconnected").maybeSingle();
     if (byPageErr) {
       logSbError(rid, "resolveClinicId.channel_connections.instagram.page_fallback", byPageErr, {
         metaInboxId
