@@ -15,6 +15,7 @@ on:
       - "supabase/migrations/**"
       - "supabase/functions/**"
       - "supabase/config.toml"
+      - ".github/workflows/supabase-deploy.yml"
   workflow_dispatch:
 
 concurrency:
@@ -75,12 +76,15 @@ jobs:
           echo "$files"
           if grep -q '^supabase/migrations/' <<< "$files"; then m=true; else m=false; fi
           if grep -qE '^supabase/(functions/|config\.toml)' <<< "$files"; then f=true; else f=false; fi
+          # Mudou o próprio workflow: publica tudo para validar
+          if grep -q '^\.github/workflows/supabase-deploy\.yml' <<< "$files"; then m=true; f=true; fi
           echo "migrations=$m" >> "$GITHUB_OUTPUT"
           echo "functions=$f" >> "$GITHUB_OUTPUT"
 
+      # Mesma versão do CLI do projeto (node_modules): versões mais novas recusam o config.toml atual
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.107.0
 
       - name: Vincular ao projeto
         run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
