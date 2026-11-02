@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   BASE_VERSION,
   CURRENT_RELEASE,
+  NEXT_RELEASE,
   RELEASES,
   computeReleases,
+  previewNextRelease,
   formatReleaseDate,
   type ReleaseEntry,
 } from "./releases";
@@ -45,6 +47,33 @@ describe("computeReleases", () => {
     expect(entries[0]).not.toHaveProperty("version");
   });
 });
+
+describe("previewNextRelease", () => {
+  const entries = [entry("2026-12-01", ["new"])]; // 2.10.0
+
+  it("sem itens não há próxima versão", () => {
+    expect(previewNextRelease([], entries, "2.9.0")).toBeNull();
+  });
+
+  it("só correções sobe o patch; novidade sobe o minor", () => {
+    expect(
+      previewNextRelease([{ kind: "fixed", text: "x" }], entries, "2.9.0")
+        ?.version,
+    ).toBe("2.10.1");
+    expect(
+      previewNextRelease([{ kind: "improved", text: "x" }], entries, "2.9.0")
+        ?.version,
+    ).toBe("2.11.0");
+  });
+});
+
+// A main só recebe a próxima versão já fechada por `npm run release`
+it.runIf(process.env.GITHUB_BASE_REF === "main")(
+  "PR para a main: NEXT_RELEASE vazia (rode npm run release na develop)",
+  () => {
+    expect(NEXT_RELEASE).toEqual([]);
+  },
+);
 
 describe("lista publicada", () => {
   it("a versão atual é a primeira e fica acima da base", () => {

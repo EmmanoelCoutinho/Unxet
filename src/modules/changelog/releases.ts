@@ -1,7 +1,9 @@
 // Novidades da Unxet mostradas no sino do topo.
 //
-// Ao publicar uma atualização, adicione uma entrada NO TOPO de
-// RELEASE_ENTRIES. O número da versão é calculado sozinho:
+// Cada PR para a develop adiciona o que mudou em NEXT_RELEASE (a próxima
+// versão, ainda em teste). No lançamento, `npm run release` move tudo para
+// uma entrada nova NO TOPO de RELEASE_ENTRIES, com a data do dia.
+// O número da versão é calculado sozinho:
 // - só correções ("fixed"): sobe o último número (2.10.0 -> 2.10.1)
 // - tem novidade ou melhoria: sobe o do meio (2.10.1 -> 2.11.0)
 // - major: true (muda o jeito de usar o sistema): sobe o primeiro (-> 3.0.0)
@@ -64,6 +66,15 @@ export const CHANGE_KIND_LABELS: Record<ChangeKind, string> = {
 };
 
 export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
+
+/**
+ * Próxima versão, em teste na develop. Só aparece no sino fora da produção
+ * e precisa estar vazia na main (o CI confere nos PRs para a main).
+ * Para versão grande, rode `npm run release -- --major` no lançamento.
+ */
+// prettier-ignore
+export const NEXT_RELEASE: ReleaseChange[] = [
+];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
@@ -149,6 +160,22 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
 export const RELEASES = computeReleases(RELEASE_ENTRIES, BASE_VERSION);
 
 export const CURRENT_RELEASE = RELEASES[0];
+
+/** Como a próxima versão vai ficar (número calculado, sem data) */
+export function previewNextRelease(
+  next: ReleaseChange[],
+  entries: ReleaseEntry[] = RELEASE_ENTRIES,
+  baseVersion: string = BASE_VERSION,
+): Omit<Release, "date"> | null {
+  if (next.length === 0) return null;
+  const [upcoming] = computeReleases(
+    [{ date: "", changes: next }, ...entries],
+    baseVersion,
+  );
+  return { version: upcoming.version, changes: upcoming.changes };
+}
+
+export const UPCOMING_RELEASE = previewNextRelease(NEXT_RELEASE);
 
 /** "2026-11-02" -> "02/11/2026" sem passar pelo fuso horário */
 export function formatReleaseDate(date: string) {

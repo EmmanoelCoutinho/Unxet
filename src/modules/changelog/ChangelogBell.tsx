@@ -11,9 +11,12 @@ import {
   CHANGE_KIND_ORDER,
   CURRENT_RELEASE,
   RELEASES,
+  UPCOMING_RELEASE,
   formatReleaseDate,
   type ChangeKind,
+  type ReleaseChange,
 } from "./releases";
+import { IS_PRODUCTION } from "../../lib/environment";
 
 const KIND_STYLES: Record<ChangeKind, { icon: LucideIcon; className: string }> =
   {
@@ -32,6 +35,13 @@ function readSeen(userId: string) {
   } catch {
     return null;
   }
+}
+
+function groupChanges(changes: ReleaseChange[], isAdmin: boolean) {
+  return CHANGE_KIND_ORDER.map((kind) => ({
+    kind,
+    items: changes.filter((c) => c.kind === kind && (isAdmin || !c.adminOnly)),
+  })).filter((g) => g.items.length > 0);
 }
 
 interface ChangelogBellProps {
@@ -62,15 +72,19 @@ export const ChangelogBell = ({ userId, isAdmin }: ChangelogBellProps) => {
     () =>
       RELEASES.map((release) => ({
         ...release,
-        groups: CHANGE_KIND_ORDER.map((kind) => ({
-          kind,
-          items: release.changes.filter(
-            (c) => c.kind === kind && (isAdmin || !c.adminOnly),
-          ),
-        })).filter((g) => g.items.length > 0),
+        groups: groupChanges(release.changes, isAdmin),
       })).filter((release) => release.groups.length > 0),
     [isAdmin],
   );
+
+  // Fora da produção, mostra o que entra na próxima versão (ainda em teste)
+  const upcoming = useMemo(() => {
+    if (IS_PRODUCTION || !UPCOMING_RELEASE) return null;
+    const groups = groupChanges(UPCOMING_RELEASE.changes, isAdmin);
+    return groups.length > 0
+      ? { version: UPCOMING_RELEASE.version, groups }
+      : null;
+  }, [isAdmin]);
 
   const toggle = () => {
     setOpen((v) => !v);
@@ -152,6 +166,20 @@ export const ChangelogBell = ({ userId, isAdmin }: ChangelogBellProps) => {
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain">
+          {upcoming && (
+            <section className="border-b border-dashed border-amber-300 bg-amber-50/60">
+              <div className="flex items-baseline justify-between gap-2 px-4 pb-1 pt-3">
+                <span className="text-sm font-semibold text-[#1E1E1E]">
+                  Versão {upcoming.version}
+                  <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                    Em teste
+                  </span>
+                </span>
+                <span className="text-xs text-gray-500">próxima versão</span>
+              </div>
+              <ChangeGroups groups={upcoming.groups} />
+            </section>
+          )}
           {releases.map((release, index) => (
             <section
               key={release.version}
@@ -170,33 +198,7 @@ export const ChangelogBell = ({ userId, isAdmin }: ChangelogBellProps) => {
                   {formatReleaseDate(release.date)}
                 </span>
               </div>
-              {release.groups.map(({ kind, items }) => {
-                const { icon: Icon, className } = KIND_STYLES[kind];
-                return (
-                  <div key={kind} className="px-4 pb-3 pt-2">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span
-                        className={`flex h-6 w-6 items-center justify-center rounded-md ${className}`}
-                      >
-                        <Icon className="h-3.5 w-3.5" />
-                      </span>
-                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        {CHANGE_KIND_LABELS[kind]}
-                      </span>
-                    </div>
-                    <ul className="space-y-1.5 pl-8">
-                      {items.map((item) => (
-                        <li
-                          key={item.text}
-                          className="list-disc text-sm leading-snug text-gray-700 marker:text-gray-300"
-                        >
-                          {item.text}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })}
+              <ChangeGroups groups={release.groups} />
             </section>
           ))}
         </div>
@@ -204,3 +206,41 @@ export const ChangelogBell = ({ userId, isAdmin }: ChangelogBellProps) => {
     </>
   );
 };
+
+function ChangeGroups({
+  groups,
+}: {
+  groups: { kind: ChangeKind; items: ReleaseChange[] }[];
+}) {
+  return (
+    <>
+      {groups.map(({ kind, items }) => {
+        const { icon: Icon, className } = KIND_STYLES[kind];
+        return (
+          <div key={kind} className="px-4 pb-3 pt-2">
+            <div className="mb-2 flex items-center gap-2">
+              <span
+                className={`flex h-6 w-6 items-center justify-center rounded-md ${className}`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                {CHANGE_KIND_LABELS[kind]}
+              </span>
+            </div>
+            <ul className="space-y-1.5 pl-8">
+              {items.map((item) => (
+                <li
+                  key={item.text}
+                  className="list-disc text-sm leading-snug text-gray-700 marker:text-gray-300"
+                >
+                  {item.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </>
+  );
+}
