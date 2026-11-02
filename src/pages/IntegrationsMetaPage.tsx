@@ -942,16 +942,14 @@ export const MetaIntegrationsPage: React.FC = () => {
                 </Button>
                 {metaSocialConnected ? (
                   <Button
-                    variant="secondary"
                     size="sm"
                     onClick={disconnectMetaSocial}
-                    isLoading={metaDisconnectLoading}
-                    disabled={!clinicId}
-                    className="text-red-600 hover:text-red-700"
+                    disabled={!clinicId || metaDisconnectLoading}
+                    className="bg-red-600 hover:bg-red-700"
                   >
                     <span className="flex items-center gap-2">
                       <LogOutIcon className="h-4 w-4" />
-                      Desconectar
+                      {metaDisconnectLoading ? "Desconectando..." : "Desconectar"}
                     </span>
                   </Button>
                 ) : null}
