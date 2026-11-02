@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { canSetPassword, clearSetPasswordGrant } from "../lib/passwordLink";
 import { translateAuthError } from "../lib/authErrors";
 import { PasswordInput } from "../components/ui/PasswordInput";
+import { LegalConsent } from "../components/LegalLinks";
 
 export const SetPassword: React.FC = () => {
   const navigate = useNavigate();
@@ -120,6 +121,7 @@ export const SetPassword: React.FC = () => {
               >
                 {loading ? "Salvando…" : "Salvar senha"}
               </button>
+              <LegalConsent action="Ao salvar a senha" className="pt-1" />
             </div>
           </>
         )}

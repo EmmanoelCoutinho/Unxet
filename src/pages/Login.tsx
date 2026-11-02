@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import logo from '../assets/logo-unxet.png';
 import { toast } from 'react-toastify';
 import { translateAuthError } from '../lib/authErrors';
+import { LegalConsent } from '../components/LegalLinks';
 
 const translateLoginError = (error: { code?: string; message?: string }) =>
   translateAuthError(error, 'Não foi possível entrar. Tente novamente.');
@@ -93,6 +94,8 @@ export const Login: React.FC = () => {
             Entrar
           </Button>
         </form>
+
+        <LegalConsent action="Ao entrar" className="mt-4" />
 
         <div className="mt-6 text-center">
           <a href="#" className="text-sm text-[#0A84FF] hover:underline">
