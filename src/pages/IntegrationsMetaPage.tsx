@@ -21,6 +21,10 @@ import {
   type DepartmentOption,
 } from "../components/settings/EvolutionConnectionsPanel";
 import { formatConnectionPhone } from "../lib/whatsappConnections";
+import {
+  MetaAccountSummary,
+  type MetaAccountDetails,
+} from "../components/settings/MetaAccountSummary";
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID as string | undefined;
 const META_APP_WABA_ID = import.meta.env.VITE_META_APP_WABA_ID as
@@ -123,6 +127,8 @@ export const MetaIntegrationsPage: React.FC = () => {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [metaDetails, setMetaDetails] = useState<Record<string, MetaAccountDetails>>({});
+  const [metaDetailsLoading, setMetaDetailsLoading] = useState(false);
 
   const clinicLabel = useMemo(() => {
     if (!clinicId) return "Empresa atual (indefinida)";
@@ -424,6 +430,35 @@ export const MetaIntegrationsPage: React.FC = () => {
     fetchConnections();
     fetchDepartments();
   }, [fetchClinic, fetchConnections, fetchDepartments]);
+
+  // Nome, foto e @ das contas da Meta conectadas, lidos na hora pelo meta-connect.
+  // Depende só de id/status/Página para não repetir a busca a cada atualização da conexão.
+  const messengerKey = messenger?.status === "connected" ? `${messenger.id}:${messenger.meta_page_id}` : "";
+  const instagramKey = instagram?.status === "connected" ? `${instagram.id}:${instagram.meta_ig_user_id}` : "";
+  useEffect(() => {
+    if (!clinicId || (!messengerKey && !instagramKey)) {
+      setMetaDetails({});
+      return;
+    }
+    let cancelled = false;
+    setMetaDetailsLoading(true);
+    supabase.functions
+      .invoke("meta-connect", { body: { action: "connection_details", clinicId } })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("Erro ao ler dados das contas da Meta:", error);
+          return;
+        }
+        setMetaDetails((data?.details ?? {}) as Record<string, MetaAccountDetails>);
+      })
+      .finally(() => {
+        if (!cancelled) setMetaDetailsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clinicId, messengerKey, instagramKey]);
 
   useEffect(() => {
     if (!clinicId) return;
@@ -814,7 +849,19 @@ export const MetaIntegrationsPage: React.FC = () => {
                     "Centralizar o atendimento do Facebook na inbox.",
                     "Sincronizar conversas recebidas pelo Facebook.",
                   ]}
-                />
+                >
+                  {messenger?.status === "connected" ? (
+                    <MetaAccountSummary
+                      kind="messenger"
+                      details={metaDetails.messenger}
+                      loading={metaDetailsLoading}
+                      fallbackName={messenger.connected_name}
+                      connectedSince={formatDateTime(
+                        messenger.last_connection_at ?? messenger.created_at,
+                      )}
+                    />
+                  ) : null}
+                </PlatformCard>
 
                 <PlatformCard
                   title="Instagram"
@@ -826,7 +873,22 @@ export const MetaIntegrationsPage: React.FC = () => {
                     "Centralizar o atendimento do Instagram na inbox.",
                     "Manter o canal disponível para operação e automações.",
                   ]}
-                />
+                >
+                  {instagram?.status === "connected" ? (
+                    <MetaAccountSummary
+                      kind="instagram"
+                      details={metaDetails.instagram}
+                      loading={metaDetailsLoading}
+                      fallbackName={instagram.connected_name}
+                      connectedSince={formatDateTime(
+                        instagram.last_connection_at ?? instagram.created_at,
+                      )}
+                      linkedPageName={
+                        metaDetails.messenger?.name ?? messenger?.connected_name ?? null
+                      }
+                    />
+                  ) : null}
+                </PlatformCard>
               </div>
 
               <div className="mt-6 flex items-center gap-2">

@@ -239,9 +239,12 @@ serve(async (req)=>{
           meta: subPage.body
         });
       }
-      const igResp = await graphGet(`${pageId}?fields=instagram_business_account,connected_instagram_account`, pageAccessToken);
+      const igResp = await graphGet(`${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, pageAccessToken);
       console.log("IG lookup:", JSON.stringify(igResp.body));
-      const igUserId = String(igResp.ok ? igResp.body?.instagram_business_account?.id ?? igResp.body?.connected_instagram_account?.id ?? "" : "").trim();
+      const igAccount = igResp.ok ? igResp.body?.instagram_business_account ?? igResp.body?.connected_instagram_account ?? null : null;
+      const igUserId = String(igAccount?.id ?? "").trim();
+      const igUsername = String(igAccount?.username ?? "").trim() || null;
+      const pageName = String(page?.name ?? "").trim() || null;
       if (igUserId) {
         console.log("✅ IG User ID encontrado:", igUserId);
         console.log("ℹ️ Para receber DMs do Instagram: configure Webhooks (Instagram -> messages) no painel do app.");
@@ -253,7 +256,9 @@ serve(async (req)=>{
         channel: "messenger",
         meta_page_id: pageId,
         access_token: pageAccessToken,
+        connected_name: pageName,
         status: "connected",
+        last_connection_at: now,
         updated_at: now
       }, {
         onConflict: "clinic_id,provider,channel,session_name"
@@ -273,7 +278,9 @@ serve(async (req)=>{
           meta_page_id: pageId,
           meta_ig_user_id: igUserId,
           access_token: pageAccessToken,
+          connected_name: igUsername,
           status: "connected",
+          last_connection_at: now,
           updated_at: now
         }, {
           onConflict: "clinic_id,provider,channel,session_name"
@@ -357,6 +364,64 @@ serve(async (req)=>{
           status: upsertInstagram.data?.status ?? "connected"
         }
       });
+    }
+    // ✅ Dados das contas conectadas (nome, foto, @, seguidores) para os cards da
+    // tela de Integrações. Lidos na hora com o token salvo: as fotos da Meta são
+    // links temporários e o nome da Página ou o @ podem mudar.
+    if (action === "connection_details") {
+      const { data: rows, error: rowsErr } = await supabase
+        .from("channel_connections")
+        .select("id, channel, meta_page_id, meta_ig_user_id, access_token, connected_name")
+        .eq("clinic_id", clinicId)
+        .eq("provider", "meta")
+        .in("channel", ["messenger", "instagram"])
+        .is("archived_at", null);
+      if (rowsErr) return json(500, {
+        error: "DB read failed",
+        details: rowsErr
+      });
+
+      const details = {};
+      for (const row of rows ?? []) {
+        const token = String(row.access_token ?? "").trim();
+        if (!token) continue;
+        const isInstagram = row.channel === "instagram";
+        const objectId = isInstagram ? row.meta_ig_user_id : row.meta_page_id;
+        if (!objectId) continue;
+
+        const fields = isInstagram
+          ? "username,name,profile_picture_url,followers_count"
+          : "name,link,followers_count,picture.type(large){url}";
+        const resp = await graphGet(`${encodeURIComponent(objectId)}?fields=${fields}`, token);
+        if (!resp.ok) {
+          // 190 = token expirado ou revogado: a empresa precisa conectar de novo
+          const code = Number(resp.body?.error?.code ?? 0);
+          console.log("connection_details failed:", row.channel, resp.status, JSON.stringify(resp.body));
+          details[row.channel] = { error: code === 190 ? "token_invalid" : "fetch_failed" };
+          continue;
+        }
+
+        const b = resp.body ?? {};
+        const username = isInstagram ? String(b.username ?? "").trim() : "";
+        const name = String(b.name ?? "").trim();
+        details[row.channel] = {
+          name: name || null,
+          username: username || null,
+          pictureUrl: (isInstagram ? b.profile_picture_url : b.picture?.data?.url) ?? null,
+          followers: typeof b.followers_count === "number" ? b.followers_count : null,
+          link: isInstagram
+            ? username ? `https://www.instagram.com/${username}` : null
+            : b.link ?? `https://www.facebook.com/${row.meta_page_id}`,
+          pageId: row.meta_page_id ?? null,
+        };
+
+        // Guarda o nome para o resto do app (ex.: identificar o canal na inbox)
+        const label = isInstagram ? username || name : name;
+        if (label && label !== row.connected_name) {
+          await supabase.from("channel_connections").update({ connected_name: label }).eq("id", row.id);
+        }
+      }
+      return json(200, { details });
     }
     return json(400, {
       error: "Invalid action"
