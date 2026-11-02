@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../contexts/AuthContext";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
+import { LegalLinks } from "../LegalLinks";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
 import type { PushStatus } from "../../lib/pushNotifications";
 
@@ -194,7 +195,8 @@ export const ProfileModal: React.FC<{
           </section>
         </div>
 
-        <div className="flex justify-end border-t border-gray-200 p-4">
+        <div className="flex items-center justify-between gap-3 border-t border-gray-200 p-4">
+          <LegalLinks className="!justify-start" />
           <Button type="button" variant="ghost" onClick={onClose}>
             Fechar
           </Button>
