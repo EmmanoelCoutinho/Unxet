@@ -353,6 +353,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # Funções sem entrada aqui são publicadas com verify_jwt = true pelo CLI, o que
 # quebraria webhooks (Meta/Evolution não enviam JWT do Supabase).
 # As funções com verify_jwt = false fazem a autenticação no próprio código.
+# O workflow Supabase (deploy) publica todas a partir daqui: ver docs/lancamentos.md.
 # -----------------------------------------------------------------------------
 [functions.meta-webhook]
 verify_jwt = false
