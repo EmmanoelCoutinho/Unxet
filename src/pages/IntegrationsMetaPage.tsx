@@ -29,6 +29,11 @@ const META_WA_CONFIG_ID = import.meta.env.VITE_META_WA_CONFIG_ID as
   string | undefined;
 const META_REDIRECT_URI = import.meta.env.VITE_META_REDIRECT_URI as
   string | undefined;
+// Configuração do "Login do Facebook para Empresas" com as permissões de
+// Instagram e Messenger. Apps do tipo Empresa recusam a lista em `scope`
+// ("Invalid Scopes"); com o config_id a Meta usa as permissões da configuração.
+const META_FB_CONFIG_ID = import.meta.env.VITE_META_FB_CONFIG_ID as
+  string | undefined;
 
 type Connection = {
   id: string;
@@ -262,15 +267,17 @@ export const MetaIntegrationsPage: React.FC = () => {
       "business_management",
     ].join(",");
 
+    const permissions = META_FB_CONFIG_ID
+      ? `&config_id=${encodeURIComponent(META_FB_CONFIG_ID)}`
+      : `&auth_type=rerequest&prompt=consent&scope=${encodeURIComponent(scopes)}`;
+
     const url =
       `https://www.facebook.com/v21.0/dialog/oauth` +
       `?client_id=${encodeURIComponent(META_APP_ID)}` +
       `&redirect_uri=${encodeURIComponent(META_REDIRECT_URI)}` +
       `&state=${encodeURIComponent(state)}` +
       `&response_type=code` +
-      `&auth_type=rerequest` +
-      `&prompt=consent` +
-      `&scope=${encodeURIComponent(scopes)}`;
+      permissions;
 
     window.location.href = url;
   }, [clinicId]);
