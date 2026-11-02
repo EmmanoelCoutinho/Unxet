@@ -7,6 +7,11 @@ import { useClinic } from "../../contexts/ClinicContext";
 import { ProfileModal } from "./ProfileModal";
 import { MobileNav } from "./MobileNav";
 import { useInternalUnreadTotal } from "../../modules/internalChat/hooks/useInternalChat";
+import { ChangelogBell } from "../../modules/changelog/ChangelogBell";
+import {
+  CURRENT_RELEASE,
+  formatReleaseDate,
+} from "../../modules/changelog/releases";
 
 function getInitials(name: string) {
   return name
@@ -92,6 +97,7 @@ export const Header = () => {
               <span className="truncate">{clinic.name}</span>
             </span>
           )}
+          <ChangelogBell userId={profile?.user_id} isAdmin={isAdmin} />
           <button
             ref={buttonRef}
             onClick={() => setOpen((v) => !v)}
@@ -156,6 +162,10 @@ export const Header = () => {
               >
                 Sair
               </button>
+            </div>
+            <div className="border-t border-[#E5E7EB] px-4 py-2 text-[11px] text-gray-400">
+              Unxet {CURRENT_RELEASE.version} · atualizada em{" "}
+              {formatReleaseDate(CURRENT_RELEASE.date)}
             </div>
           </div>
         </div>
