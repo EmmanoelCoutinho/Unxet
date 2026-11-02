@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 import { queueInboundPush } from "../_shared/push.ts";
+import { findOutboundByMetaId } from "../_shared/metaMessageId.ts";
 const VERIFY_TOKEN = Deno.env.get("META_VERIFY_TOKEN") ?? "";
 const META_APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
 const ALLOW_UNSIGNED_TESTS = (Deno.env.get("META_ALLOW_UNSIGNED_TESTS") ?? "false") === "true";
@@ -1008,7 +1009,10 @@ serve(async (req)=>{
           const currentName = String(contact.name ?? "").trim();
           if (desiredName && (!currentName || currentName === "Cliente")) updates.name = desiredName;
           const currentImg = String(contact.image_url ?? "").trim();
-          if (desiredImageUrl && (!currentImg || currentImg.length < 5)) updates.image_url = desiredImageUrl;
+          // O link da foto de perfil da Meta expira em alguns dias: troca pelo link novo
+          // que veio agora (só quando a foto atual também é da Meta ou está vazia)
+          const currentIsMetaCdn = /(?:fbcdn\.net|cdninstagram\.com|fbsbx\.com)/i.test(currentImg);
+          if (desiredImageUrl && desiredImageUrl !== currentImg && (currentImg.length < 5 || currentIsMetaCdn)) updates.image_url = desiredImageUrl;
           const { error: updContactErr } = await supabase.from("contacts").update(updates).eq("id", contact.id);
           if (updContactErr) {
             logSbError(rid, "contacts.update", updContactErr, {
@@ -1184,6 +1188,22 @@ serve(async (req)=>{
           });
           continue;
         }
+        // O eco do Instagram vem com outro id ("ig_dm_item" em vez do "new_ig_dm_item"
+        // devolvido no envio): compara pela chave da mensagem dentro da conversa
+        if (isFromBusiness && providerMessageId) {
+          const sentRowId = await findOutboundByMetaId(supabase, {
+            conversationId: conversation.id,
+            mid: providerMessageId
+          });
+          if (sentRowId) {
+            logStep(rid, "messages.echo.skip", {
+              providerMessageId,
+              sentRowId,
+              channel
+            });
+            continue;
+          }
+        }
         const metaMessageIdFinal = providerMessageId || `no-mid:${Date.now()}:${counterpartyId}`;
         const messageInsert = {
           conversation_id: conversation.id,
@@ -1244,10 +1264,9 @@ serve(async (req)=>{
             conversationUpdates.closed_at = null;
             conversationUpdates.first_unanswered_inbound_at = timestampIso;
             conversationUpdates.sla_breached_at = null;
-          } else if (conversation.status !== STATUS_PENDING && conversation.status !== STATUS_CLOSED) {
-            conversationUpdates.status = STATUS_PENDING;
-            conversationUpdates.status_changed_at = new Date().toISOString();
           }
+          // Mensagem nova numa conversa em atendimento não muda o status (igual ao
+          // WhatsApp): antes ela voltava para a fila a cada mensagem do cliente.
         } else {
           conversationUpdates.last_outbound_at = timestampIso;
           if (!conversation.first_outbound_at) {
