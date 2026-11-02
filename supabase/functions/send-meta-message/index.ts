@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { findOutboundByMetaId } from "../_shared/metaMessageId.ts";
 import { toProviderMediaUrl } from "../_shared/media.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -827,10 +828,12 @@ serve(async (req)=>{
     }
     // Se o eco da Meta (meta-in) já gravou esta mensagem, completa a mesma linha
     // em vez de criar outra: senão a mensagem aparece duas vezes na conversa.
-    const { data: echoRow } = providerMessageId ? await supabaseAdmin.from("messages").select("id").eq("meta_message_id", providerMessageId).limit(1).maybeSingle() : {
-      data: null
-    };
-    const { data: inserted, error: msgErr } = echoRow ? await supabaseAdmin.from("messages").update(messageInsert).eq("id", echoRow.id).select().maybeSingle() : await supabaseAdmin.from("messages").insert(messageInsert).select().maybeSingle();
+    // O eco do Instagram pode ter outro id para a mesma mensagem: compara pela chave
+    const echoRowId = providerMessageId ? await findOutboundByMetaId(supabaseAdmin, {
+      conversationId: conversation.id,
+      mid: providerMessageId
+    }) : null;
+    const { data: inserted, error: msgErr } = echoRowId ? await supabaseAdmin.from("messages").update(messageInsert).eq("id", echoRowId).select().maybeSingle() : await supabaseAdmin.from("messages").insert(messageInsert).select().maybeSingle();
     if (msgErr || !inserted) {
       console.error(JSON.stringify({
         rid,
