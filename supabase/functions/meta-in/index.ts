@@ -17,6 +17,8 @@ const MESSAGE_TYPE_TEXT = "text";
 const MESSAGE_TYPE_IMAGE = "image";
 const MESSAGE_TYPE_AUDIO = "audio";
 const MESSAGE_TYPE_DOCUMENT = "document";
+// Quanto o eco de uma mensagem enviada espera pela gravação de quem enviou
+const ECHO_WAIT_MS = 3000;
 function toHex(buffer) {
   const bytes = new Uint8Array(buffer);
   return Array.from(bytes).map((b)=>b.toString(16).padStart(2, "0")).join("");
@@ -1019,7 +1021,15 @@ serve(async (req)=>{
           };
         }
         const metaConversationIdFinal = `${channel}:${metaInboxId}:${counterpartyId}`;
-        const { data: existingMessage, error: existingErr } = await supabase.from("messages").select("id").eq("meta_message_id", providerMessageId).maybeSingle();
+        // Eco de mensagem enviada pela empresa: a Meta costuma mandar o eco antes de
+        // quem enviou (send-meta-message, bot) gravar a mensagem com o mesmo mid.
+        // Espera um pouco para a gravação acontecer e o eco ser ignorado abaixo;
+        // se nada aparecer, a mensagem saiu por fora do Unxet (app do Instagram) e é gravada.
+        if (isFromBusiness && providerMessageId) {
+          const { data: alreadySaved } = await supabase.from("messages").select("id").eq("meta_message_id", providerMessageId).limit(1).maybeSingle();
+          if (!alreadySaved) await new Promise((resolve)=>setTimeout(resolve, ECHO_WAIT_MS));
+        }
+        const { data: existingMessage, error: existingErr } = await supabase.from("messages").select("id").eq("meta_message_id", providerMessageId).limit(1).maybeSingle();
         if (existingErr) {
           logSbError(rid, "messages.idempotency_check", existingErr, {
             providerMessageId,

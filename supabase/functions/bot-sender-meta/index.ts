@@ -434,7 +434,12 @@ serve(async (req)=>{
       sent_at: nowIso,
       is_automated: true
     };
-    const { data: inserted, error: msgErr } = await supabaseAdmin.from("messages").insert(messageInsert).select().maybeSingle();
+    // Se o eco da Meta (meta-in) já gravou esta mensagem, completa a mesma linha
+    // em vez de criar outra: senão a mensagem aparece duas vezes na conversa.
+    const { data: echoRow } = providerMessageId ? await supabaseAdmin.from("messages").select("id").eq("meta_message_id", providerMessageId).limit(1).maybeSingle() : {
+      data: null
+    };
+    const { data: inserted, error: msgErr } = echoRow ? await supabaseAdmin.from("messages").update(messageInsert).eq("id", echoRow.id).select().maybeSingle() : await supabaseAdmin.from("messages").insert(messageInsert).select().maybeSingle();
     if (msgErr || !inserted) {
       console.error(JSON.stringify({
         rid,
