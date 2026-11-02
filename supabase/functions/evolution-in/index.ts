@@ -19,6 +19,7 @@ import { timingSafeEqual } from "../_shared/security.ts";
 import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { redactWebhookSecrets, stripWebhookEventSuffix } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
+import { createCheckThrottle, imageHash, isCurrentProfilePic, profilePicFolder, profilePicPath } from "../_shared/profilePicture.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -675,7 +676,7 @@ serve(async (req)=>{
     }
     // ── Foto de perfil (fire-and-forget assíncrono) ───────────────────────
     if (connection.evolution_api_url && connection.evolution_api_key) {
-      fetchAndStoreProfilePic({
+      const profilePicTask = fetchAndStoreProfilePic({
         supabase,
         evolutionApiUrl: connection.evolution_api_url,
         evolutionApiKey: connection.evolution_api_key,
@@ -685,6 +686,10 @@ serve(async (req)=>{
       }).catch((err)=>{
         console.error("Erro ao buscar/salvar profile pic:", err);
       });
+      // Mantém a função viva até a foto terminar de ser conferida
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+        EdgeRuntime.waitUntil(profilePicTask);
+      }
     }
     return new Response(JSON.stringify({
       success: true
@@ -788,13 +793,16 @@ async function endBotSessionIfSentOutsideUnxet(params) {
 // ---------------------------------------------------------------------------
 // Profile pic: busca na Evolution API e faz upsert no bucket + contacts
 // ---------------------------------------------------------------------------
+// Confere a foto a cada mensagem, com intervalo mínimo por contato (ver
+// _shared/profilePicture.ts): o cliente que troca a foto aparece atualizado.
+const shouldCheckProfilePic = createCheckThrottle();
 async function fetchAndStoreProfilePic(params) {
   const { supabase, evolutionApiUrl, evolutionApiKey, instanceName, waId, clinicId } = params;
-  // 1. Verifica se o contato já tem foto
+  if (!shouldCheckProfilePic(`${clinicId}:${waId}`)) return;
+  // 1. Contato (criado pelo shared-in-config antes de chegar aqui)
   const { data: existingContact } = await supabase.from("contacts").select("id, image_url").eq("phone", waId).eq("clinic_id", clinicId).maybeSingle();
-  if (existingContact?.image_url) {
-    return;
-  }
+  if (!existingContact?.id) return;
+  const folder = profilePicFolder(clinicId, waId);
   // 2. Busca URL da foto na Evolution API
   const picResp = await fetch(`${evolutionApiUrl.replace(/\/$/, "")}/chat/fetchProfilePictureUrl/${instanceName}`, {
     method: "POST",
@@ -813,19 +821,27 @@ async function fetchAndStoreProfilePic(params) {
   const picJson = await picResp.json();
   const profilePicUrl = picJson?.profilePictureUrl ?? picJson?.profilePicUrl ?? null;
   if (!profilePicUrl) {
+    // Cliente tirou a foto (ou escondeu): some também no Unxet
+    if (existingContact.image_url?.includes(`/${folder}/`)) {
+      await supabase.from("contacts").update({
+        image_url: null
+      }).eq("id", existingContact.id);
+      await removeOldProfilePics(supabase, folder, null);
+    }
     return;
   }
   // 3. Baixa a imagem
   const imgResp = await fetch(profilePicUrl);
   if (!imgResp.ok || !imgResp.body) {
-    console.warn(`Falha ao baixar profile pic de ${profilePicUrl}`);
+    console.warn(`Falha ao baixar profile pic de ${waId}`);
     return;
   }
   const arrayBuffer = await imgResp.arrayBuffer();
   const contentType = imgResp.headers.get("content-type") ?? "image/jpeg";
-  const ext = contentType.includes("png") ? "png" : "jpg";
-  // 4. Upload no bucket
-  const storagePath = `${clinicId}/${waId}/profile/avatar.${ext}`;
+  // 4. Mesma imagem de antes? Nada a fazer
+  const storagePath = profilePicPath(clinicId, waId, await imageHash(arrayBuffer), contentType);
+  if (isCurrentProfilePic(existingContact.image_url, storagePath)) return;
+  // 5. Upload no bucket (nome novo a cada foto nova, sem cache antigo)
   const { error: uploadError } = await supabase.storage.from(PROFILE_PIC_BUCKET).upload(storagePath, arrayBuffer, {
     contentType,
     upsert: true
@@ -837,15 +853,22 @@ async function fetchAndStoreProfilePic(params) {
   const { data: publicData } = supabase.storage.from(PROFILE_PIC_BUCKET).getPublicUrl(storagePath);
   const publicUrl = publicData?.publicUrl;
   if (!publicUrl) return;
-  // 5. Atualiza contacts.image_url
-  if (existingContact?.id) {
-    const { error: updateErr } = await supabase.from("contacts").update({
-      image_url: publicUrl
-    }).eq("id", existingContact.id);
-    if (updateErr) {
-      console.error("Erro ao atualizar image_url no contato:", updateErr);
-    } else {
-      console.log(`Profile pic salva para ${waId}: ${publicUrl}`);
-    }
+  // 6. Atualiza contacts.image_url e apaga as fotos anteriores
+  const { error: updateErr } = await supabase.from("contacts").update({
+    image_url: publicUrl
+  }).eq("id", existingContact.id);
+  if (updateErr) {
+    console.error("Erro ao atualizar image_url no contato:", updateErr);
+    return;
   }
+  console.log(`Foto de perfil atualizada para ${waId}`);
+  await removeOldProfilePics(supabase, folder, storagePath);
+}
+async function removeOldProfilePics(supabase, folder, keepPath) {
+  const { data: files, error } = await supabase.storage.from(PROFILE_PIC_BUCKET).list(folder);
+  if (error || !files?.length) return;
+  const stale = files.map((f)=>`${folder}/${f.name}`).filter((p)=>p !== keepPath);
+  if (!stale.length) return;
+  const { error: removeErr } = await supabase.storage.from(PROFILE_PIC_BUCKET).remove(stale);
+  if (removeErr) console.warn("Erro ao apagar fotos antigas:", removeErr);
 }

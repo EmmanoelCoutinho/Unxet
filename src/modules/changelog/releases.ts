@@ -127,6 +127,10 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
       },
       {
         kind: "fixed",
+        text: "Foto do cliente no WhatsApp atualizada: quando o cliente troca ou tira a foto, o Unxet acompanha a partir da próxima mensagem dele.",
+      },
+      {
+        kind: "fixed",
         text: "Foto do cliente que não carregava agora é atualizada, e as iniciais aparecem no lugar enquanto isso.",
       },
       {
