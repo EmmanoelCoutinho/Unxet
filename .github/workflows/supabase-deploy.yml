@@ -1,0 +1,106 @@
+name: Supabase (deploy)
+
+# Publica migrations e edge functions quando elas mudam:
+# - push na develop  -> projeto develop  (ambiente "supabase-develop")
+# - push na main     -> produção         (ambiente "supabase-production",
+#                                         que pede aprovação antes de rodar)
+# Cada ambiente do GitHub tem a variável SUPABASE_PROJECT_REF e os secrets
+# SUPABASE_ACCESS_TOKEN e SUPABASE_DB_PASSWORD.
+# Ordem: migrations antes das functions.
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - "supabase/config.toml"
+      - ".github/workflows/supabase-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.ref_name == 'develop' || github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ github.ref_name == 'main' && 'supabase-production' || 'supabase-develop' }}
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Conferir configuração do ambiente
+        run: |
+          missing=""
+          [ -n "$PROJECT_REF" ] || missing="$missing SUPABASE_PROJECT_REF"
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || missing="$missing SUPABASE_ACCESS_TOKEN"
+          [ -n "$SUPABASE_DB_PASSWORD" ] || missing="$missing SUPABASE_DB_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Faltando no ambiente do GitHub:$missing"
+            exit 1
+          fi
+          # Trava: a main só publica na produção e a develop nunca publica nela
+          prod_ref="karmtrldanuxqisgzlhk"
+          if [ "$GITHUB_REF_NAME" = "main" ] && [ "$PROJECT_REF" != "$prod_ref" ]; then
+            echo "::error::A main deveria publicar no projeto da produção ($prod_ref)."
+            exit 1
+          fi
+          if [ "$GITHUB_REF_NAME" != "main" ] && [ "$PROJECT_REF" = "$prod_ref" ]; then
+            echo "::error::Só a main publica na produção."
+            exit 1
+          fi
+
+      - name: O que mudou
+        id: changes
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "push" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "Execução manual ou sem commit anterior: publica tudo."
+            echo "migrations=true" >> "$GITHUB_OUTPUT"
+            echo "functions=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$BEFORE" "$GITHUB_SHA")
+          echo "$files"
+          if grep -q '^supabase/migrations/' <<< "$files"; then m=true; else m=false; fi
+          if grep -qE '^supabase/(functions/|config\.toml)' <<< "$files"; then f=true; else f=false; fi
+          # Mudou o próprio workflow: publica tudo para validar
+          if grep -q '^\.github/workflows/supabase-deploy\.yml' <<< "$files"; then m=true; f=true; fi
+          echo "migrations=$m" >> "$GITHUB_OUTPUT"
+          echo "functions=$f" >> "$GITHUB_OUTPUT"
+
+      # Mesma versão do CLI do projeto (node_modules): versões mais novas recusam o config.toml atual
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.107.0
+
+      - name: Vincular ao projeto
+        run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      # Sem --include-all: se houver migration local mais antiga que a última
+      # aplicada (histórico incompleto), o CLI recusa em vez de reaplicar.
+      - name: Migrations pendentes
+        if: steps.changes.outputs.migrations == 'true'
+        run: supabase db push --linked --dry-run --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Aplicar migrations
+        if: steps.changes.outputs.migrations == 'true'
+        run: supabase db push --linked --yes --password "$SUPABASE_DB_PASSWORD"
+
+      # Publica todas: o código em _shared é usado por várias functions.
+      # verify_jwt de cada uma vem do supabase/config.toml.
+      - name: Publicar edge functions
+        if: steps.changes.outputs.functions == 'true'
+        run: supabase functions deploy --use-api --project-ref "$PROJECT_REF"

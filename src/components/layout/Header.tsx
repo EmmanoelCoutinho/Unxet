@@ -12,6 +12,7 @@ import {
   CURRENT_RELEASE,
   formatReleaseDate,
 } from "../../modules/changelog/releases";
+import { APP_ENVIRONMENT, IS_PRODUCTION } from "../../lib/environment";
 
 function getInitials(name: string) {
   return name
@@ -86,6 +87,18 @@ export const Header = () => {
           <Link to="/inbox" className="flex items-center gap-2 select-none">
             <img src={logo} alt="Unxet logo" className="w-28 sm:w-36" />
           </Link>
+          {!IS_PRODUCTION && (
+            <span
+              className="flex-shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700"
+              title={
+                APP_ENVIRONMENT === "local"
+                  ? "Banco local de testes"
+                  : "Ambiente de testes (develop): sem dados de clientes reais"
+              }
+            >
+              {APP_ENVIRONMENT === "local" ? "Local" : "Testes"}
+            </span>
+          )}
         </div>
         <div className="relative flex min-w-0 items-center justify-end gap-3">
           {clinic?.name && (
