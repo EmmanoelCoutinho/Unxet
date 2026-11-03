@@ -8,7 +8,7 @@ produção juntas, quando o bloco inteiro estiver testado.
 | Branch | `develop` | `main` |
 | App | develop.unxet.com.br | app.unxet.com.br |
 | Supabase | `ketolvqnptmdczkzrqba` | `karmtrldanuxqisgzlhk` |
-| Publicação do Supabase | automática no merge | no merge, depois de aprovar no GitHub |
+| Publicação do Supabase | automática no merge | automática no merge |
 
 No app de testes aparece o selo **Testes** ao lado do logo, e o sino mostra a
 próxima versão como **Em teste**. Na produção, nenhum dos dois aparece.
@@ -42,10 +42,10 @@ Quando todos os cards do bloco estiverem em **Pronto para produção**:
    das tarefas. O CI bloqueia se `NEXT_RELEASE` não estiver vazia.
 3. Faça o merge com **Create a merge commit** (não use squash, senão a
    `develop` e a `main` se separam).
-4. A Vercel publica em app.unxet.com.br. O workflow **Supabase (deploy)** fica
-   esperando aprovação: em Actions, abra a execução e clique em
-   **Review deployments → Approve**. Ele aplica as migrations e depois as
-   functions.
+4. A Vercel publica em app.unxet.com.br e o workflow **Supabase (deploy)**
+   aplica as migrations e depois as functions na produção. Acompanhe em
+   Actions até ficar verde. (Para exigir aprovação antes, marque **Required
+   reviewers** no ambiente `supabase-production`.)
 5. Mova os cards para **Publicado**.
 
 ## Correção urgente (hotfix)
@@ -74,8 +74,8 @@ Quando todos os cards do bloco estiverem em **Pronto para produção**:
   `https://develop.unxet.com.br` e o mesmo endereço com `/**` nos Redirect URLs.
 - **GitHub** (Settings → Environments): ambientes `supabase-develop` e
   `supabase-production`, cada um com a variável `SUPABASE_PROJECT_REF` e os
-  secrets `SUPABASE_ACCESS_TOKEN` e `SUPABASE_DB_PASSWORD`. No de produção,
-  marque **Required reviewers** e **Deployment branches: main**.
+  secrets `SUPABASE_ACCESS_TOKEN` e `SUPABASE_DB_PASSWORD`, e Deployment
+  branches restrito a `develop` e a `main`, respectivamente.
 - **GitHub** (Settings → Rules): proteger `main` e `develop` (só por PR, CI
   passando).
 - **Histórico de migrations da produção**: a produção veio de um dump e não
@@ -86,4 +86,6 @@ Quando todos os cards do bloco estiverem em **Pronto para produção**:
   ```bash
   supabase migration repair --linked --status applied 20260620000100 20261006000000 20261007000000 20261007100000 20261007110000 20261008000000 20261008100000 20261008200000 20261011000000 20261011100000 20261011100100 20261011100200 20261012000000 20261012100000 20261012200000 20261013000000 20261013100000 20261013200000 20261014000000 20261015000000 20261015100000 20261016000000 20261017000000 20261018000000 20261019000000
   ```
-  Depois, `supabase db push --linked --dry-run` deve dizer que está tudo em dia.
+  Depois, `supabase db push --linked --dry-run` deve listar só as migrations
+  novas. A 20260620000100 nunca rodou em nenhum ambiente: a parte que o app
+  usa (anotações de clientes) foi refeita na 20261103000000_contact_notes.
