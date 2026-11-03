@@ -74,14 +74,19 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
-  {
-    kind: "fixed",
-    text: "As anotações na Carteira de clientes voltaram a funcionar: dá para escrever, ver e apagar notas sobre cada cliente.",
-    adminOnly: true,
-  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
+  {
+    date: "2026-11-03",
+    changes: [
+      {
+        kind: "fixed",
+        text: "As anotações na Carteira de clientes voltaram a funcionar: dá para escrever, ver e apagar notas sobre cada cliente.",
+        adminOnly: true,
+      },
+    ],
+  },
   {
     date: "2026-11-02",
     changes: [
