@@ -74,6 +74,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
+  {
+    kind: "fixed",
+    text: "As anotações na Carteira de clientes voltaram a funcionar: dá para escrever, ver e apagar notas sobre cada cliente.",
+    adminOnly: true,
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
