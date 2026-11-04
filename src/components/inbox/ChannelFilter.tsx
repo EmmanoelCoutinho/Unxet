@@ -38,7 +38,7 @@ export const ChannelFilter: React.FC<ChannelFilterProps> = ({
         Canais
       </label>
       <div className="flex flex-wrap gap-2">
-        {channels.map(channel => <button key={channel.value} onClick={() => toggleChannel(channel.value)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${selectedChannels.includes(channel.value) ? 'bg-[#0A84FF] text-white' : 'bg-[#E5E7EB] text-[#1E1E1E] hover:bg-[#E5E7EB]/70'}`}>
+        {channels.map(channel => <button key={channel.value} onClick={() => toggleChannel(channel.value)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${selectedChannels.includes(channel.value) ? 'bg-[#0A84FF] text-white' : 'bg-gray-200 text-gray-900 hover:bg-gray-200/70'}`}>
             {channel.icon}
             <span>{channel.label}</span>
           </button>)}

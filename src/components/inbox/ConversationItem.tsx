@@ -108,7 +108,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   return (
     <div
       onClick={onClick}
-      className="p-4 hover:bg-[#E5E7EB]/30 cursor-pointer transition-colors"
+      className="p-4 hover:bg-gray-200/30 cursor-pointer transition-colors"
     >
       <div className="flex gap-3">
         <div className="w-12 h-12 rounded-full bg-[#0A84FF] text-white flex items-center justify-center font-medium flex-shrink-0 overflow-hidden">
@@ -125,7 +125,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1">
-            <h3 className="font-medium text-[#1E1E1E] truncate">
+            <h3 className="font-medium text-gray-900 truncate">
               {conversation.contactName}
             </h3>
             <span className="text-xs text-gray-500 flex-shrink-0 ml-2">

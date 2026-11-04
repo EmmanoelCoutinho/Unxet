@@ -72,9 +72,9 @@ const STATUS_BADGE: Record<SubscriptionStatus, string> = {
 };
 
 const fieldClassName =
-  "w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]";
+  "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]";
 
-const labelClassName = "mb-1 block text-sm font-medium text-[#1E1E1E]";
+const labelClassName = "mb-1 block text-sm font-medium text-gray-900";
 
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleDateString("pt-BR") : "–";

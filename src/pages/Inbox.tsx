@@ -178,7 +178,7 @@ export const Inbox: React.FC = () => {
                 "relative flex h-[42px] w-[42px] flex-shrink-0 items-center justify-center rounded-lg border transition lg:hidden",
                 filtersOpen || activeFiltersCount > 0
                   ? "border-blue-500 bg-blue-50 text-blue-600"
-                  : "border-[#E5E7EB] text-gray-600 hover:bg-gray-50",
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50",
               ].join(" ")}
               aria-label="Filtros"
               aria-expanded={filtersOpen}

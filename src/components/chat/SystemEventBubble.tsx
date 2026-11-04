@@ -193,9 +193,9 @@ export const SystemEventBubble: React.FC<SystemEventBubbleProps> = ({
 }) => {
   return (
     <div className="flex justify-center">
-      <div className="rounded-full bg-[#F3F4F6] px-3 py-1 text-xs text-[#6B7280]">
+      <div className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-500">
         <span>{getEventText(event)}</span>
-        <span className="ml-2 text-[#9CA3AF]">
+        <span className="ml-2 text-gray-400">
           {formatTime(event.createdAt)}
         </span>
       </div>

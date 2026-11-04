@@ -12,6 +12,19 @@
     <meta name="apple-mobile-web-app-title" content="Unxet" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Unxet</title>
+    <script>
+      // Aplica o tema salvo antes de desenhar a tela (ver src/lib/theme.ts)
+      (function () {
+        var pref = null;
+        try { pref = localStorage.getItem("unxet-theme"); } catch (e) {}
+        var dark = pref === "dark" ||
+          (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) {
+          document.documentElement.classList.add("dark");
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", "#151d2c");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

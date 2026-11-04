@@ -17,3 +17,22 @@ html,
 body {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Tema escuro: as cores das classes vêm das variáveis do tailwind.config.js */
+html.dark body {
+  background-color: rgb(var(--c-bg-slate-50));
+  color: rgb(var(--c-text-gray-800));
+}
+
+/* Campos sem cor de fundo própria usam o fundo do cartão (e não o cinza do
+   navegador). :where() mantém a prioridade zero: classes bg-* continuam valendo. */
+:where(html.dark) :where(input, select, textarea) {
+  background-color: rgb(var(--c-bg-white));
+}
+
+/* O espaço entre o foco (ring-offset) e o botão acompanha o fundo */
+html.dark *,
+html.dark ::before,
+html.dark ::after {
+  --tw-ring-offset-color: rgb(var(--c-bg-white));
+}

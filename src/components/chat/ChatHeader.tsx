@@ -227,7 +227,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     ];
 
     return (
-      <div className="shrink-0 border-b border-[#E5E7EB] bg-white px-2 pb-2 pt-1.5">
+      <div className="shrink-0 border-b border-gray-200 bg-white px-2 pb-2 pt-1.5">
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -247,7 +247,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 initials
               )}
             </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1E1E1E]">
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
               {conversation.contactName}
             </span>
           </button>
@@ -346,15 +346,15 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   }
 
   return (
-    <div className="sticky top-0 z-10 shrink-0 border-b border-[#E5E7EB] bg-white px-2 py-2 sm:h-20 sm:p-4">
+    <div className="sticky top-0 z-10 shrink-0 border-b border-gray-200 bg-white px-2 py-2 sm:h-20 sm:p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <button
             onClick={onBack}
-            className="flex-shrink-0 rounded-lg p-2 transition-colors hover:bg-[#E5E7EB]"
+            className="flex-shrink-0 rounded-lg p-2 transition-colors hover:bg-gray-200"
             aria-label="Voltar para conversas"
           >
-            <ArrowLeftIcon className="h-5 w-5 text-[#1E1E1E]" />
+            <ArrowLeftIcon className="h-5 w-5 text-gray-900" />
           </button>
 
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0A84FF] font-medium text-white">
@@ -371,7 +371,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </div>
 
           <div className="min-w-0 flex-1">
-            <h2 className="truncate font-semibold text-[#1E1E1E]">
+            <h2 className="truncate font-semibold text-gray-900">
               {conversation.contactName}
             </h2>
 

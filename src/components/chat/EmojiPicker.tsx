@@ -185,21 +185,21 @@ export function EmojiPicker({
   return (
     <div
       ref={pickerRef as any}
-      className={`absolute bottom-full left-0 right-0 z-30 mb-2 max-h-[min(420px,60dvh)] overflow-hidden ${compact ? "" : "sm:left-16 sm:right-auto sm:w-[360px]"} rounded-lg border border-[#E5E7EB] bg-white shadow-lg`}
+      className={`absolute bottom-full left-0 right-0 z-30 mb-2 max-h-[min(420px,60dvh)] overflow-hidden ${compact ? "" : "sm:left-16 sm:right-auto sm:w-[360px]"} rounded-lg border border-gray-200 bg-white shadow-lg`}
     >
       {/* Header: busca */}
-      <div className="p-2 border-b border-[#E5E7EB]">
+      <div className="p-2 border-b border-gray-200">
         <input
           ref={inputRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar emoji (ex: coração, risada, ok)…"
-          className="w-full h-9 px-3 rounded-md border border-[#E5E7EB] outline-none focus:ring-2 focus:ring-black/10"
+          className="w-full h-9 px-3 rounded-md border border-gray-200 outline-none focus:ring-2 focus:ring-black/10"
         />
       </div>
 
       {/* Tabs de categoria */}
-      <div className="flex items-center gap-1 px-2 py-2 border-b border-[#E5E7EB] overflow-x-auto">
+      <div className="flex items-center gap-1 px-2 py-2 border-b border-gray-200 overflow-x-auto">
         {(q ? filteredCategories : EMOJI_CATEGORIES).map((cat) => {
           const isActive = activeCategoryData?.key === cat.key;
           return (
@@ -211,7 +211,7 @@ export function EmojiPicker({
                 "shrink-0 px-2 py-1 rounded-md text-sm border transition-colors",
                 isActive
                   ? "bg-blue-500 text-white border-blue-500"
-                  : "bg-white text-[#111827] border-[#E5E7EB] hover:bg-[#F3F4F6]",
+                  : "bg-white text-gray-900 border-gray-200 hover:bg-gray-100",
               ].join(" ")}
               title={cat.label}
             >
@@ -225,16 +225,16 @@ export function EmojiPicker({
       {/* Conteúdo */}
       <div className="max-h-[min(260px,40dvh)] overflow-y-auto overflow-x-hidden p-2 pb-8">
         {!activeCategoryData ? (
-          <div className="text-sm text-[#6B7280] p-2">
+          <div className="text-sm text-gray-500 p-2">
             Nenhum emoji encontrado.
           </div>
         ) : (
           <>
             <div className="flex items-center justify-between mb-2 px-1">
-              <div className="text-sm font-medium text-[#111827]">
+              <div className="text-sm font-medium text-gray-900">
                 {activeCategoryData.icon} {activeCategoryData.label}
               </div>
-              <div className="text-xs text-[#6B7280]">
+              <div className="text-xs text-gray-500">
                 {activeCategoryData.emojis.length} itens
               </div>
             </div>
@@ -245,7 +245,7 @@ export function EmojiPicker({
                   key={`${activeCategoryData.key}-${emoji}`}
                   type="button"
                   onClick={() => onPick(emoji)}
-                  className="text-xl hover:bg-[#E5E7EB] rounded-lg p-1 leading-none"
+                  className="text-xl hover:bg-gray-200 rounded-lg p-1 leading-none"
                   title={emoji}
                 >
                   {emoji}
@@ -258,7 +258,7 @@ export function EmojiPicker({
 
       {/* Footer (opcional): quando está buscando, mostrar “todas categorias” em lista */}
       {q && filteredCategories.length > 1 && (
-        <div className="border-t border-[#E5E7EB] px-2 py-2 text-xs text-[#6B7280]">
+        <div className="border-t border-gray-200 px-2 py-2 text-xs text-gray-500">
           Mostrando resultados filtrados em {filteredCategories.length}{" "}
           categorias.
         </div>

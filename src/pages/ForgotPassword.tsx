@@ -49,10 +49,10 @@ export const ForgotPassword: React.FC = () => {
             alt="Unxet"
             className="mx-auto w-56 mb-2 object-contain"
           />
-          <p className="text-[#1E1E1E] text-lg">Central de Mensagens</p>
+          <p className="text-gray-900 text-lg">Central de Mensagens</p>
         </div>
 
-        <h2 className="text-2xl font-semibold text-[#1E1E1E] mb-2">Recuperar Senha</h2>
+        <h2 className="text-2xl font-semibold text-gray-900 mb-2">Recuperar Senha</h2>
         <p className="text-sm text-gray-500 mb-6">
           Digite o seu e-mail cadastrado e enviaremos um link para você criar uma nova senha.
         </p>

@@ -1428,7 +1428,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           className="p-2 rounded-full hover:bg-gray-100 text-gray-600"
           aria-label="Voltar"
         >
-          <ArrowLeftIcon className="w-5 h-5 text-[#1E1E1E]" />
+          <ArrowLeftIcon className="w-5 h-5 text-gray-900" />
         </button>
         <p className="text-gray-500 text-sm">{text}</p>
       </div>
@@ -1440,7 +1440,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         {isFloating && placeholderHeader("Conversa indisponível")}
         <div className="flex min-h-0 flex-1 items-center justify-center p-4">
           <div className="text-center">
-            <h3 className="text-lg font-medium text-[#1E1E1E] mb-2">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
               Conversa não encontrada
             </h3>
             <Button variant="primary" onClick={onExit}>
@@ -1596,15 +1596,15 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
       {recordingUiState.isRecording && (
         <div className={`pointer-events-none absolute left-1/2 z-20 ${isFloating ? "bottom-24" : "bottom-28 sm:bottom-32"} w-[calc(100%-2rem)] max-w-md -translate-x-1/2`}>
-          <div className="rounded-xl border border-red-100 bg-white/95 px-4 py-3 text-sm text-[#1F2937] shadow-lg backdrop-blur">
+          <div className="rounded-xl border border-red-100 bg-white/95 px-4 py-3 text-sm text-gray-800 shadow-lg backdrop-blur">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
               <span className="font-medium">Gravando...</span>
-              <span className="text-[#6B7280]">
+              <span className="text-gray-500">
                 {formatRecordTime(recordingUiState.recordSeconds)}
               </span>
             </div>
-            <p className="mt-1 text-xs text-[#6B7280]">
+            <p className="mt-1 text-xs text-gray-500">
               Toque no botão de envio para concluir e enviar.
             </p>
           </div>
@@ -1663,7 +1663,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
                         } ${loading ? "opacity-60" : ""}`}
                         style={{
                           backgroundColor: active ? t.color : "transparent",
-                          color: active ? "white" : "#374151",
+                          color: active ? "white" : "rgb(var(--c-text-gray-700))",
                         }}
                       >
                         {loading ? "Salvando..." : t.name}
@@ -1698,8 +1698,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       {/* Caixa flutuante: aceitar fica no rodapé, onde o campo de mensagem
           aparece depois de aceitar */}
       {isFloating && conversation?.status === "pending" && (
-        <div className="flex shrink-0 items-center gap-3 border-t border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2.5">
-          <p className="min-w-0 flex-1 text-xs leading-snug text-[#6B7280]">
+        <div className="flex shrink-0 items-center gap-3 border-t border-gray-200 bg-gray-50 px-3 py-2.5">
+          <p className="min-w-0 flex-1 text-xs leading-snug text-gray-500">
             {conversation.inBotFlow
               ? "O cliente ainda está no atendimento automático."
               : "Aceite a conversa para responder."}

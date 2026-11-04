@@ -91,7 +91,7 @@ export const ContactsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full min-h-0 w-full overflow-hidden bg-[#F7F8FA]">
+    <div className="flex h-full min-h-0 w-full overflow-hidden bg-gray-50">
       <AppSidebar />
       <div
         ref={scrollRef}

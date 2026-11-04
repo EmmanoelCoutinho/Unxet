@@ -74,7 +74,7 @@ const Editor = ({
   });
 
   return (
-    <div className="space-y-4 border-t border-[#E5E7EB] bg-slate-50 p-4 sm:p-5">
+    <div className="space-y-4 border-t border-gray-200 bg-slate-50 p-4 sm:p-5">
       <label className="flex items-center gap-2 text-sm font-medium text-gray-900">
         <input
           type="checkbox"
@@ -98,7 +98,7 @@ const Editor = ({
             step={50}
             value={limit}
             onChange={(e) => setLimit(e.target.value)}
-            className="w-40 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm"
+            className="w-40 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
           />
           {!limitValid ? (
             <p className="mt-1 text-xs text-red-600">
@@ -126,7 +126,7 @@ const Editor = ({
           maxLength={20000}
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
-          className="w-full resize-y rounded-lg border border-[#E5E7EB] bg-white p-3 text-sm"
+          className="w-full resize-y rounded-lg border border-gray-200 bg-white p-3 text-sm"
         />
       </div>
 
@@ -188,11 +188,11 @@ export const AiAddonPage: React.FC = () => {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Buscar empresa"
-        className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm sm:w-72"
+        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm sm:w-72"
       />
 
       {query.isLoading ? (
-        <div className="h-40 animate-pulse rounded-lg border border-[#E5E7EB] bg-white" />
+        <div className="h-40 animate-pulse rounded-lg border border-gray-200 bg-white" />
       ) : query.isError ? (
         <Card className="flex flex-col items-start gap-3 p-5 text-sm text-gray-600">
           <p>Não foi possível carregar as empresas.</p>
@@ -201,7 +201,7 @@ export const AiAddonPage: React.FC = () => {
           </Button>
         </Card>
       ) : (
-        <Card className="divide-y divide-[#E5E7EB] overflow-hidden p-0">
+        <Card className="divide-y divide-gray-200 overflow-hidden p-0">
           {rows.length === 0 ? (
             <p className="p-5 text-sm text-gray-500">Nenhuma empresa encontrada.</p>
           ) : (

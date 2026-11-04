@@ -117,7 +117,7 @@ export const MaintenancePage: React.FC = () => {
       </div>
 
       {settingsQuery.isLoading ? (
-        <div className="h-40 animate-pulse rounded-lg border border-[#E5E7EB] bg-white" />
+        <div className="h-40 animate-pulse rounded-lg border border-gray-200 bg-white" />
       ) : settingsQuery.isError || !settings ? (
         <Card className="flex flex-col items-start gap-3 p-5 text-sm text-gray-600 sm:p-8">
           <p>Não foi possível carregar a configuração de manutenção.</p>
@@ -163,7 +163,7 @@ export const MaintenancePage: React.FC = () => {
             </p>
 
             <div>
-              <p className="mb-1 text-sm font-medium text-[#1E1E1E]">
+              <p className="mb-1 text-sm font-medium text-gray-900">
                 Pré-visualização
               </p>
               <div className="flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-medium text-amber-900 sm:text-sm">

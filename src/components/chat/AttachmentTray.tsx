@@ -36,13 +36,13 @@ export const AttachmentTray: React.FC<AttachmentTrayProps> = ({
   if (items.length === 0) return null;
 
   return (
-    <div className="mb-2 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-2">
+    <div className="mb-2 rounded-xl border border-gray-200 bg-gray-50 p-2">
       <div className="flex gap-2 overflow-x-auto pb-1">
         {items.map((item) =>
           item.kind === "image" && item.previewUrl ? (
             <div
               key={item.id}
-              className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white"
+              className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white"
               title={item.file.name}
             >
               <img
@@ -57,7 +57,7 @@ export const AttachmentTray: React.FC<AttachmentTrayProps> = ({
           ) : (
             <div
               key={item.id}
-              className="relative flex h-16 w-48 flex-shrink-0 items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white py-2 pl-2 pr-6"
+              className="relative flex h-16 w-48 flex-shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white py-2 pl-2 pr-6"
               title={item.file.name}
             >
               <div className="flex h-10 w-9 flex-shrink-0 flex-col items-center justify-center rounded-md bg-[#0A84FF] text-white">
@@ -67,10 +67,10 @@ export const AttachmentTray: React.FC<AttachmentTrayProps> = ({
                 </span>
               </div>
               <div className="min-w-0">
-                <p className="truncate text-xs font-medium text-[#111827]">
+                <p className="truncate text-xs font-medium text-gray-900">
                   {item.file.name}
                 </p>
-                <p className="text-[11px] text-[#6B7280]">
+                <p className="text-[11px] text-gray-500">
                   {formatSize(item.file.size)}
                 </p>
               </div>
@@ -82,7 +82,7 @@ export const AttachmentTray: React.FC<AttachmentTrayProps> = ({
         )}
       </div>
       {!sending && (
-        <p className="mt-1 px-0.5 text-[11px] text-[#6B7280]">
+        <p className="mt-1 px-0.5 text-[11px] text-gray-500">
           {items.length === 1 ? "1 arquivo pronto" : `${items.length} arquivos prontos`}
           {" · "}
           {captionHint}
