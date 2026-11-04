@@ -76,7 +76,7 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
-    text: "Tutoriais: vídeos curtos que mostram, passo a passo, como usar a Unxet. Fica no rodapé do menu lateral. O primeiro ensina a criar uma atendente, e novos vídeos chegam aos poucos.",
+    text: "Tutoriais: vídeos curtos que mostram, passo a passo, como usar a Unxet. Fica no rodapé do menu lateral. O primeiro ensina a criar uma atendente e também abre pelo botão Ver tutorial, na tela Atendentes. Novos vídeos chegam aos poucos.",
   },
   {
     kind: "new",

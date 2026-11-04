@@ -17,6 +17,7 @@ import { getAuthCallbackUrl } from "../lib/appUrl";
 import { useClinic } from "../contexts/ClinicContext";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "react-toastify";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 
 type Role = "admin" | "agent";
@@ -863,7 +864,8 @@ export const AttendantsPage: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <TutorialButton tutorialId="criar-atendente" />
             <button
               type="button"
               onClick={handleOpenInvite}

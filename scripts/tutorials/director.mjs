@@ -26,6 +26,7 @@ const OVERLAY_SCRIPT = () => {
         box-shadow: 0 10px 30px rgba(0,0,0,.25); opacity: 0;
         transition: opacity .25s, transform .25s; }
       #__tut-caption.show { opacity: 1; transform: translate(-50%, 0); }
+      #__tut-caption.top { bottom: auto; top: 84px; }
       #__tut-caption .step { flex-shrink: 0; display: flex; align-items: center; justify-content: center;
         min-width: 30px; height: 30px; padding: 0 8px; border-radius: 9999px;
         background: #0A84FF; font-size: 15px; }
@@ -153,16 +154,20 @@ export function createDirector(page) {
       await sleep(500);
     },
 
-    /** Legenda na parte de baixo. `step` vazio esconde o número. */
-    async caption(text, { step = "", hold = 1800 } = {}) {
+    /**
+     * Legenda. `step` vazio esconde o número; `top: true` sobe a legenda
+     * quando o que importa está na parte de baixo da tela (ex.: fim do menu).
+     */
+    async caption(text, { step = "", hold = 1800, top = false } = {}) {
       await page.evaluate(
-        ([t, s]) => {
+        ([t, s, isTop]) => {
           const el = document.getElementById("__tut-caption");
           el.querySelector(".step").textContent = s;
           el.querySelector(".text").textContent = t;
+          el.classList.toggle("top", isTop);
           el.classList.add("show");
         },
-        [text, String(step)],
+        [text, String(step), top],
       );
       await sleep(hold);
     },
@@ -176,6 +181,9 @@ export function createDirector(page) {
 
     /** Leva o cursor até o elemento e o destaca, sem clicar */
     async point(locator, ms = 1200) {
+      // Centraliza o elemento para não ficar atrás da legenda
+      await locator.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "smooth" }));
+      await sleep(600);
       const box = await moveTo(locator);
       await ring(box);
       await sleep(ms);
@@ -193,7 +201,17 @@ export function createDirector(page) {
     },
 
     async type(locator, text, { delay = 75 } = {}) {
-      await this.click(locator, { before: 400, after: 200 });
+      await this.click(locator, { before: 400, after: 150 });
+      // Tira o cursor de cima do campo para não esconder o que é digitado
+      const box = await locator.boundingBox();
+      if (box) {
+        const vp = page.viewportSize() ?? { width: 1280, height: 720 };
+        const x = Math.min(box.x + box.width + 36, vp.width - 30);
+        const y = Math.min(box.y + box.height + 34, vp.height - 30);
+        await page.mouse.move(x, y, { steps: 10 });
+        mouse = { x, y };
+      }
+      await sleep(250);
       await page.keyboard.type(text, { delay });
       await sleep(500);
     },

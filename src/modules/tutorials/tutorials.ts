@@ -1,7 +1,7 @@
 // Tutoriais em vídeo mostrados na tela "Tutoriais".
 //
 // Os vídeos são gravados pelo script scripts/tutorials/record.mjs e ficam em
-// public/tutorials/<id>.webm. Tutorial sem `video` aparece como "Em breve".
+// public/tutorials/<id>.mp4. Tutorial sem `video` aparece como "Em breve".
 // `adminOnly`: só administradores veem (o atendente não tem acesso à tela).
 
 export type TutorialTrackId =
@@ -22,7 +22,7 @@ export interface Tutorial {
   track: TutorialTrackId;
   title: string;
   description: string;
-  /** Caminho do vídeo em public/ (ex.: /tutorials/criar-atendente.webm) */
+  /** Caminho do vídeo em public/ (ex.: /tutorials/criar-atendente.mp4) */
   video?: string;
   /** Duração aproximada, ex.: "1:20" */
   duration?: string;
@@ -92,8 +92,8 @@ export const TUTORIALS: Tutorial[] = [
     description:
       "Convide uma pessoa da equipe, escolha o cargo e o setor dela.",
     // #t=1 pula a tela de carregamento do primeiro segundo
-    video: "/tutorials/criar-atendente.webm#t=1",
-    duration: "0:44",
+    video: "/tutorials/criar-atendente.mp4#t=1",
+    duration: "0:47",
     path: "/inbox/attendants",
     adminOnly: true,
   },
@@ -229,4 +229,10 @@ export const saveWatchedTutorials = (ids: string[]) => {
   } catch {
     // sem armazenamento: só não lembra na próxima visita
   }
+};
+
+/** Marca o tutorial como assistido neste navegador */
+export const markTutorialWatched = (id: string) => {
+  const watched = readWatchedTutorials();
+  if (!watched.includes(id)) saveWatchedTutorials([...watched, id]);
 };

@@ -1,14 +1,10 @@
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import * as Dialog from "@radix-ui/react-dialog";
 import {
-  ArrowRightIcon,
   CheckCircle2Icon,
   ClockIcon,
   GraduationCapIcon,
   PlayIcon,
   SearchIcon,
-  XIcon,
 } from "lucide-react";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { useClinic } from "../contexts/ClinicContext";
@@ -16,15 +12,14 @@ import {
   TUTORIALS,
   TUTORIAL_TRACKS,
   readWatchedTutorials,
-  saveWatchedTutorials,
   type Tutorial,
 } from "../modules/tutorials/tutorials";
+import { TutorialPlayer } from "../modules/tutorials/TutorialPlayer";
 
 const normalize = (text: string) =>
   text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 export const TutorialsPage: React.FC = () => {
-  const navigate = useNavigate();
   const { membership } = useClinic();
   const isAdmin = membership?.role === "admin";
   const [search, setSearch] = useState("");
@@ -50,20 +45,6 @@ export const TutorialsPage: React.FC = () => {
       return { ...track, items, available: available.length, done };
     }).filter((track) => track.items.length > 0);
   }, [visible, search, watched]);
-
-  const markWatched = (id: string) => {
-    setWatched((prev) => {
-      if (prev.includes(id)) return prev;
-      const next = [...prev, id];
-      saveWatchedTutorials(next);
-      return next;
-    });
-  };
-
-  const goToScreen = (path: string) => {
-    setPlaying(null);
-    navigate(path);
-  };
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50">
@@ -182,66 +163,14 @@ export const TutorialsPage: React.FC = () => {
         ))}
       </div>
 
-      <Dialog.Root
-        open={playing !== null}
-        onOpenChange={(open) => !open && setPlaying(null)}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl bg-white shadow-2xl focus:outline-none">
-            {playing && (
-              <>
-                <div className="flex items-start justify-between gap-4 px-5 py-4">
-                  <div className="min-w-0">
-                    <Dialog.Title className="text-base font-semibold text-gray-900">
-                      {playing.title}
-                    </Dialog.Title>
-                    <Dialog.Description className="text-sm text-gray-500">
-                      {playing.description}
-                    </Dialog.Description>
-                  </div>
-                  <Dialog.Close
-                    className="rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                    aria-label="Fechar"
-                  >
-                    <XIcon className="h-5 w-5" />
-                  </Dialog.Close>
-                </div>
-                <video
-                  key={playing.id}
-                  src={playing.video}
-                  controls
-                  autoPlay
-                  playsInline
-                  onEnded={() => markWatched(playing.id)}
-                  className="aspect-video w-full bg-black"
-                />
-                <div className="flex flex-wrap items-center justify-end gap-3 px-5 py-3">
-                  {!watched.includes(playing.id) && (
-                    <button
-                      type="button"
-                      onClick={() => markWatched(playing.id)}
-                      className="rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:border-gray-300"
-                    >
-                      Marcar como assistido
-                    </button>
-                  )}
-                  {playing.path && (
-                    <button
-                      type="button"
-                      onClick={() => playing.path && goToScreen(playing.path)}
-                      className="inline-flex items-center gap-2 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
-                    >
-                      Ir para a tela
-                      <ArrowRightIcon className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <TutorialPlayer
+        tutorial={playing}
+        onClose={() => setPlaying(null)}
+        watched={playing ? watched.includes(playing.id) : false}
+        onWatched={(id) =>
+          setWatched((prev) => (prev.includes(id) ? prev : [...prev, id]))
+        }
+      />
     </div>
   );
 };

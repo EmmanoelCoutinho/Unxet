@@ -15,8 +15,14 @@ npm install
 node record.mjs criar-atendente --url http://localhost:5173
 ```
 
-O vídeo vai para `public/tutorials/<id>.webm`. Use `--headed` para assistir
+O vídeo vai para `public/tutorials/<id>.mp4`. Use `--headed` para assistir
 a gravação. Se algo falhar, a tela do momento do erro fica em `erro.png`.
+
+## Música
+
+Todos os vídeos usam a mesma trilha, composta pelo próprio script (`music.mjs`,
+sem direitos autorais de terceiros). Para ouvir: `node music.mjs 30` gera
+`trilha-previa.wav`. O ffmpeg vem do pacote `ffmpeg-static`.
 
 ## Criar um tutorial novo
 
