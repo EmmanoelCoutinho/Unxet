@@ -1,0 +1,184 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  MAX_QUEUE_MESSAGE_BYTES,
+  deliveryOutcome,
+  fromBase64,
+  functionUrl,
+  retryDelaySeconds,
+  targetFromPath,
+  toBase64,
+  type QueuedWebhook,
+} from "./gateway";
+import { handleBatch, handleRequest, type Env, type QueueMessage } from "./index";
+
+const BASE = "https://proj.supabase.co/functions/v1";
+
+const makeEnv = (send = vi.fn().mockResolvedValue(undefined)): Env & { send: typeof send } => ({
+  INBOUND: { send },
+  SUPABASE_FUNCTIONS_URL: BASE,
+  ENVIRONMENT: "test",
+  send,
+});
+
+const evolutionRequest = (body: string, extra: Record<string, string> = {}) =>
+  new Request("https://gw.test/evolution-in?token=SECRET", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: "não repassa", ...extra },
+    body,
+  });
+
+describe("gateway: regras", () => {
+  it("só aceita as funções de entrada", () => {
+    expect(targetFromPath("/evolution-in")).toBe("evolution-in");
+    expect(targetFromPath("/meta-webhook/")).toBe("meta-webhook");
+    expect(targetFromPath("/meta-in")).toBe("meta-in");
+    expect(targetFromPath("/bot-engine")).toBeNull();
+    expect(targetFromPath("/")).toBeNull();
+  });
+
+  it("monta o endereço com a query string original", () => {
+    expect(functionUrl(`${BASE}/`, "evolution-in", "?token=a%2Fb")).toBe(
+      `${BASE}/evolution-in?token=a%2Fb`,
+    );
+  });
+
+  it("guarda o corpo byte a byte (assinatura da Meta)", () => {
+    const original = new TextEncoder().encode('{"texto":"ação ✅ \\u00e9"}');
+    expect(fromBase64(toBase64(original))).toEqual(original);
+  });
+
+  it.each([
+    [200, "delivered"],
+    [204, "delivered"],
+    [500, "retry"],
+    [503, "retry"],
+    [546, "retry"],
+    [429, "retry"],
+    [408, "retry"],
+    [400, "rejected"],
+    [401, "rejected"],
+    [404, "rejected"],
+  ])("status %i → %s", (status, expected) => {
+    expect(deliveryOutcome(status)).toBe(expected);
+  });
+
+  it("espera cada vez mais entre as tentativas, até 15 min", () => {
+    expect([1, 2, 3, 4, 7, 8, 100].map(retryDelaySeconds)).toEqual([15, 30, 60, 120, 900, 900, 900]);
+    // 100 tentativas cobrem perto das 24 h do plano grátis
+    const total = Array.from({ length: 100 }, (_, i) => retryDelaySeconds(i + 1)).reduce((a, b) => a + b);
+    expect(total / 3600).toBeGreaterThan(22);
+    expect(total / 3600).toBeLessThan(25);
+  });
+});
+
+describe("gateway: recebimento", () => {
+  it("guarda na fila e responde na hora, sem chamar o Supabase", async () => {
+    const env = makeEnv();
+    const fetchImpl = vi.fn();
+    const res = await handleRequest(
+      evolutionRequest('{"event":"messages.upsert"}', { "x-webhook-secret": "s" }),
+      env,
+      fetchImpl,
+    );
+    expect(res.status).toBe(200);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    const queued: QueuedWebhook = env.send.mock.calls[0][0];
+    expect(queued.target).toBe("evolution-in");
+    expect(queued.search).toBe("?token=SECRET");
+    expect(queued.headers).toEqual({ "content-type": "application/json", "x-webhook-secret": "s" });
+    expect(new TextDecoder().decode(fromBase64(queued.body))).toBe('{"event":"messages.upsert"}');
+  });
+
+  it("repassa direto quando a fila falha", async () => {
+    const env = makeEnv(vi.fn().mockRejectedValue(new Error("queue down")));
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const res = await handleRequest(evolutionRequest("{}"), env, fetchImpl);
+    expect(res.status).toBe(200);
+    expect(fetchImpl.mock.calls[0][0]).toBe(`${BASE}/evolution-in?token=SECRET`);
+  });
+
+  it("repassa direto quando a mensagem passa do limite da fila", async () => {
+    const env = makeEnv();
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const big = JSON.stringify({ data: "x".repeat(MAX_QUEUE_MESSAGE_BYTES) });
+    await handleRequest(evolutionRequest(big), env, fetchImpl);
+    expect(env.send).not.toHaveBeenCalled();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("responde 503 quando nem a fila nem o Supabase respondem", async () => {
+    const env = makeEnv(vi.fn().mockRejectedValue(new Error("queue down")));
+    const fetchImpl = vi.fn().mockRejectedValue(new Error("supabase down"));
+    const res = await handleRequest(evolutionRequest("{}"), env, fetchImpl);
+    expect(res.status).toBe(503);
+  });
+
+  it("verificação da Meta (GET) vai direto para a função", async () => {
+    const env = makeEnv();
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("12345", { status: 200 }));
+    const res = await handleRequest(
+      new Request("https://gw.test/meta-webhook?hub.mode=subscribe&hub.challenge=12345"),
+      env,
+      fetchImpl,
+    );
+    expect(await res.text()).toBe("12345");
+    expect(fetchImpl.mock.calls[0][0]).toBe(`${BASE}/meta-webhook?hub.mode=subscribe&hub.challenge=12345`);
+    expect(env.send).not.toHaveBeenCalled();
+  });
+
+  it("recusa caminhos desconhecidos e responde ao monitor", async () => {
+    const env = makeEnv();
+    expect((await handleRequest(new Request("https://gw.test/bot-engine", { method: "POST" }), env)).status).toBe(404);
+    expect((await handleRequest(new Request("https://gw.test/health"), env)).status).toBe(200);
+  });
+});
+
+describe("gateway: entrega da fila", () => {
+  const queued: QueuedWebhook = {
+    target: "meta-webhook",
+    search: "",
+    headers: { "content-type": "application/json", "x-hub-signature-256": "sha256=abc" },
+    body: toBase64(new TextEncoder().encode('{"entry":[]}')),
+    receivedAt: "2026-11-04T12:00:00.000Z",
+  };
+  const message = (attempts = 1): QueueMessage & { ack: ReturnType<typeof vi.fn>; retry: ReturnType<typeof vi.fn> } => ({
+    body: queued,
+    attempts,
+    ack: vi.fn(),
+    retry: vi.fn(),
+  });
+
+  it("entrega com o corpo e a assinatura originais", async () => {
+    const msg = message();
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
+    await handleBatch({ queue: "q", messages: [msg] }, makeEnv(), fetchImpl);
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe(`${BASE}/meta-webhook`);
+    expect(init.headers["x-hub-signature-256"]).toBe("sha256=abc");
+    expect(init.headers["x-unxet-received-at"]).toBe(queued.receivedAt);
+    expect(new TextDecoder().decode(init.body)).toBe('{"entry":[]}');
+    expect(msg.ack).toHaveBeenCalled();
+    expect(msg.retry).not.toHaveBeenCalled();
+  });
+
+  it("tenta de novo, com espera, quando o Supabase está fora", async () => {
+    const down = message(3);
+    const error = message(1);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("", { status: 503 }))
+      .mockRejectedValueOnce(new Error("timeout"));
+    await handleBatch({ queue: "q", messages: [down, error] }, makeEnv(), fetchImpl);
+    expect(down.retry).toHaveBeenCalledWith({ delaySeconds: 60 });
+    expect(error.retry).toHaveBeenCalledWith({ delaySeconds: 15 });
+    expect(down.ack).not.toHaveBeenCalled();
+  });
+
+  it("descarta o que a função recusou", async () => {
+    const msg = message();
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("Unauthorized", { status: 401 }));
+    await handleBatch({ queue: "q", messages: [msg] }, makeEnv(), fetchImpl);
+    expect(msg.ack).toHaveBeenCalled();
+    expect(msg.retry).not.toHaveBeenCalled();
+  });
+});
