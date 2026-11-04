@@ -1,0 +1,71 @@
+name: Cloudflare (deploy)
+
+# Publica a fila de entrada dos webhooks (cloudflare/webhook-gateway):
+# - push na develop -> https://develop.unxet-entrada.workers.dev
+# - push na main    -> https://producao.unxet-entrada.workers.dev
+# Secrets do repositório: CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID.
+# Guia em docs/fila-de-entrada.md.
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - "cloudflare/webhook-gateway/**"
+      - ".github/workflows/cloudflare-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  WRANGLER: npx -y wrangler@4.149.0
+
+jobs:
+  deploy:
+    if: github.ref_name == 'develop' || github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: cloudflare/webhook-gateway
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TARGET_ENV: ${{ github.ref_name == 'main' && 'production' || 'develop' }}
+      QUEUE: ${{ github.ref_name == 'main' && 'unxet-entrada' || 'unxet-entrada-develop' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Conferir configuração
+        id: config
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN ou CLOUDFLARE_ACCOUNT_ID não configurados: publicação pulada."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # As filas precisam existir antes do deploy. Cria só as que faltam.
+      - name: Criar filas
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          for q in "$QUEUE" "$QUEUE-falhas"; do
+            if $WRANGLER queues info "$q" > /dev/null 2>&1; then
+              echo "Fila $q já existe"
+            else
+              $WRANGLER queues create "$q"
+            fi
+          done
+
+      - name: Publicar Worker
+        if: steps.config.outputs.ready == 'true'
+        run: $WRANGLER deploy --env "$TARGET_ENV"

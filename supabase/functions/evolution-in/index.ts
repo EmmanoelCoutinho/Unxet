@@ -360,8 +360,16 @@ serve(async (req)=>{
       });
     }
     const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
-    if (connectionError || !connection) {
-      console.error("Connection not found:", connectionError);
+    // Erro do banco é temporário: 503 faz a fila de entrada tentar de novo.
+    // Conexão inexistente (ex.: instância do outro ambiente) é 404 e é descartada.
+    if (connectionError) {
+      console.error("Connection lookup failed:", connectionError);
+      return new Response("Database unavailable", {
+        status: 503
+      });
+    }
+    if (!connection) {
+      console.warn("Connection not found:", instanceName);
       return new Response("Connection not found", {
         status: 404
       });
