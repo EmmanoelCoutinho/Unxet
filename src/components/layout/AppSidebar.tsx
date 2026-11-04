@@ -7,6 +7,7 @@ import {
   Building2Icon,
   ChevronDownIcon,
   FileBarChartIcon,
+  GraduationCapIcon,
   KanbanSquareIcon,
   MegaphoneIcon,
   MessageCircleIcon,
@@ -222,6 +223,13 @@ export const settingsItem: SidebarItem = {
   adminOnly: true,
 };
 
+// Fica no rodapé do menu, para todos (atendente vê só os tutoriais dele)
+export const tutorialsItem: SidebarItem = {
+  label: "Tutoriais",
+  icon: GraduationCapIcon,
+  path: "/inbox/tutorials",
+};
+
 /**
  * Itens do menu para o papel do usuário logado. Enquanto o vínculo com a
  * empresa carrega, vale a visão de atendente (não pisca item de admin).
@@ -237,6 +245,7 @@ export const useSidebarNavigation = () => {
         (!item.planFeature || hasFeature(item.planFeature)),
     ),
     settings: isAdmin ? settingsItem : null,
+    tutorials: tutorialsItem,
     isAdmin,
   };
 };
@@ -275,7 +284,7 @@ export const isSidebarItemActive = (item: SidebarItem, pathname: string) =>
 export const AppSidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { items, settings } = useSidebarNavigation();
+  const { items, settings, tutorials } = useSidebarNavigation();
   const isBelowLg = useIsBelowLg();
   const internalUnread = useInternalUnreadTotal();
   const { closed, toggle } = useClosedSidebarGroups();
@@ -388,11 +397,10 @@ export const AppSidebar: React.FC = () => {
           })}
         </nav>
 
-        {settings && (
-          <div className="shrink-0 border-t bg-gray-50 p-2">
-            {renderItem(settings)}
-          </div>
-        )}
+        <div className="shrink-0 space-y-1 border-t bg-gray-50 p-2">
+          {renderItem(tutorials)}
+          {settings && renderItem(settings)}
+        </div>
       </aside>
     </div>
   );

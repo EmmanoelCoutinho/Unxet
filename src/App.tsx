@@ -84,6 +84,7 @@ const QuickMessagesPage = lazy(() =>
     default: m.QuickMessagesPage,
   })),
 );
+const TutorialsPage = lazy(() => import("./pages/TutorialsPage"));
 const MarketingCampaignsPage = lazy(() =>
   import("./pages/MarketingCampaignsPage").then((m) => ({
     default: m.MarketingCampaignsPage,
@@ -283,6 +284,7 @@ function RoutedApp() {
             <Route path="departments" element={<AdminOnly><PlanGate feature="departments"><DepartmentsPage /></PlanGate></AdminOnly>} />
             <Route path="attendants" element={<AdminOnly><AttendantsPage /></AdminOnly>} />
             <Route path="quick-messages" element={<QuickMessagesPage />} />
+            <Route path="tutorials" element={<TutorialsPage />} />
             <Route path="leads" element={<PlanGate feature="scheduled_messages"><LeadsKanbanPage /></PlanGate>} />
             <Route path="campaigns" element={<PlanGate feature="scheduled_messages"><ScheduledMessagesPage /></PlanGate>} />
             <Route path="campaigns/new" element={<PlanGate feature="scheduled_messages"><ScheduledMessageEditorPage /></PlanGate>} />
