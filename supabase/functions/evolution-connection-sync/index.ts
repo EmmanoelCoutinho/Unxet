@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
 import { reconcileConnectionStatus } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
+import { ensureInstanceSettings } from "../_shared/evolutionSettings.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -91,12 +92,19 @@ serve(async (req)=>{
       });
     }
     const changes = [];
+    const settingsUpdated = [];
     await Promise.all((connections ?? []).map(async (connection)=>{
       const apiUrl = connection.evolution_api_url || EVOLUTION_API_URL;
       const apiKey = connection.evolution_api_key || EVOLUTION_API_KEY;
       if (!apiUrl || !apiKey) return;
       const result = await fetchInstanceState(apiUrl, apiKey, connection.session_name);
       if (!result) return;
+      // Corrige instâncias antigas ou alteradas no Evolution Manager
+      // (ignorar grupos, sem histórico). Normalmente é só uma leitura.
+      if (result.exists) {
+        const settings = await ensureInstanceSettings(apiUrl, apiKey, connection.session_name);
+        if (settings === "updated") settingsUpdated.push(connection.id);
+      }
       const nextStatus = reconcileConnectionStatus(connection.status, result.state, result.exists);
       if (!nextStatus) return;
       const now = new Date().toISOString();
@@ -132,7 +140,8 @@ serve(async (req)=>{
     }));
     console.log("[CONNECTION_SYNC]", JSON.stringify({
       checked: connections?.length ?? 0,
-      changes
+      changes,
+      settingsUpdated
     }));
     return new Response(JSON.stringify({
       success: true,

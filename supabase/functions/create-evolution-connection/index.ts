@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAuthenticatedUser, getClinicMembership } from "../_shared/security.ts";
 import { clinicCanAddQrNumber, clinicCanUseWhatsappNumber, PLAN_LIMIT_MESSAGES } from "../_shared/plan.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
+import { ensureInstanceSettings } from "../_shared/evolutionSettings.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -221,6 +222,9 @@ serve(async (req)=>{
       console.log("Instance already exists");
     }
     await setInstanceWebhook(evolutionApiUrl, evolutionApiKey, sessionName);
+    // Ignorar grupos e não puxar histórico: menos webhooks à toa. Se falhar,
+    // a conexão segue e o evolution-connection-sync tenta de novo.
+    await ensureInstanceSettings(evolutionApiUrl, evolutionApiKey, sessionName);
     // =========================================================
     // 3. Verificar estado da conexão
     // =========================================================
