@@ -1,15 +1,16 @@
 # Fila de entrada dos webhooks. Guia: docs/fila-de-entrada.md
 # Publicado pelo workflow .github/workflows/cloudflare-deploy.yml:
-#   push na develop -> --env develop     (unxet-entrada-develop)
-#   push na main    -> --env production  (unxet-entrada)
+#   push na develop -> --env develop     (Worker "develop", fila unxet-entrada-develop)
+#   push na main    -> --env production  (Worker "producao", fila unxet-entrada)
+# Endereços: https://<worker>.unxet-entrada.workers.dev
 
-name = "unxet-entrada"
+name = "producao"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
 workers_dev = true
 
 [env.develop]
-name = "unxet-entrada-develop"
+name = "develop"
 vars = { ENVIRONMENT = "develop", SUPABASE_FUNCTIONS_URL = "https://ketolvqnptmdczkzrqba.supabase.co/functions/v1" }
 
 [[env.develop.queues.producers]]
@@ -26,7 +27,7 @@ max_retries = 100
 dead_letter_queue = "unxet-entrada-develop-falhas"
 
 [env.production]
-name = "unxet-entrada"
+name = "producao"
 vars = { ENVIRONMENT = "production", SUPABASE_FUNCTIONS_URL = "https://karmtrldanuxqisgzlhk.supabase.co/functions/v1" }
 
 [[env.production.queues.producers]]

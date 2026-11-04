@@ -1,8 +1,8 @@
 name: Cloudflare (deploy)
 
 # Publica a fila de entrada dos webhooks (cloudflare/webhook-gateway):
-# - push na develop -> unxet-entrada-develop
-# - push na main    -> unxet-entrada (produção)
+# - push na develop -> https://develop.unxet-entrada.workers.dev
+# - push na main    -> https://producao.unxet-entrada.workers.dev
 # Secrets do repositório: CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID.
 # Guia em docs/fila-de-entrada.md.
 
