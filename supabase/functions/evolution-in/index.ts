@@ -19,6 +19,7 @@ import { timingSafeEqual } from "../_shared/security.ts";
 import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { redactWebhookSecrets, stripWebhookEventSuffix } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
+import { isNonChatJid } from "../_shared/evolutionSettings.ts";
 import { createCheckThrottle, imageHash, isCurrentProfilePic, profilePicFolder, profilePicPath } from "../_shared/profilePicture.ts";
 // ---------------------------------------------------------------------------
 // Env
@@ -271,6 +272,15 @@ serve(async (req)=>{
       return new Response(JSON.stringify({
         ignored: true,
         reason: "group_message"
+      }), {
+        status: 200
+      });
+    }
+    // ── Ignora Status do WhatsApp, canais e listas de transmissão ─────────
+    if (isNonChatJid(remoteJidRaw)) {
+      return new Response(JSON.stringify({
+        ignored: true,
+        reason: "non_chat_message"
       }), {
         status: 200
       });
