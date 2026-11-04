@@ -193,9 +193,14 @@ serve(async (req)=>{
       }
     });
     const fetchInstancesData = await fetchInstancesResponse.json();
-    console.log("Instances fetched:", fetchInstancesData);
     const instances = Array.isArray(fetchInstancesData) ? fetchInstancesData : fetchInstancesData?.instances || [];
     const existingInstance = instances.find((instance)=>instance?.name === sessionName || instance?.instance?.instanceName === sessionName);
+    // Só o resumo: a lista traz token, telefone e foto de TODAS as instâncias
+    // do servidor (inclusive de outras empresas e do outro ambiente)
+    console.log("Instances fetched:", {
+      total: instances.length,
+      found: Boolean(existingInstance)
+    });
     // =========================================================
     // 2. Criar instância se não existir
     // =========================================================
@@ -214,7 +219,10 @@ serve(async (req)=>{
         })
       });
       const createData = await createResponse.json();
-      console.log("Create instance response:", createData);
+      // A resposta traz o token da instância: registra só o resultado
+      console.log("Create instance response:", {
+        status: createResponse.status
+      });
       if (!createResponse.ok) {
         throw new Error(createData?.message || "Failed to create Evolution instance");
       }
@@ -278,8 +286,12 @@ serve(async (req)=>{
       }
     });
     const connectData = await connectResponse.json();
-    console.log("Connect response:", connectData);
     const qrCode = connectData?.base64 || connectData?.qrcode?.base64 || connectData?.code || connectData?.qrcode || null;
+    // O QR Code conecta o WhatsApp de quem o ler: não vai para o log
+    console.log("Connect response:", {
+      status: connectResponse.status,
+      hasQrCode: Boolean(qrCode)
+    });
     if (!qrCode) {
       throw new Error("QR Code not returned by Evolution");
     }
