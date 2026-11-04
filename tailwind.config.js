@@ -100,6 +100,8 @@ export default {
       addBase({
         ":root": light,
         ":root.dark": { ...dark, "color-scheme": "dark" },
+        // Trechos que imitam outro app (prévia do WhatsApp) ficam sempre claros
+        ".theme-light": { ...light, "color-scheme": "light", color: "#111827" },
       });
     }),
   ],

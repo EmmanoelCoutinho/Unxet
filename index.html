@@ -18,7 +18,7 @@
         var pref = null;
         try { pref = localStorage.getItem("unxet-theme"); } catch (e) {}
         var dark = pref === "dark" ||
-          (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          (pref === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
         if (dark) {
           document.documentElement.classList.add("dark");
           document.querySelector('meta[name="theme-color"]').setAttribute("content", "#151d2c");
