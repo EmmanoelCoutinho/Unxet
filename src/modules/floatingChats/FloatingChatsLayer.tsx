@@ -97,7 +97,7 @@ const MinimizedBar: React.FC<{
         title={`Abrir conversa com ${name}`}
       >
         <Avatar name={name} avatar={conversation?.contactAvatar} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#1E1E1E]">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">
           {name}
         </span>
         <UnreadBadge count={unread} />
@@ -159,7 +159,7 @@ const OverflowMenu: React.FC<{
                   className="flex min-w-0 flex-1 items-center gap-2 text-left"
                 >
                   <Avatar name={name} avatar={conversationOf(box)?.contactAvatar} />
-                  <span className="min-w-0 flex-1 truncate text-sm text-[#1E1E1E]">
+                  <span className="min-w-0 flex-1 truncate text-sm text-gray-900">
                     {name}
                   </span>
                   <UnreadBadge count={conversationOf(box)?.unreadCount ?? 0} />

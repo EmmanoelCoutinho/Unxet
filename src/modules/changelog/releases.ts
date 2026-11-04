@@ -74,6 +74,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
+  {
+    kind: "new",
+    text: "Modo escuro: no menu do seu perfil (canto superior direito), escolha entre tema Claro, Escuro ou Automático, que acompanha o modo do celular ou do computador.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

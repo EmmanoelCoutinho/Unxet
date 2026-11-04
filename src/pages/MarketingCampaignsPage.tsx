@@ -1660,7 +1660,7 @@ export const MarketingCampaignsPage: React.FC = () => {
                 <EyeIcon className="h-4 w-4 text-slate-500" />
                 <h3 className="font-semibold text-slate-900">Preview</h3>
               </div>
-              <div className="mt-4 rounded-[28px] bg-[#0f172a] p-3">
+              <div className="mt-4 rounded-[28px] bg-slate-900 p-3">
                 <div className="rounded-[24px] bg-white p-4 shadow-sm">
                   <p className="text-sm font-semibold text-slate-900">
                     {templateForm.internalName || "Novo template"}

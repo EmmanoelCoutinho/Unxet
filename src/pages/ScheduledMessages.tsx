@@ -261,7 +261,7 @@ export const ScheduledMessagesPage: React.FC = () => {
                     {label}
                     <span
                       className={`rounded-full px-1.5 text-xs ${
-                        filter === key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                        filter === key ? "bg-[#fff]/20 text-white" : "bg-slate-100 text-slate-500"
                       }`}
                     >
                       {counts[key]}

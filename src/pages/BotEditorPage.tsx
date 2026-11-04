@@ -486,7 +486,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="w-full">
-                      <label className="block text-sm font-medium text-[#1E1E1E] mb-1">
+                      <label className="block text-sm font-medium text-gray-900 mb-1">
                         Status
                       </label>
                       <select
@@ -495,7 +495,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                           setForm((p) => ({ ...p, status: e.target.value as BotRow["status"] }))
                         }
                         disabled={!isAdmin || saving}
-                        className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
                       >
                         <option value="active">Ativo</option>
                         <option value="inactive">Inativo</option>
@@ -532,7 +532,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                   </div>
 
                   <div className="w-full">
-                    <label className="block text-sm font-medium text-[#1E1E1E] mb-1">
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
                       Encerrar sessão por inatividade
                     </label>
                     <select
@@ -544,7 +544,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                         }))
                       }
                       disabled={!isAdmin || saving}
-                      className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
                     >
                       {BOT_SESSION_TIMEOUT_HOUR_OPTIONS.map((hours) => (
                         <option key={hours} value={hours}>

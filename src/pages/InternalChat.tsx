@@ -360,7 +360,7 @@ const ThreadView: React.FC<ThreadViewProps> = ({
                 "rounded-lg px-4 py-3 text-sm whitespace-pre-wrap break-words",
                 mine
                   ? "bg-[#0A84FF] text-white"
-                  : "bg-[#E5E7EB] text-[#1E1E1E]",
+                  : "bg-gray-200 text-gray-900",
                 message.pending ? "opacity-70" : "",
               ].join(" ")}
             >
@@ -419,7 +419,7 @@ const ThreadView: React.FC<ThreadViewProps> = ({
               type="button"
               onClick={handleLoadOlder}
               disabled={loadingOlder}
-              className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+              className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
             >
               {loadingOlder ? "Carregando..." : "Carregar mensagens anteriores"}
             </button>
@@ -443,7 +443,7 @@ const ThreadView: React.FC<ThreadViewProps> = ({
         )}
       </div>
 
-      <div className="shrink-0 border-t border-[#E5E7EB] bg-white p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-4">
+      <div className="shrink-0 border-t border-gray-200 bg-white p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-4">
         <div className="relative flex items-end gap-1 sm:gap-2">
           <EmojiPicker
             open={emojiOpen}
@@ -454,7 +454,7 @@ const ThreadView: React.FC<ThreadViewProps> = ({
             ref={emojiButtonRef}
             type="button"
             onClick={() => setEmojiOpen((value) => !value)}
-            className="flex h-11 w-10 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[#E5E7EB] sm:h-12 sm:w-12"
+            className="flex h-11 w-10 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-gray-200 sm:h-12 sm:w-12"
             aria-label="Emojis"
             aria-expanded={emojiOpen}
           >
@@ -468,7 +468,7 @@ const ThreadView: React.FC<ThreadViewProps> = ({
             rows={1}
             maxLength={INTERNAL_MESSAGE_MAX_LENGTH}
             placeholder="Mensagem para a equipe..."
-            className="max-h-32 min-h-11 min-w-0 flex-1 resize-none rounded-lg border border-[#E5E7EB] px-3 py-2.5 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] sm:min-h-12 sm:px-4 sm:py-3"
+            className="max-h-32 min-h-11 min-w-0 flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2.5 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] sm:min-h-12 sm:px-4 sm:py-3"
           />
           <button
             type="button"

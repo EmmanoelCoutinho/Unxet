@@ -17,7 +17,7 @@ export const Button: React.FC<ButtonProps> = ({
   const variants = {
     primary: 'bg-[#0A84FF] text-white hover:bg-[#0A84FF]/90 focus:ring-[#0A84FF]',
     secondary: 'bg-[#003366] text-white hover:bg-[#003366]/90 focus:ring-[#003366]',
-    ghost: 'bg-transparent text-[#1E1E1E] hover:bg-[#E5E7EB] focus:ring-[#E5E7EB]'
+    ghost: 'bg-transparent text-gray-900 hover:bg-gray-200 focus:ring-gray-200'
   };
   const sizes = {
     sm: 'px-3 py-1.5 text-sm',

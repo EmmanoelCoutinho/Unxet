@@ -33,7 +33,7 @@ const AdminLayout: React.FC = () => {
 
   return (
     <div className="min-h-dvh bg-slate-50">
-      <header className="border-b border-[#E5E7EB] bg-white">
+      <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8">
           <div className="flex items-center gap-3">
             <img src={logo} alt="Unxet" className="h-8 object-contain" />
@@ -46,7 +46,7 @@ const AdminLayout: React.FC = () => {
             <button
               type="button"
               onClick={signOut}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-[#1E1E1E] hover:bg-[#E5E7EB]"
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-gray-900 hover:bg-gray-200"
             >
               <LogOut className="h-4 w-4" />
               Sair
@@ -62,8 +62,8 @@ const AdminLayout: React.FC = () => {
                 [
                   "whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium",
                   isActive
-                    ? "border-[#003366] text-[#003366]"
-                    : "border-transparent text-gray-500 hover:text-[#1E1E1E]",
+                    ? "border-[#003366] text-[#003366] dark:border-sky-400 dark:text-sky-300"
+                    : "border-transparent text-gray-500 hover:text-gray-900",
                 ].join(" ")
               }
             >

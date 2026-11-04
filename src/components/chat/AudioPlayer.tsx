@@ -112,21 +112,21 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, outgoing }) => {
     ? {
         box: "bg-[#0A84FF] text-white",
         play: "bg-white text-[#0A84FF] hover:bg-blue-50",
-        track: "bg-white/30",
+        track: "bg-[#fff]/30",
         fill: "bg-white",
         thumb: "[&::-webkit-slider-thumb]:bg-white [&::-moz-range-thumb]:bg-white",
         muted: "text-blue-100",
-        chip: "bg-white/20 text-white hover:bg-white/30",
+        chip: "bg-[#fff]/20 text-white hover:bg-[#fff]/30",
       }
     : {
-        box: "bg-[#F3F4F6] text-[#1E1E1E] border border-[#E5E7EB]",
+        box: "bg-gray-100 text-gray-900 border border-gray-200",
         play: "bg-[#0A84FF] text-white hover:bg-[#0066d6]",
-        track: "bg-[#D1D5DB]",
+        track: "bg-gray-300",
         fill: "bg-[#0A84FF]",
         thumb:
           "[&::-webkit-slider-thumb]:bg-[#0A84FF] [&::-moz-range-thumb]:bg-[#0A84FF]",
-        muted: "text-[#6B7280]",
-        chip: "bg-white text-[#374151] hover:bg-[#E5E7EB] border border-[#E5E7EB]",
+        muted: "text-gray-500",
+        chip: "bg-white text-gray-700 hover:bg-gray-200 border border-gray-200",
       };
 
   return (

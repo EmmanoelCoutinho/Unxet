@@ -151,14 +151,14 @@ export const ChangelogBell = ({ userId, isAdmin }: ChangelogBellProps) => {
         role="dialog"
         aria-label="Novidades da Unxet"
         aria-hidden={!open}
-        className={`absolute right-0 top-full z-50 mt-2 flex max-h-[min(32rem,calc(100vh-6rem))] w-96 max-w-[calc(100vw-1.5rem)] origin-top-right flex-col overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-lg transition-[opacity,transform,visibility] duration-150 ease-out motion-reduce:transition-none ${
+        className={`absolute right-0 top-full z-50 mt-2 flex max-h-[min(32rem,calc(100vh-6rem))] w-96 max-w-[calc(100vw-1.5rem)] origin-top-right flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg transition-[opacity,transform,visibility] duration-150 ease-out motion-reduce:transition-none ${
           open
             ? "visible translate-y-0 scale-100 opacity-100"
             : "pointer-events-none invisible -translate-y-1 scale-95 opacity-0"
         }`}
       >
-        <div className="border-b border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
-          <div className="font-medium text-[#1E1E1E]">Novidades da Unxet</div>
+        <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+          <div className="font-medium text-gray-900">Novidades da Unxet</div>
           <div className="text-xs text-gray-500">
             Versão {CURRENT_RELEASE.version} · atualizada em{" "}
             {formatReleaseDate(CURRENT_RELEASE.date)}
@@ -169,7 +169,7 @@ export const ChangelogBell = ({ userId, isAdmin }: ChangelogBellProps) => {
           {upcoming && (
             <section className="border-b border-dashed border-amber-300 bg-amber-50/60">
               <div className="flex items-baseline justify-between gap-2 px-4 pb-1 pt-3">
-                <span className="text-sm font-semibold text-[#1E1E1E]">
+                <span className="text-sm font-semibold text-gray-900">
                   Versão {upcoming.version}
                   <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
                     Em teste
@@ -183,10 +183,10 @@ export const ChangelogBell = ({ userId, isAdmin }: ChangelogBellProps) => {
           {releases.map((release, index) => (
             <section
               key={release.version}
-              className={index > 0 ? "border-t border-[#E5E7EB]" : undefined}
+              className={index > 0 ? "border-t border-gray-200" : undefined}
             >
               <div className="flex items-baseline justify-between gap-2 px-4 pb-1 pt-3">
-                <span className="text-sm font-semibold text-[#1E1E1E]">
+                <span className="text-sm font-semibold text-gray-900">
                   Versão {release.version}
                   {index === 0 && (
                     <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-[#0A84FF]">
