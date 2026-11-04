@@ -1,0 +1,12 @@
+{
+  "name": "unxet-tutorials-recorder",
+  "private": true,
+  "type": "module",
+  "description": "Grava os vídeos da tela Tutoriais com o Playwright (só no ambiente local)",
+  "scripts": {
+    "record": "node record.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}
