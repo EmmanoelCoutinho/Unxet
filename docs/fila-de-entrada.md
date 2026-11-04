@@ -30,11 +30,11 @@ Código em `cloudflare/webhook-gateway`. Testes rodam no `npm test`.
 
 | Ambiente | Worker | Fila |
 |---|---|---|
-| Develop | `https://unxet-entrada-develop.<subdominio>.workers.dev` | `unxet-entrada-develop` |
-| Produção | `https://unxet-entrada.<subdominio>.workers.dev` | `unxet-entrada` |
+| Develop | `https://develop.unxet-entrada.workers.dev` | `unxet-entrada-develop` |
+| Produção | `https://producao.unxet-entrada.workers.dev` | `unxet-entrada` |
 
-`<subdominio>` é o subdomínio `workers.dev` da conta, escolhido uma vez no
-painel do Cloudflare (Workers & Pages → Overview).
+`unxet-entrada.workers.dev` é o subdomínio da conta do Cloudflare (um por
+conta). Cada Worker fica em `<nome do worker>.unxet-entrada.workers.dev`.
 
 Caminhos aceitos: `/evolution-in`, `/meta-webhook`, `/meta-in` e `/health`
 (para o monitor). A query string vai junto: `/evolution-in?token=...` chega
@@ -42,7 +42,8 @@ em `.../functions/v1/evolution-in?token=...`.
 
 ## Configuração (uma vez)
 
-1. Criar a conta grátis no Cloudflare e escolher o subdomínio `workers.dev`.
+1. Criar a conta grátis no Cloudflare e o subdomínio `workers.dev` (feito
+   em 04/11/2026: `unxet-entrada.workers.dev`).
 2. Criar um token de API (My Profile → API Tokens → Create Token → modelo
    "Edit Cloudflare Workers"), garantindo a permissão **Account → Queues →
    Edit**.
@@ -58,7 +59,7 @@ Sem os secrets, o workflow só avisa e não publica.
 ## Ligar no develop
 
 1. No Supabase do develop, trocar o secret `EVOLUTION_INSTANCE_WEBHOOK_URL`
-   para `https://unxet-entrada-develop.<subdominio>.workers.dev/evolution-in?token=<EVOLUTION_WEBHOOK_SECRET>`.
+   para `https://develop.unxet-entrada.workers.dev/evolution-in?token=<EVOLUTION_WEBHOOK_SECRET>`.
 2. Reconectar o número de teste pelo app (o `create-evolution-connection`
    grava o webhook novo na instância).
 3. Mandar mensagens para o número e conferir que chegam no app.
@@ -66,15 +67,15 @@ Sem os secrets, o workflow só avisa e não publica.
 ## Ligar na produção
 
 1. **Evolution:** no servidor, trocar `WEBHOOK_GLOBAL_URL` para
-   `https://unxet-entrada.<subdominio>.workers.dev/evolution-in?token=<o mesmo token de hoje>`
+   `https://producao.unxet-entrada.workers.dev/evolution-in?token=<o mesmo token de hoje>`
    e recriar o container (`docker compose up -d`) num horário calmo.
 2. **WhatsApp oficial:** no app da Meta, em WhatsApp → Configuration →
    Webhook, trocar a Callback URL para
-   `https://unxet-entrada.<subdominio>.workers.dev/meta-webhook` (o verify
+   `https://producao.unxet-entrada.workers.dev/meta-webhook` (o verify
    token continua o mesmo; a verificação passa direto para a função).
 3. **Instagram e Messenger**, quando forem lançados: `.../meta-in`.
 4. No Better Stack, criar o monitor **Recebimento de mensagens** em
-   `https://unxet-entrada.<subdominio>.workers.dev/health`.
+   `https://producao.unxet-entrada.workers.dev/health`.
 
 ## Voltar atrás
 
@@ -84,7 +85,7 @@ pode continuar publicado sem receber nada.
 
 ## Acompanhar
 
-- Logs: painel do Cloudflare → Workers & Pages → `unxet-entrada` → Logs, ou
+- Logs: painel do Cloudflare → Workers & Pages → `producao` → Logs, ou
   `npx wrangler tail --env production` na pasta do Worker.
   - `[GATEWAY_RETRY]`: o Supabase não respondeu; a mensagem será reenviada.
   - `[GATEWAY_DELIVERED_LATE]`: entregue depois de alguma tentativa.
