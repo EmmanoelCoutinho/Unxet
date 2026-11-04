@@ -1,0 +1,42 @@
+# Fila de entrada dos webhooks. Guia: docs/fila-de-entrada.md
+# Publicado pelo workflow .github/workflows/cloudflare-deploy.yml:
+#   push na develop -> --env develop     (unxet-entrada-develop)
+#   push na main    -> --env production  (unxet-entrada)
+
+name = "unxet-entrada"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[env.develop]
+name = "unxet-entrada-develop"
+vars = { ENVIRONMENT = "develop", SUPABASE_FUNCTIONS_URL = "https://ketolvqnptmdczkzrqba.supabase.co/functions/v1" }
+
+[[env.develop.queues.producers]]
+binding = "INBOUND"
+queue = "unxet-entrada-develop"
+
+[[env.develop.queues.consumers]]
+queue = "unxet-entrada-develop"
+max_batch_size = 10
+max_batch_timeout = 1
+max_concurrency = 3
+# 100 tentativas com espera crescente (até 15 min) cobrem cerca de 24 h
+max_retries = 100
+dead_letter_queue = "unxet-entrada-develop-falhas"
+
+[env.production]
+name = "unxet-entrada"
+vars = { ENVIRONMENT = "production", SUPABASE_FUNCTIONS_URL = "https://karmtrldanuxqisgzlhk.supabase.co/functions/v1" }
+
+[[env.production.queues.producers]]
+binding = "INBOUND"
+queue = "unxet-entrada"
+
+[[env.production.queues.consumers]]
+queue = "unxet-entrada"
+max_batch_size = 10
+max_batch_timeout = 1
+max_concurrency = 3
+max_retries = 100
+dead_letter_queue = "unxet-entrada-falhas"
