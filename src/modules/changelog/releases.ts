@@ -82,6 +82,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "new",
     text: "Modo escuro: no menu do seu perfil (canto superior direito), escolha entre tema Claro, Escuro ou Automático, que acompanha o modo do celular ou do computador.",
   },
+  {
+    kind: "new",
+    text: "Página de status: em status.unxet.com.br você confere se a Unxet está funcionando normalmente, parte por parte. O link fica na tela de login e no rodapé do seu perfil, e a página abre mesmo quando o sistema está fora do ar.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
