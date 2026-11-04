@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import logo from '../assets/logo-unxet.png';
 import { toast } from 'react-toastify';
 import { translateAuthError } from '../lib/authErrors';
-import { LegalConsent } from '../components/LegalLinks';
+import { LegalConsent, StatusNotice } from '../components/LegalLinks';
 
 const translateLoginError = (error: { code?: string; message?: string }) =>
   translateAuthError(error, 'Não foi possível entrar. Tente novamente.');
@@ -96,6 +96,7 @@ export const Login: React.FC = () => {
         </form>
 
         <LegalConsent action="Ao entrar" className="mt-4" />
+        <StatusNotice className="mt-2" />
       </Card>
     </div>
   );

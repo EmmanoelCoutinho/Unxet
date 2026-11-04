@@ -78,6 +78,15 @@ export const NEXT_RELEASE: ReleaseChange[] = [
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    date: "2026-11-04",
+    changes: [
+      {
+        kind: "new",
+        text: "Página de status: em status.unxet.com.br você confere se a Unxet está funcionando normalmente, parte por parte. O link fica na tela de login e no rodapé do seu perfil, e a página abre mesmo quando o sistema está fora do ar.",
+      },
+    ],
+  },
+  {
     date: "2026-11-03",
     changes: [
       {
