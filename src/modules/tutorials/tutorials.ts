@@ -93,7 +93,7 @@ export const TUTORIALS: Tutorial[] = [
       "Convide uma pessoa da equipe, escolha o cargo e o setor dela.",
     // #t=1 pula a tela de carregamento do primeiro segundo
     video: "/tutorials/criar-atendente.mp4#t=1",
-    duration: "0:44",
+    duration: "0:47",
     path: "/inbox/attendants",
     adminOnly: true,
   },
