@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-// Tema do sistema. A escolha fica salva neste aparelho; "system" segue o
-// modo claro/escuro do celular ou do computador.
+// Tema do sistema. A escolha fica salva neste aparelho; o padrão é o claro e
+// "system" (Automático) segue o modo claro/escuro do celular ou do computador.
 // O index.html aplica o tema salvo antes do React carregar, para a tela não
 // piscar em branco: mantenha a mesma chave e as mesmas cores de lá.
 
@@ -16,11 +16,11 @@ const media = () => window.matchMedia("(prefers-color-scheme: dark)");
 export function readThemePreference(): ThemePreference {
   try {
     const saved = localStorage.getItem(THEME_STORAGE_KEY);
-    if (saved === "light" || saved === "dark") return saved;
+    if (saved === "dark" || saved === "system") return saved;
   } catch {
     // navegação privada ou armazenamento bloqueado
   }
-  return "system";
+  return "light";
 }
 
 export function resolveTheme(pref: ThemePreference): "light" | "dark" {
@@ -40,7 +40,7 @@ const listeners = new Set<(pref: ThemePreference) => void>();
 
 export function setThemePreference(pref: ThemePreference) {
   try {
-    if (pref === "system") localStorage.removeItem(THEME_STORAGE_KEY);
+    if (pref === "light") localStorage.removeItem(THEME_STORAGE_KEY);
     else localStorage.setItem(THEME_STORAGE_KEY, pref);
   } catch {
     // segue só nesta aba

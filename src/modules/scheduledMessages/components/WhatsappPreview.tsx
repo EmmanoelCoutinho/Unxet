@@ -17,7 +17,7 @@ export const WhatsappPreview: React.FC<{
       <p className="text-sm font-semibold text-slate-900">{title}</p>
       {meta && <p className="text-xs text-slate-500">{meta}</p>}
     </div>
-    <div className="bg-[#EFEAE2] px-4 py-5">
+    <div className="theme-light bg-[#EFEAE2] px-4 py-5">
       <div className="mb-3 flex items-center gap-2">
         <span
           className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-white"
