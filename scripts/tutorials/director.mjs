@@ -176,6 +176,9 @@ export function createDirector(page) {
 
     /** Leva o cursor até o elemento e o destaca, sem clicar */
     async point(locator, ms = 1200) {
+      // Centraliza o elemento para não ficar atrás da legenda
+      await locator.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "smooth" }));
+      await sleep(600);
       const box = await moveTo(locator);
       await ring(box);
       await sleep(ms);

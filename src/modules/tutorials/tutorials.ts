@@ -230,3 +230,9 @@ export const saveWatchedTutorials = (ids: string[]) => {
     // sem armazenamento: só não lembra na próxima visita
   }
 };
+
+/** Marca o tutorial como assistido neste navegador */
+export const markTutorialWatched = (id: string) => {
+  const watched = readWatchedTutorials();
+  if (!watched.includes(id)) saveWatchedTutorials([...watched, id]);
+};
