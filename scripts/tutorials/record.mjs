@@ -6,14 +6,17 @@
 // - Entra com admin@teste.local usando LOCAL_TEST_PASSWORD (do .env.local
 //   na raiz do projeto ou da variável de ambiente). Só o banco local.
 // - O login acontece fora do vídeo; a gravação começa já dentro do sistema.
-// - Salva em public/tutorials/<id>.webm.
+// - Junta a trilha padrão (music.mjs) e salva em public/tutorials/<id>.mp4
+//   (H.264 + AAC, toca em qualquer navegador, inclusive no iPhone).
 
 import { chromium } from "playwright";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import ffmpeg from "ffmpeg-static";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDirector } from "./director.mjs";
+import { writeMusic } from "./music.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..", "..");
@@ -89,6 +92,7 @@ const main = async () => {
     recordVideo: { dir: videoDir, size: VIEWPORT },
   });
   const page = await context.newPage();
+  const startedAt = Date.now();
   const director = createDirector(page);
   await director.install();
 
@@ -102,13 +106,29 @@ const main = async () => {
     await context.close();
     await browser.close();
   }
+  const seconds = (Date.now() - startedAt) / 1000;
 
   const recorded = await page.video().path();
   const outDir = path.join(root, "public", "tutorials");
   mkdirSync(outDir, { recursive: true });
-  const target = path.join(outDir, `${scenario.meta.id}.webm`);
-  rmSync(target, { force: true });
-  renameSync(recorded, target);
+  const target = path.join(outDir, `${scenario.meta.id}.mp4`);
+  const music = path.join(videoDir, "trilha.wav");
+  writeMusic(music, seconds);
+  execFileSync(
+    ffmpeg,
+    [
+      "-y", "-loglevel", "error",
+      "-i", recorded,
+      "-i", music,
+      "-map", "0:v", "-map", "1:a",
+      "-c:v", "libx264", "-preset", "slow", "-crf", "23", "-pix_fmt", "yuv420p",
+      "-c:a", "aac", "-b:a", "128k",
+      "-af", "volume=0.55",
+      "-shortest", "-movflags", "+faststart",
+      target,
+    ],
+    { stdio: "inherit" },
+  );
   rmSync(videoDir, { recursive: true, force: true });
   cleanup(scenario.meta.cleanupEmails);
   console.log(`Vídeo salvo em ${path.relative(root, target)}`);

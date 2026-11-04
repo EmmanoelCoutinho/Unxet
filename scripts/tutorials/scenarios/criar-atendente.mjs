@@ -16,8 +16,18 @@ export async function run(page, d) {
   await opening;
 
   // 1. Abrir a tela
-  await d.caption("No menu lateral, abra Atendentes", { step: 1, hold: 600 });
-  await d.click(page.getByRole("button", { name: "Atendentes" }).first(), {
+  // Atendentes fica no fim do menu: a legenda sobe para não cobrir o botão
+  await d.caption("No menu lateral, abra Atendentes", { step: 1, hold: 600, top: true });
+  // Abre o menu e rola até o botão, que é o último da lista
+  const attendantsItem = page.getByRole("button", { name: "Atendentes" }).first();
+  await page.mouse.move(32, 300, { steps: 18 });
+  await d.wait(450);
+  await attendantsItem.evaluate((el) =>
+    el.scrollIntoView({ block: "center", behavior: "smooth" }),
+  );
+  await d.wait(700);
+  await d.click(attendantsItem, {
+    before: 1800,
     after: 1400,
   });
   await page.mouse.move(900, 400, { steps: 20 }); // recolhe o menu
