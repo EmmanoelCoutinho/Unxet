@@ -409,6 +409,10 @@ verify_jwt = false
 [functions.deal-task-reminders]
 verify_jwt = false
 
+# Pública: chamada pelos monitores externos da página de status
+[functions.health]
+verify_jwt = false
+
 [functions.send-whatsapp-message]
 verify_jwt = true
 
