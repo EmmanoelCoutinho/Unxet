@@ -14,6 +14,7 @@ import {
   RefreshCwIcon,
 } from "lucide-react";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import { fetchBacklog, type BacklogResult } from "../services/inboxAnalytics";
@@ -411,6 +412,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <TutorialButton tutorialId="painel" />
               <button
                 type="button"
                 onClick={refresh}

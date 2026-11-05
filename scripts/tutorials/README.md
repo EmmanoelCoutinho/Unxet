@@ -27,6 +27,20 @@ precisa ter sido iniciado com `supabase/functions/.env` presente. A tabela
 `channel_connections` precisa estar na publicação `supabase_realtime` do
 banco local para a tela mudar sozinha quando o número conecta.
 
+## Opções do roteiro
+
+- `meta.login`: quem aparece no vídeo (padrão `admin@teste.local`). O dia a dia
+  do atendente usa `mariana@teste.local` (Mariana Souza, Recepção), com a
+  mesma `LOCAL_TEST_PASSWORD`.
+- `meta.mockEvolution`: `true` (porta 8080) ou a lista de portas. Os envios de
+  mensagem da Empresa Teste vão para a 8787.
+- `bringActivityToToday` / `restoreActivity` (`db.mjs`): adiantam as datas
+  da atividade de demonstração para hoje (Painel e Relatórios cheios) e
+  devolvem no fim.
+- O banco local precisa ter na publicação `supabase_realtime` as tabelas que
+  o app escuta (conversations, messages, conversation_tags, channel_connections
+  e outras), senão a tela não muda sozinha.
+
 ## Música
 
 Todos os vídeos usam a mesma trilha, composta pelo próprio script (`music.mjs`,

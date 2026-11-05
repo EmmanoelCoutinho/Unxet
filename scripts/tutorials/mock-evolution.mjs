@@ -4,7 +4,8 @@
 //
 // A função do Supabase local chama EVOLUTION_API_URL (host.docker.internal
 // :8080 em supabase/functions/.env), então este servidor ocupa essa porta
-// enquanto a Evolution local de verdade estiver desligada.
+// enquanto a Evolution local de verdade estiver desligada. Os envios de
+// mensagem usam a URL gravada no número (na Empresa Teste, a porta 8787).
 
 import http from "node:http";
 import QRCode from "qrcode";
@@ -35,6 +36,13 @@ export async function startMockEvolution(port = MOCK_EVOLUTION_PORT) {
       return send(200, { instance: { state: "close" } });
     }
     if (url.startsWith("/instance/connect/")) return send(200, { base64: qr });
+    // Envio de mensagem: finge que saiu (o sistema só precisa do id)
+    if (url.startsWith("/message/")) {
+      return send(201, {
+        key: { id: `TUTORIAL${Date.now()}`, fromMe: true },
+        status: "PENDING",
+      });
+    }
     // webhook/set, settings/set e o que mais vier: tudo certo
     return send(200, {});
   });

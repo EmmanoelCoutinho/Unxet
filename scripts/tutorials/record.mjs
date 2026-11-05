@@ -3,7 +3,7 @@
 // Uso (na pasta scripts/tutorials, depois de `npm install`):
 //   node record.mjs criar-atendente --url http://localhost:5173
 //
-// - Entra com admin@teste.local usando LOCAL_TEST_PASSWORD (do .env.local
+// - Entra com admin@teste.local (ou meta.login) usando LOCAL_TEST_PASSWORD (do .env.local
 //   na raiz do projeto ou da variável de ambiente). Só o banco local.
 // - O login acontece fora do vídeo; a gravação começa já dentro do sistema.
 // - Junta a trilha padrão (music.mjs) e salva em public/tutorials/<id>.mp4
@@ -68,7 +68,12 @@ const main = async () => {
   const scenario = await import(`./scenarios/${scenarioId}.mjs`);
   cleanup(scenario.meta.cleanupEmails);
   const db = { sql, lit };
-  const stopMock = scenario.meta.mockEvolution ? await startMockEvolution() : null;
+  // mockEvolution: true (porta 8080) ou a lista de portas
+  const mockPorts =
+    scenario.meta.mockEvolution === true ? [8080] : scenario.meta.mockEvolution || [];
+  const stops = [];
+  for (const port of mockPorts) stops.push(await startMockEvolution(port));
+  const stopMock = stops.length ? () => Promise.all(stops.map((stop) => stop())) : null;
   const state = scenario.prepare ? await scenario.prepare(db) : undefined;
   try {
     await record(scenario, db);
@@ -85,7 +90,8 @@ const record = async (scenario, db) => {
   const loginContext = await browser.newContext({ baseURL, viewport: VIEWPORT });
   const loginPage = await loginContext.newPage();
   await loginPage.goto("/login");
-  await loginPage.locator('input[type="email"]').fill("admin@teste.local");
+  // Quem aparece no vídeo: admin (padrão) ou atendente (meta.login)
+  await loginPage.locator('input[type="email"]').fill(scenario.meta.login ?? "admin@teste.local");
   await loginPage.locator('input[type="password"]').fill(readPassword());
   await loginPage.locator('button[type="submit"]').click();
   await loginPage.waitForURL(/\/inbox/, { timeout: 20000 });

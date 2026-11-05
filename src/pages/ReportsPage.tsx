@@ -12,6 +12,7 @@ import {
   ShieldCheckIcon,
 } from "lucide-react";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -807,6 +808,8 @@ export const ReportsPage: React.FC = () => {
               </div>
             </div>
 
+            <div className="flex flex-wrap items-center gap-2">
+            <TutorialButton tutorialId="relatorios" />
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button
@@ -839,6 +842,7 @@ export const ReportsPage: React.FC = () => {
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
             </DropdownMenu.Root>
+            </div>
           </div>
 
           <div className="space-y-3">
