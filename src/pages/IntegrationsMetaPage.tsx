@@ -117,6 +117,8 @@ type PlatformCardProps = {
   actionIcon?: React.ReactNode;
   actionAfterChildren?: boolean;
   children?: React.ReactNode;
+  // Tutorial em vídeo deste cartão (link "Ver tutorial" embaixo da descrição)
+  tutorialId?: string;
 };
 
 export const MetaIntegrationsPage: React.FC = () => {
@@ -587,6 +589,7 @@ export const MetaIntegrationsPage: React.FC = () => {
     actionIcon,
     actionAfterChildren = false,
     children,
+    tutorialId,
   }) => {
     const actionContent =
       actionLabel && onAction ? (
@@ -616,6 +619,9 @@ export const MetaIntegrationsPage: React.FC = () => {
             <div>
               <p className="text-sm font-semibold text-gray-900">{title}</p>
               <p className="text-xs text-gray-500">{description}</p>
+              {tutorialId ? (
+                <TutorialButton tutorialId={tutorialId} variant="link" className="mt-1 text-xs" />
+              ) : null}
             </div>
           </div>
           {renderStatus(status)}
@@ -660,7 +666,6 @@ export const MetaIntegrationsPage: React.FC = () => {
                 </p>
               </span>
             </div>
-            <TutorialButton tutorialId="conectar-whatsapp-qr" />
           </div>
           <SettingsTabs />
         </div>
@@ -710,6 +715,7 @@ export const MetaIntegrationsPage: React.FC = () => {
               <div className="mt-6 grid gap-3 md:grid-cols-2">
                 <PlatformCard
                   title="WhatsApp via Meta"
+                  tutorialId="conectar-whatsapp-oficial"
                   description="Integração oficial da Meta Cloud API."
                   status={whatsappMeta?.status}
                   icon={
@@ -736,6 +742,7 @@ export const MetaIntegrationsPage: React.FC = () => {
                 {multipleWhatsapp ? (
                   <PlatformCard
                     title="WhatsApp via QR Code"
+                    tutorialId="conectar-whatsapp-qr"
                     description="Conecte um ou mais WhatsApps escaneando um QR Code."
                     status={evolutionSummaryStatus}
                     icon={
@@ -761,6 +768,7 @@ export const MetaIntegrationsPage: React.FC = () => {
                 ) : (
                   <PlatformCard
                     title="WhatsApp via QR Code"
+                    tutorialId="conectar-whatsapp-qr"
                     description="Conecte um WhatsApp existente escaneando um QR Code."
                     status={whatsappEvolution?.status}
                     icon={
