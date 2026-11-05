@@ -8,6 +8,9 @@
 // - O login acontece fora do vídeo; a gravação começa já dentro do sistema.
 // - Junta a trilha padrão (music.mjs) e salva em public/tutorials/<id>.mp4
 //   (H.264 + AAC, toca em qualquer navegador, inclusive no iPhone).
+// - O roteiro pode exportar prepare()/restore() para arrumar o banco local
+//   antes e desfazer depois (restore roda mesmo se a gravação falhar), e
+//   pedir meta.mockEvolution para usar a Evolution de mentira.
 
 import { chromium } from "playwright";
 import { execFileSync } from "node:child_process";
@@ -17,11 +20,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDirector } from "./director.mjs";
 import { writeMusic } from "./music.mjs";
+import { lit, sql } from "./db.mjs";
+import { startMockEvolution } from "./mock-evolution.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..", "..");
 const VIEWPORT = { width: 1280, height: 720 };
-const DB_CONTAINER = "supabase_db_mensageria_service_ia";
 
 const args = process.argv.slice(2);
 const scenarioId = args.find((a) => !a.startsWith("--"));
@@ -56,20 +60,25 @@ const assertLocal = () => {
 
 const cleanup = (emails) => {
   if (!emails?.length) return;
-  const list = emails.map((e) => `'${e.replace(/'/g, "''")}'`).join(",");
-  execFileSync(
-    "docker",
-    ["exec", "-i", DB_CONTAINER, "psql", "-U", "postgres", "-q", "-c",
-      `delete from auth.users where email in (${list});`],
-    { stdio: ["ignore", "ignore", "ignore"] },
-  );
+  sql(`delete from auth.users where email in (${emails.map(lit).join(",")});`);
 };
 
 const main = async () => {
   assertLocal();
   const scenario = await import(`./scenarios/${scenarioId}.mjs`);
   cleanup(scenario.meta.cleanupEmails);
+  const db = { sql, lit };
+  const stopMock = scenario.meta.mockEvolution ? await startMockEvolution() : null;
+  const state = scenario.prepare ? await scenario.prepare(db) : undefined;
+  try {
+    await record(scenario, db);
+  } finally {
+    if (scenario.restore) await scenario.restore(db, state);
+    if (stopMock) await stopMock();
+  }
+};
 
+const record = async (scenario, db) => {
   const browser = await chromium.launch({ headless: !headed });
 
   // Login fora do vídeo
@@ -97,7 +106,7 @@ const main = async () => {
   await director.install();
 
   try {
-    await scenario.run(page, director);
+    await scenario.run(page, director, db);
   } catch (err) {
     await page.screenshot({ path: path.join(here, "erro.png") }).catch(() => {});
     console.error("Falhou; a tela no momento do erro está em scripts/tutorials/erro.png");

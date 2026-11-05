@@ -31,6 +31,25 @@ const OVERLAY_SCRIPT = () => {
         min-width: 30px; height: 30px; padding: 0 8px; border-radius: 9999px;
         background: #0A84FF; font-size: 15px; }
       #__tut-caption .step:empty { display: none; }
+      #__tut-panel { position: fixed; z-index: 2147483647; pointer-events: none;
+        right: 28px; top: 50%; transform: translate(24px, -50%); width: 340px;
+        background: #fff; color: #111827; border-radius: 18px; padding: 20px 22px;
+        font-family: Inter, system-ui, sans-serif; border: 1px solid #e5e7eb;
+        box-shadow: 0 18px 50px rgba(15,23,42,.28); opacity: 0;
+        transition: opacity .3s, transform .3s; }
+      #__tut-panel.show { opacity: 1; transform: translate(0, -50%); }
+      #__tut-panel.left { right: auto; left: 84px; transform: translate(-24px, -50%); }
+      #__tut-panel.left.show { transform: translate(0, -50%); }
+      #__tut-panel .head { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; }
+      #__tut-panel .head span { display: flex; width: 34px; height: 34px; border-radius: 10px;
+        align-items: center; justify-content: center; background: #dcfce7; font-size: 18px; }
+      #__tut-panel ol { margin: 14px 0 0; padding: 0; list-style: none; counter-reset: s; }
+      #__tut-panel li { counter-increment: s; display: flex; gap: 10px; margin-top: 10px;
+        font-size: 15px; line-height: 1.4; opacity: .35; transition: opacity .3s; }
+      #__tut-panel li.on { opacity: 1; }
+      #__tut-panel li::before { content: counter(s); flex-shrink: 0; width: 24px; height: 24px;
+        border-radius: 9999px; background: #16a34a; color: #fff; font-size: 13px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center; }
       #__tut-title { position: fixed; inset: 0; z-index: 2147483647; pointer-events: none;
         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
         background: linear-gradient(135deg, #0A84FF, #0052cc); color: #fff;
@@ -54,7 +73,10 @@ const OVERLAY_SCRIPT = () => {
     const title = document.createElement("div");
     title.id = "__tut-title";
     title.innerHTML = '<img src="/logo-unxet.png" alt=""><h1></h1><p></p>';
-    document.body.append(ring, cursor, caption, title);
+    const panel = document.createElement("div");
+    panel.id = "__tut-panel";
+    panel.innerHTML = '<div class="head"><span>📱</span><b></b></div><ol></ol>';
+    document.body.append(ring, cursor, caption, panel, title);
 
     window.addEventListener(
       "mousemove",
@@ -170,6 +192,41 @@ export function createDirector(page) {
         [text, String(step), top],
       );
       await sleep(hold);
+    },
+
+    /**
+     * Cartão ao lado com passos fora da tela (ex.: o que fazer no celular).
+     * Os passos acendem um a um, a cada `stepMs`. `side: "left"` põe o
+     * cartão à esquerda, quando o que importa está à direita.
+     */
+    async panel(heading, steps, { stepMs = 1800, side = "right" } = {}) {
+      await page.evaluate(
+        ([h, list, isLeft]) => {
+          const el = document.getElementById("__tut-panel");
+          el.querySelector("b").textContent = h;
+          el.querySelector("ol").innerHTML = list
+            .map((t) => `<li><span>${t}</span></li>`)
+            .join("");
+          el.classList.toggle("left", isLeft);
+          el.classList.add("show");
+        },
+        [heading, steps, side === "left"],
+      );
+      for (let i = 0; i < steps.length; i++) {
+        await sleep(i === 0 ? 400 : stepMs);
+        await page.evaluate(
+          (n) => document.querySelectorAll("#__tut-panel li")[n]?.classList.add("on"),
+          i,
+        );
+      }
+      await sleep(stepMs);
+    },
+
+    async hidePanel() {
+      await page.evaluate(() =>
+        document.getElementById("__tut-panel").classList.remove("show"),
+      );
+      await sleep(350);
     },
 
     async hideCaption() {
