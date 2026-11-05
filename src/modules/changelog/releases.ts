@@ -76,7 +76,7 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
-    text: "Tutoriais: vídeos curtos que mostram, passo a passo, como usar a Unxet. Fica no rodapé do menu lateral. Já dá para ver como conectar o WhatsApp por QR Code ou pela conta oficial da Meta, configurar as automações de conversa, criar departamentos, usar a carteira de clientes e o funil de vendas, criar campanhas e montar um bot com menu, criar uma atendente, fazer um atendimento do início ao fim, ler o Painel e gerar relatórios. Eles também abrem pelo botão Ver tutorial nas telas de cada assunto. Novos vídeos chegam aos poucos.",
+    text: "Tutoriais: vídeos curtos que mostram, passo a passo, como usar a Unxet. Fica no rodapé do menu lateral. São 18 vídeos, organizados em trilhas: primeiros passos (conectar o WhatsApp, criar departamentos e atendentes, automações), atendimento no dia a dia (a tela de atendimentos, transferir, mensagens rápidas, etiquetas, arquivos e chat interno), clientes e vendas, automação (campanhas e bot) e gestão (Painel e Relatórios). Eles também abrem pelo botão Ver tutorial nas telas de cada assunto.",
   },
   {
     kind: "new",

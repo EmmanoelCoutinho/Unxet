@@ -12,6 +12,7 @@ import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { CgClose } from "react-icons/cg";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 type ModalMode = "create" | "edit" | "delete";
 
@@ -116,13 +117,14 @@ export const QuickMessagesPage: React.FC = () => {
                 Mensagens rápidas
               </h1>
               <p className="mt-1 text-sm text-gray-500">
-                Administradores gerenciam os atalhos da Empresa. Agentes podem
+                Administradores gerenciam os atalhos da Empresa. Atendentes podem
                 apenas consultar e usar na conversa.
               </p>
               <p className="mt-1 text-sm text-gray-500">
                 Na conversa, digite <span className="font-semibold">/</span> no
                 campo de mensagem para escolher uma delas sem abrir o menu.
               </p>
+              <TutorialButton tutorialId="usar-mensagens-rapidas" className="mt-1" />
             </div>
           </div>
 
