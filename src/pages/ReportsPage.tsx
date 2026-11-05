@@ -12,6 +12,7 @@ import {
   ShieldCheckIcon,
 } from "lucide-react";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -804,6 +805,7 @@ export const ReportsPage: React.FC = () => {
                 <p className="text-sm text-slate-500">
                   Números da operação de {companyName} para apoiar decisões, com exportação em PDF e planilha
                 </p>
+                <TutorialButton tutorialId="relatorios" variant="link" className="mt-1" />
               </div>
             </div>
 

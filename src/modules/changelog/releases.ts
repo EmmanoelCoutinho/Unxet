@@ -76,7 +76,7 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
-    text: "Tutoriais: vídeos curtos que mostram, passo a passo, como usar a Unxet. Fica no rodapé do menu lateral. Os primeiros ensinam a conectar o WhatsApp por QR Code e a criar uma atendente, e também abrem pelo botão Ver tutorial nas telas Integrações e Atendentes. Novos vídeos chegam aos poucos.",
+    text: "Tutoriais: vídeos curtos que mostram, passo a passo, como usar a Unxet. Fica no rodapé do menu lateral. Já dá para ver como conectar o WhatsApp por QR Code, criar uma atendente, fazer um atendimento do início ao fim, ler o Painel e gerar relatórios. Eles também abrem pelo botão Ver tutorial nas telas Integrações, Atendentes, Painel e Relatórios. Novos vídeos chegam aos poucos.",
   },
   {
     kind: "new",

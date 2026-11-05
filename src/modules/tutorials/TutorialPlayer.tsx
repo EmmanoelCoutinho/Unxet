@@ -111,11 +111,14 @@ export const TutorialPlayer: React.FC<PlayerProps> = ({
 /**
  * Atalho "Ver tutorial" para colocar no cabeçalho de uma tela.
  * Some sozinho enquanto o tutorial ainda não tem vídeo.
+ * `variant="link"`: link discreto (embaixo do subtítulo), para cabeçalhos
+ * que já têm vários botões de ação.
  */
-export const TutorialButton: React.FC<{ tutorialId: string; className?: string }> = ({
-  tutorialId,
-  className = "",
-}) => {
+export const TutorialButton: React.FC<{
+  tutorialId: string;
+  className?: string;
+  variant?: "button" | "link";
+}> = ({ tutorialId, className = "", variant = "button" }) => {
   const tutorial = TUTORIALS.find((t) => t.id === tutorialId);
   const [open, setOpen] = useState(false);
   const [watched, setWatched] = useState(() =>
@@ -130,9 +133,13 @@ export const TutorialButton: React.FC<{ tutorialId: string; className?: string }
         type="button"
         onClick={() => setOpen(true)}
         title={tutorial.title}
-        className={`inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:border-blue-200 hover:text-blue-700 ${className}`}
+        className={
+          variant === "link"
+            ? `inline-flex items-center gap-1.5 rounded text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline ${className}`
+            : `inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:border-blue-200 hover:text-blue-700 ${className}`
+        }
       >
-        <PlayCircleIcon className="h-4 w-4 text-blue-600" />
+        <PlayCircleIcon className={variant === "link" ? "h-4 w-4" : "h-4 w-4 text-blue-600"} />
         Ver tutorial
       </button>
       <TutorialPlayer

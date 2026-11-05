@@ -110,6 +110,16 @@ export const TUTORIALS: Tutorial[] = [
 
   // Atendimento no dia a dia
   {
+    id: "dia-a-dia-atendente",
+    track: "atendimento",
+    title: "Um atendimento do início ao fim",
+    description:
+      "Pegue o cliente da fila, responda, marque com etiqueta e finalize: o caminho de cada conversa.",
+    video: "/tutorials/dia-a-dia-atendente.mp4#t=1",
+    duration: "0:53",
+    path: "/inbox",
+  },
+  {
     id: "conhecer-atendimentos",
     track: "atendimento",
     title: "Conhecer a tela de atendimentos",
@@ -200,6 +210,8 @@ export const TUTORIALS: Tutorial[] = [
     track: "gestao",
     title: "Ler o Painel",
     description: "Veja o que está acontecendo agora no atendimento.",
+    video: "/tutorials/painel.mp4#t=1",
+    duration: "0:53",
     path: "/inbox",
     adminOnly: true,
   },
@@ -208,6 +220,8 @@ export const TUTORIALS: Tutorial[] = [
     track: "gestao",
     title: "Gerar e exportar relatórios",
     description: "Resultados por período, em PDF ou planilha.",
+    video: "/tutorials/relatorios.mp4#t=1",
+    duration: "0:52",
     path: "/inbox/reports",
     adminOnly: true,
   },
