@@ -922,7 +922,7 @@ export const DepartmentsPage: React.FC = () => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSubmitting || !isAdmin}
-                className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full bg-[#0A84FF] hover:bg-[#0A84FF]/90 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting
                   ? "Salvando..."
@@ -957,7 +957,7 @@ export const DepartmentsPage: React.FC = () => {
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isDeleting ? "Excluindo..." : "Excluir"}
               </button>
