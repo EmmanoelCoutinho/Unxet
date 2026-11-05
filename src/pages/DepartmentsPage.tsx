@@ -630,10 +630,10 @@ export const DepartmentsPage: React.FC = () => {
               <p className="text-sm text-gray-500">
                 Apenas administradores podem alterar departamentos.
               </p>
+              <TutorialButton tutorialId="criar-departamentos" className="mt-1" />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <TutorialButton tutorialId="criar-departamentos" />
             <button
               type="button"
               onClick={openCreateModal}

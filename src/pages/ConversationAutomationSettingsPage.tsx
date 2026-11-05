@@ -402,7 +402,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             <p className="mt-1 text-sm text-slate-500">
               Configure regras automáticas de SLA e ciclo de vida das conversas.
             </p>
-            <TutorialButton tutorialId="automacoes-conversa" variant="link" className="mt-1" />
+            <TutorialButton tutorialId="automacoes-conversa" className="mt-1" />
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 pt-2 sm:py-4">

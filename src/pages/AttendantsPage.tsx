@@ -861,11 +861,11 @@ export const AttendantsPage: React.FC = () => {
                       ". Para convidar mais pessoas, fale com a Unxet sobre mudar de plano."}
                   </p>
                 )}
+                <TutorialButton tutorialId="criar-atendente" className="mt-1" />
               </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <TutorialButton tutorialId="criar-atendente" />
             <button
               type="button"
               onClick={handleOpenInvite}

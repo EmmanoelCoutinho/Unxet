@@ -409,7 +409,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                   Como está o atendimento agora
                   {data ? ` · atualizado às ${formatTime(data.generatedAt)}` : ""}
                 </p>
-                <TutorialButton tutorialId="painel" variant="link" className="mt-1" />
+                <TutorialButton tutorialId="painel" className="mt-1" />
               </div>
             </div>
             <div className="flex flex-wrap gap-2">

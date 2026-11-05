@@ -620,7 +620,7 @@ export const MetaIntegrationsPage: React.FC = () => {
               <p className="text-sm font-semibold text-gray-900">{title}</p>
               <p className="text-xs text-gray-500">{description}</p>
               {tutorialId ? (
-                <TutorialButton tutorialId={tutorialId} variant="link" className="mt-1 text-xs" />
+                <TutorialButton tutorialId={tutorialId} className="mt-1" />
               ) : null}
             </div>
           </div>
