@@ -107,6 +107,15 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "improved",
     text: "Os botões de salvar nas janelas de Atendentes e Departamentos e na tela de criar senha agora seguem o azul da Unxet, e o de excluir departamento ficou vermelho.",
   },
+  {
+    kind: "fixed",
+    text: "Avisos dentro da conversa feitos por outra pessoa (como aceitar ou transferir) e mensagens rápidas novas agora aparecem na hora, sem precisar recarregar a página.",
+  },
+  {
+    kind: "fixed",
+    text: "O andamento das Campanhas Meta agora atualiza sozinho durante o envio.",
+    adminOnly: true,
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
