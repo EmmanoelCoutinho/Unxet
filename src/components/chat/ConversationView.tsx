@@ -45,6 +45,7 @@ import { sharedContactText, type SharedContact } from "../../lib/sharedContact";
 import { whatsappConnectionLabel } from "../../lib/whatsappConnections";
 import { useWhatsappConnections } from "../../hooks/useWhatsappConnections";
 import { useFloatingChats } from "../../modules/floatingChats/FloatingChatsContext";
+import { useConversationList } from "../../contexts/ConversationsContext";
 import { WindowControls, type WindowControlsProps } from "./WindowControls";
 
 type UiTag = { id: string; name: string; color: string };
@@ -220,6 +221,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const { getDraft, setDraft } = useFloatingChats();
   const { authUser } = useAuth();
   const { clinicId, membership, hasFeature } = useClinic();
+  const { refetch: refetchConversationList } = useConversationList();
   const { hasMultiple: hasMultipleWhatsapp } = useWhatsappConnections(clinicId);
   const isAdmin = membership?.role === "admin";
   const userNames = useClinicUserNames(clinicId, isAdmin);
@@ -951,9 +953,14 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       setTransferringConversation(false);
       toast.success("Conversa transferida.");
 
+      // Quem transferiu pode perder o acesso à conversa (outro setor, sem
+      // responsável): o aviso em tempo real dessa mudança não chega até essa
+      // pessoa, então a lista é recarregada para tirar a conversa de lá
+      void refetchConversationList();
+
       onExit();
     },
-    [id, onExit],
+    [id, onExit, refetchConversationList],
   );
 
   const addTagToConversation = async (

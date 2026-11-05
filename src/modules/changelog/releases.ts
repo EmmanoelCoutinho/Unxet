@@ -116,6 +116,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     text: "O andamento das Campanhas Meta agora atualiza sozinho durante o envio.",
     adminOnly: true,
   },
+  {
+    kind: "fixed",
+    text: "Ao transferir uma conversa para outro setor, ela agora sai na hora da sua lista de atendimentos. Antes, continuava lá até recarregar a página.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
