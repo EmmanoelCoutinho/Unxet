@@ -134,13 +134,17 @@ export const TUTORIALS: Tutorial[] = [
     track: "atendimento",
     title: "Conhecer a tela de atendimentos",
     description: "Filtros, abas e o status de cada conversa.",
+    video: "/tutorials/conhecer-atendimentos.mp4#t=1",
+    duration: "0:52",
     path: "/inbox",
   },
   {
-    id: "responder-transferir-finalizar",
+    id: "transferir-conversa",
     track: "atendimento",
-    title: "Responder, transferir e finalizar",
-    description: "O caminho completo de uma conversa.",
+    title: "Transferir uma conversa",
+    description: "Passe o cliente para outro setor, com todo o histórico.",
+    video: "/tutorials/transferir-conversa.mp4#t=1",
+    duration: "0:32",
     path: "/inbox",
   },
   {
@@ -148,6 +152,8 @@ export const TUTORIALS: Tutorial[] = [
     track: "atendimento",
     title: "Usar mensagens rápidas",
     description: "Respostas prontas com poucos cliques.",
+    video: "/tutorials/usar-mensagens-rapidas.mp4#t=1",
+    duration: "0:51",
     path: "/inbox/quick-messages",
   },
   {
@@ -155,6 +161,8 @@ export const TUTORIALS: Tutorial[] = [
     track: "atendimento",
     title: "Usar etiquetas",
     description: "Marque as conversas para encontrá-las depois.",
+    video: "/tutorials/usar-etiquetas.mp4#t=1",
+    duration: "0:55",
     path: "/inbox/tags",
   },
   {
@@ -162,6 +170,8 @@ export const TUTORIALS: Tutorial[] = [
     track: "atendimento",
     title: "Enviar áudio, imagem e arquivo",
     description: "Mande mais do que texto para o cliente.",
+    video: "/tutorials/enviar-arquivos.mp4#t=1",
+    duration: "0:46",
     path: "/inbox",
   },
   {
@@ -169,6 +179,8 @@ export const TUTORIALS: Tutorial[] = [
     track: "atendimento",
     title: "Conversar com a equipe",
     description: "Use o chat interno sem sair da Unxet.",
+    video: "/tutorials/chat-interno.mp4#t=1",
+    duration: "0:37",
     path: "/inbox/team",
   },
 

@@ -8,6 +8,7 @@ import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import * as Dialog from "@radix-ui/react-dialog";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 type TagItem = {
   id: string;
@@ -283,6 +284,7 @@ export const Tags: React.FC = () => {
             <p className="text-sm text-gray-500">
               Gerencie as etiquetas da sua empresa para organizar atendimentos.
             </p>
+            <TutorialButton tutorialId="usar-etiquetas" className="mt-1" />
           </div>
         </div>
       </div>
