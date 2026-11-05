@@ -50,6 +50,7 @@ import {
   startsIn,
 } from "../modules/scheduledMessages/utils/schedule";
 import { CAMPAIGNS_PATH } from "../modules/scheduledMessages/paths";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 type Filter = "all" | "upcoming" | "sent" | "problems" | "cancelled";
 
@@ -187,6 +188,7 @@ export const ScheduledMessagesPage: React.FC = () => {
                 <p className="mt-0.5 text-sm text-slate-500">
                   Envie uma mensagem para vários clientes e acompanhe quem leu, respondeu e aderiu.
                 </p>
+                <TutorialButton tutorialId="criar-campanha" className="mt-1" />
               </div>
             </div>
             <button
