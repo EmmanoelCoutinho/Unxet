@@ -805,7 +805,7 @@ export const ReportsPage: React.FC = () => {
                 <p className="text-sm text-slate-500">
                   Números da operação de {companyName} para apoiar decisões, com exportação em PDF e planilha
                 </p>
-                <TutorialButton tutorialId="relatorios" variant="link" className="mt-1" />
+                <TutorialButton tutorialId="relatorios" className="mt-1" />
               </div>
             </div>
 
