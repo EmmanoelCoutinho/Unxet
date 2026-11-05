@@ -12,6 +12,7 @@ import { CloseButton } from "../components/ui/CloseButton";
 import { supabase } from "../lib/supabaseClient";
 import { useClinic } from "../contexts/ClinicContext";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 type Department = {
   id: string;
@@ -631,15 +632,18 @@ export const DepartmentsPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            disabled={!isAdmin}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <PlusIcon className="h-4 w-4" />
-            Criar departamento
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <TutorialButton tutorialId="criar-departamentos" />
+            <button
+              type="button"
+              onClick={openCreateModal}
+              disabled={!isAdmin}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <PlusIcon className="h-4 w-4" />
+              Criar departamento
+            </button>
+          </div>
         </div>
       </div>
 
@@ -696,7 +700,7 @@ export const DepartmentsPage: React.FC = () => {
                     <th className="px-4 sm:px-6 py-4">Nome</th>
                     <th className="px-4 sm:px-6 py-4">Avaliação</th>
                     <th className="px-4 sm:px-6 py-4">Status</th>
-                    <th className="px-4 sm:px-6 py-4">Default</th>
+                    <th className="px-4 sm:px-6 py-4">Padrão</th>
                     <th className="px-4 sm:px-6 py-4">Ações</th>
                   </tr>
                 </thead>
