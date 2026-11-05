@@ -31,6 +31,7 @@ import {
   stageTotals,
   topPosition,
 } from "../modules/leads/utils/board";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 export const LEADS_PATH = "/inbox/leads";
 const PIPELINE_STORAGE_KEY = "unxet:leads:pipeline";
@@ -251,6 +252,7 @@ export const LeadsKanbanPage: React.FC = () => {
                 {openTotals.value > 0 ? ` · ${formatCompactCurrency(openTotals.value)} em negociação` : ""}
                 {` · ganhos e perdidos dos últimos ${CLOSED_VISIBLE_DAYS} dias`}
               </p>
+              <TutorialButton tutorialId="funil-vendas" className="mt-1" />
             </div>
           </div>
           <div className="flex items-center gap-2">

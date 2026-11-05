@@ -175,6 +175,8 @@ export const TUTORIALS: Tutorial[] = [
     track: "clientes-vendas",
     title: "Carteira de clientes",
     description: "Cadastre, busque e anote informações dos clientes.",
+    video: "/tutorials/carteira-clientes.mp4#t=1",
+    duration: "1:03",
     path: "/contacts",
     adminOnly: true,
   },
@@ -183,6 +185,8 @@ export const TUTORIALS: Tutorial[] = [
     track: "clientes-vendas",
     title: "Funil de vendas",
     description: "Crie negócios, mova entre etapas e agende tarefas.",
+    video: "/tutorials/funil-vendas.mp4#t=1",
+    duration: "1:28",
     path: "/inbox/leads",
   },
 
