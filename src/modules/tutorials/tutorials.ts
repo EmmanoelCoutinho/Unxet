@@ -84,6 +84,8 @@ export const TUTORIALS: Tutorial[] = [
     track: "primeiros-passos",
     title: "Criar departamentos",
     description: "Separe os atendimentos por setor, como Vendas e Suporte.",
+    video: "/tutorials/criar-departamentos.mp4#t=1",
+    duration: "1:03",
     path: "/inbox/departments",
     adminOnly: true,
   },
