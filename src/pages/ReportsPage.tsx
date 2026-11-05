@@ -805,11 +805,10 @@ export const ReportsPage: React.FC = () => {
                 <p className="text-sm text-slate-500">
                   Números da operação de {companyName} para apoiar decisões, com exportação em PDF e planilha
                 </p>
+                <TutorialButton tutorialId="relatorios" variant="link" className="mt-1" />
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-            <TutorialButton tutorialId="relatorios" />
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button
@@ -842,7 +841,6 @@ export const ReportsPage: React.FC = () => {
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
             </DropdownMenu.Root>
-            </div>
           </div>
 
           <div className="space-y-3">
