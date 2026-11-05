@@ -1208,7 +1208,7 @@ export const AttendantsPage: React.FC = () => {
                   type="button"
                   onClick={handleSave}
                   disabled={!isAdmin || isSaving}
-                  className="rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+                  className="rounded-full bg-[#0A84FF] hover:bg-[#0A84FF]/90 px-5 py-2 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
                   {isSaving ? "Salvando..." : "Salvar alterações"}
                 </button>

@@ -103,6 +103,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     text: "Na tela Departamentos, a coluna que indica o departamento padrão aparecia como Default; agora se chama Padrão.",
     adminOnly: true,
   },
+  {
+    kind: "improved",
+    text: "Os botões de salvar nas janelas de Atendentes e Departamentos e na tela de criar senha agora seguem o azul da Unxet, e o de excluir departamento ficou vermelho.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
