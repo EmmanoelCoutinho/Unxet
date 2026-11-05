@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import {
   SendIcon,
   PaperclipIcon,
@@ -189,6 +189,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       el.setSelectionRange(nextCaret, nextCaret);
     });
   };
+
+  // O campo cresce com o texto até o max-h; só depois disso aparece a rolagem
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const borders = el.offsetHeight - el.clientHeight;
+    const maxHeight = parseFloat(getComputedStyle(el).maxHeight) || Infinity;
+    const needed = el.scrollHeight + borders;
+    el.style.height = `${Math.min(needed, maxHeight)}px`;
+    el.style.overflowY = needed > maxHeight ? "auto" : "hidden";
+  }, [message]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1199,7 +1211,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           placeholder={placeholderText}
           rows={1}
           disabled={disabled}
-          className={`min-h-11 min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2.5 resize-none ${sm("sm:min-h-12 sm:px-4 sm:py-3")} max-h-32 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400`}
+          className={`min-h-11 min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2.5 resize-none ${sm("sm:min-h-12 sm:px-4 sm:py-3")} max-h-40 overflow-y-hidden focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400`}
         />
 
         <Button

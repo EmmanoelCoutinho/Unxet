@@ -82,6 +82,22 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "new",
     text: "Modo escuro: no menu do seu perfil (canto superior direito), escolha entre tema Claro, Escuro ou Automático, que acompanha o modo do celular ou do computador.",
   },
+  {
+    kind: "improved",
+    text: "Conversas mais confortáveis de ler: os balões de mensagem ficaram mais largos no computador, a janela flutuante de conversa ficou maior e o cabeçalho dela foi reorganizado.",
+  },
+  {
+    kind: "improved",
+    text: "O campo de mensagem cresce conforme você digita, sem mostrar a barra de rolagem logo na segunda linha. As barras de rolagem do sistema também ficaram mais finas e discretas.",
+  },
+  {
+    kind: "improved",
+    text: "As janelas do sistema agora fecham pelo X no canto superior, no lugar do botão Fechar.",
+  },
+  {
+    kind: "improved",
+    text: "Funil de vendas: clique e arraste o fundo do quadro para ver as outras etapas para os lados.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

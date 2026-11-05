@@ -18,6 +18,40 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Barra de rolagem fina e discreta no sistema todo (acompanha o tema) */
+/* Firefox não tem ::-webkit-scrollbar. Nos outros navegadores essas duas
+   propriedades desligariam o estilo abaixo, então ficam só para o Firefox. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--c-base-slate-300)) transparent;
+  }
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--c-base-slate-300));
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--c-base-slate-400));
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Tema escuro: as cores das classes vêm das variáveis do tailwind.config.js */
 html.dark body {
   background-color: rgb(var(--c-bg-slate-50));

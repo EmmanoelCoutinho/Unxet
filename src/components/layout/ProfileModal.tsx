@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../contexts/AuthContext";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
+import { CloseButton } from "../ui/CloseButton";
 import { LegalLinks } from "../LegalLinks";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
 import type { PushStatus } from "../../lib/pushNotifications";
@@ -137,9 +138,12 @@ export const ProfileModal: React.FC<{
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
       <div className="absolute left-1/2 top-1/2 max-h-[90dvh] w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-xl">
-        <div className="border-b border-gray-200 p-5">
-          <h3 className="text-base font-semibold text-gray-900">Meu perfil</h3>
-          <p className="mt-1 text-sm text-gray-500">{authUser?.email}</p>
+        <div className="flex items-start justify-between gap-3 border-b border-gray-200 p-5">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-gray-900">Meu perfil</h3>
+            <p className="mt-1 truncate text-sm text-gray-500">{authUser?.email}</p>
+          </div>
+          <CloseButton onClick={onClose} className="-mr-1 -mt-1" />
         </div>
 
         <div className="space-y-6 p-5">
@@ -195,11 +199,8 @@ export const ProfileModal: React.FC<{
           </section>
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-gray-200 p-4">
+        <div className="border-t border-gray-200 p-4">
           <LegalLinks className="!justify-start" />
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Fechar
-          </Button>
         </div>
       </div>
     </div>,

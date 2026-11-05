@@ -8,7 +8,7 @@ export type FloatingBox = {
   title: string;
 };
 
-export const BOX_WIDTH = 360;
+export const BOX_WIDTH = 400;
 export const MINIMIZED_WIDTH = 232;
 export const BOX_GAP = 12;
 export const OVERFLOW_WIDTH = 56;

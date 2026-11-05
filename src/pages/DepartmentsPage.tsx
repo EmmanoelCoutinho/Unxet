@@ -8,6 +8,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { Input } from "../components/ui/Input";
+import { CloseButton } from "../components/ui/CloseButton";
 import { supabase } from "../lib/supabaseClient";
 import { useClinic } from "../contexts/ClinicContext";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
@@ -826,13 +827,7 @@ export const DepartmentsPage: React.FC = () => {
                   ? "Criar departamento"
                   : "Editar departamento"}
               </h2>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="text-sm text-slate-500 hover:text-slate-700"
-              >
-                Fechar
-              </button>
+              <CloseButton onClick={closeModal} />
             </div>
 
             <div className="mt-5 space-y-4">

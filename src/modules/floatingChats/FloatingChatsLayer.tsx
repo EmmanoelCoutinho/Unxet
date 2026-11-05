@@ -230,7 +230,7 @@ export function FloatingChatsLayer() {
           <section
             key={box.id}
             aria-label={`Conversa com ${nameOf(box)}`}
-            className="pointer-events-auto flex h-[min(560px,calc(100dvh-5.5rem))] w-[360px] flex-col overflow-hidden rounded-t-xl border border-b-0 border-gray-200 bg-white shadow-2xl"
+            className="pointer-events-auto flex h-[min(560px,calc(100dvh-5.5rem))] w-[400px] flex-col overflow-hidden rounded-t-xl border border-b-0 border-gray-200 bg-white shadow-2xl"
           >
             <BoxErrorBoundary onClose={() => close(box.id)}>
               <ConversationView
