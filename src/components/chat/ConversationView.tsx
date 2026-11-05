@@ -30,6 +30,7 @@ import {
   useClinicUserNames,
 } from "../../hooks/useClinicUserNames";
 import { Button } from "../ui/Button";
+import { CloseButton } from "../ui/CloseButton";
 import { ChatHeader } from "./ChatHeader";
 import { ConversationCampaignBanner } from "../../modules/scheduledMessages/components/ConversationCampaignBanner";
 import { ConversationDealBar } from "../../modules/leads/components/ConversationDealBar";
@@ -1619,13 +1620,19 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           />
 
           <div className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl border border-gray-200 bg-white shadow-xl sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[92vw] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl">
-            <div className="shrink-0 p-5 border-b border-gray-200">
-              <h3 className="text-base font-semibold text-gray-900">
-                Gerenciar Etiquetas
-              </h3>
-              <p className="text-sm text-gray-500 mt-1">
-                Selecione as etiquetas que deseja aplicar nesta conversa.
-              </p>
+            <div className="flex shrink-0 items-start justify-between gap-3 p-5 border-b border-gray-200">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-gray-900">
+                  Gerenciar Etiquetas
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Selecione as etiquetas que deseja aplicar nesta conversa.
+                </p>
+              </div>
+              <CloseButton
+                onClick={() => setIsManageTagsOpen(false)}
+                className="-mr-1 -mt-1"
+              />
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -1672,15 +1679,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
                   })}
                 </div>
               )}
-            </div>
-
-            <div className="shrink-0 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] border-t border-gray-200 flex justify-end">
-              <Button
-                variant="ghost"
-                onClick={() => setIsManageTagsOpen(false)}
-              >
-                Fechar
-              </Button>
+              <div className="pb-[env(safe-area-inset-bottom)]" />
             </div>
           </div>
         </div>

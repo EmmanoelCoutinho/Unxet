@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import { useClinic } from "../contexts/ClinicContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useClinicUserNames } from "../hooks/useClinicUserNames";
+import { useDragToScroll } from "../hooks/useDragToScroll";
 import { Button } from "../components/ui/Button";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { useCampaignTags } from "../modules/scheduledMessages/hooks/useScheduledMessages";
@@ -82,6 +83,8 @@ export const LeadsKanbanPage: React.FC = () => {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // Clicar e arrastar o fundo do quadro rola as etapas para os lados
+  const boardScroll = useDragToScroll<HTMLDivElement>();
 
   // ?deal=<id> (lembrete por push, link da conversa) abre o cartão
   useDealFromQuery(location.search, (id) => setOpenDealId(id));
@@ -345,7 +348,13 @@ export const LeadsKanbanPage: React.FC = () => {
       </div>
 
       {/* Quadro */}
-      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
+      <div
+        ref={boardScroll.ref}
+        onPointerDown={boardScroll.onPointerDown}
+        className={`min-h-0 flex-1 overflow-x-auto overflow-y-hidden ${
+          boardScroll.dragging ? "cursor-grabbing select-none" : "cursor-grab"
+        }`}
+      >
         {loadingPipelines || (loadingDeals && deals.length === 0) ? (
           <div className="flex h-full gap-4 p-4 sm:p-6">
             {[1, 2, 3, 4].map((i) => (

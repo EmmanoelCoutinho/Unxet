@@ -8,10 +8,10 @@ import {
   PlayCircleIcon,
   PlusIcon,
   SendIcon,
-  XIcon,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button } from "../components/ui/Button";
+import { CloseButton } from "../components/ui/CloseButton";
 import { Card } from "../components/ui/Card";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { useClinic } from "../contexts/ClinicContext";
@@ -496,13 +496,7 @@ const ModalShell: React.FC<ModalShellProps> = ({
           <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
           <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
-        >
-          <XIcon className="h-4 w-4" />
-        </button>
+        <CloseButton onClick={onClose} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
     </div>
@@ -1704,11 +1698,8 @@ export const MarketingCampaignsPage: React.FC = () => {
             </Card>
           </div>
 
-          <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-4 sm:px-6 py-4">
-            <Button type="button" variant="ghost" onClick={resetTemplateForm}>
-              Fechar
-            </Button>
-            {templateModalMode !== "view" ? (
+          {templateModalMode !== "view" ? (
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-4 sm:px-6 py-4">
               <Button
                 type="button"
                 onClick={handleSaveTemplate}
@@ -1719,8 +1710,8 @@ export const MarketingCampaignsPage: React.FC = () => {
                   ? "Salvar alterações"
                   : "Criar template"}
               </Button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </ModalShell>
       ) : null}
 
@@ -2360,18 +2351,7 @@ export const MarketingCampaignsPage: React.FC = () => {
                     </div>
                   )}
                 </Card>
-              </div>
-
-              <div className="flex justify-end border-t border-slate-200 px-4 sm:px-6 py-4">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setMetricsCampaignId(null)}
-                >
-                  Fechar
-                </Button>
-              </div>
-            </>
+              </div>            </>
           ) : (
             <div className="px-4 sm:px-6 py-6">
               <EmptyState

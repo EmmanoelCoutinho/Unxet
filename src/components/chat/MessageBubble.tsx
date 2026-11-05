@@ -352,7 +352,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <div className={`flex w-full ${isClient ? "justify-start" : "justify-end"}`}>
       <div
-        className={`flex min-w-0 items-end gap-1 max-w-[88%] sm:gap-2 sm:max-w-[min(28rem,88%)] ${
+        className={`flex min-w-0 items-end gap-1 max-w-[88%] sm:gap-2 sm:max-w-[min(40rem,88%)] ${
           isClient ? "" : "flex-row-reverse"
         }`}
       >

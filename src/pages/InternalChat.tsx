@@ -348,7 +348,7 @@ const ThreadView: React.FC<ThreadViewProps> = ({
           </div>
         )}
         <div className={`flex w-full ${mine ? "justify-end" : "justify-start"}`}>
-          <div className="flex min-w-0 max-w-[88%] flex-col sm:max-w-md">
+          <div className="flex min-w-0 max-w-[88%] flex-col sm:max-w-[min(40rem,88%)]">
             {showSender && (
               <span className="mb-1 text-xs font-medium text-gray-600">
                 {(message.senderId && memberNames[message.senderId]) ||
