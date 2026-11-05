@@ -16,6 +16,7 @@ import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import { SettingsTabs } from "../components/settings/SettingsTabs";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import {
   EvolutionConnectionsPanel,
   type DepartmentOption,
@@ -646,17 +647,20 @@ export const MetaIntegrationsPage: React.FC = () => {
     <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50">
       <div className="border-b bg-white px-4 sm:px-6 py-5">
         <div className="flex flex-col justify-center">
-          <div className="flex gap-3">
-            <PreTitleIcon icon={Settings2Icon} />
-            <span className="flex flex-col">
-              <h1 className="text-2xl font-semibold text-gray-900">
-                Integrações
-              </h1>
-              <p className="text-sm text-gray-500">
-                Conecte seus canais da Meta para ativar Messenger, Instagram e
-                WhatsApp.
-              </p>
-            </span>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex gap-3">
+              <PreTitleIcon icon={Settings2Icon} />
+              <span className="flex flex-col">
+                <h1 className="text-2xl font-semibold text-gray-900">
+                  Integrações
+                </h1>
+                <p className="text-sm text-gray-500">
+                  Conecte seus canais da Meta para ativar Messenger, Instagram e
+                  WhatsApp.
+                </p>
+              </span>
+            </div>
+            <TutorialButton tutorialId="conectar-whatsapp-qr" />
           </div>
           <SettingsTabs />
         </div>

@@ -66,7 +66,9 @@ export const TUTORIALS: Tutorial[] = [
     track: "primeiros-passos",
     title: "Conectar o WhatsApp por QR Code",
     description: "Ligue o número da empresa lendo o QR Code no celular.",
-    path: "/inbox/settings",
+    video: "/tutorials/conectar-whatsapp-qr.mp4#t=1",
+    duration: "0:43",
+    path: "/inbox/settings/integrations/meta",
     adminOnly: true,
   },
   {
