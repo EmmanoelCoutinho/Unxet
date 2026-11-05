@@ -1,8 +1,11 @@
+
 // Tutoriais em vídeo mostrados na tela "Tutoriais".
 //
 // Os vídeos são gravados pelo script scripts/tutorials/record.mjs e ficam em
 // public/tutorials/<id>.mp4. Tutorial sem `video` aparece como "Em breve".
 // `adminOnly`: só administradores veem (o atendente não tem acesso à tela).
+
+import { AI_ASSISTANT_ENABLED } from "../../lib/aiAssistantFlag";
 
 export type TutorialTrackId =
   | "primeiros-passos"
@@ -196,22 +199,31 @@ export const TUTORIALS: Tutorial[] = [
     track: "automacao",
     title: "Criar um bot com menu",
     description: "Monte um menu de opções para os clientes.",
+    video: "/tutorials/criar-bot.mp4#t=1",
+    duration: "1:38",
     path: "/inbox/bots",
     adminOnly: true,
   },
-  {
-    id: "assistente-ia",
-    track: "automacao",
-    title: "Configurar o assistente com IA",
-    description: "Ensine o assistente a responder pela empresa.",
-    path: "/inbox/ai-assistant",
-    adminOnly: true,
-  },
+  // Some enquanto o assistente com IA estiver desligado no app
+  ...(AI_ASSISTANT_ENABLED
+    ? [
+        {
+          id: "assistente-ia",
+          track: "automacao" as const,
+          title: "Configurar o assistente com IA",
+          description: "Ensine o assistente a responder pela empresa.",
+          path: "/inbox/ai-assistant",
+          adminOnly: true,
+        },
+      ]
+    : []),
   {
     id: "criar-campanha",
     track: "automacao",
     title: "Criar uma campanha",
     description: "Envie uma mensagem para vários clientes de uma vez.",
+    video: "/tutorials/criar-campanha.mp4#t=1",
+    duration: "1:22",
     path: "/inbox/campaigns",
   },
 

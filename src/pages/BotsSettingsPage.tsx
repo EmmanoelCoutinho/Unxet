@@ -19,6 +19,7 @@ import { botsService } from "../services/bots";
 import type { BotRow } from "../types/bots";
 import { isBotSupportedChannel } from "../types/bots";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return "-";
@@ -219,6 +220,7 @@ export const BotsSettingsPage: React.FC = () => {
                 Configure fluxos de triagem e vincule bots aos canais da
                 Empresa.
               </p>
+              <TutorialButton tutorialId="criar-bot" className="mt-1" />
             </div>
           </div>
 
