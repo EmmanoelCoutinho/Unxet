@@ -176,7 +176,7 @@ export const TUTORIALS: Tutorial[] = [
     title: "Carteira de clientes",
     description: "Cadastre, busque e anote informações dos clientes.",
     video: "/tutorials/carteira-clientes.mp4#t=1",
-    duration: "1:03",
+    duration: "1:29",
     path: "/contacts",
     adminOnly: true,
   },
