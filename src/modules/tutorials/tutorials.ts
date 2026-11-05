@@ -67,7 +67,7 @@ export const TUTORIALS: Tutorial[] = [
     title: "Conectar o WhatsApp por QR Code",
     description: "Ligue o número da empresa lendo o QR Code no celular.",
     video: "/tutorials/conectar-whatsapp-qr.mp4#t=1",
-    duration: "0:50",
+    duration: "0:44",
     path: "/inbox/settings/integrations/meta",
     adminOnly: true,
   },
@@ -99,7 +99,7 @@ export const TUTORIALS: Tutorial[] = [
       "Convide uma pessoa da equipe, escolha o cargo e o setor dela.",
     // #t=1 pula a tela de carregamento do primeiro segundo
     video: "/tutorials/criar-atendente.mp4#t=1",
-    duration: "0:47",
+    duration: "0:50",
     path: "/inbox/attendants",
     adminOnly: true,
   },
