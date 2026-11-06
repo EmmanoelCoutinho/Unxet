@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ClockIcon, PlusIcon, RefreshCwIcon } from "lucide-react";
+import { ClockIcon, PlusIcon, RefreshCwIcon, ShieldCheckIcon } from "lucide-react";
 import { toast } from "react-toastify";
 import { useMetaTemplateActions } from "../hooks/useScheduledMessages";
 import type { MetaTemplate, MetaTemplateInput } from "../types/scheduledMessages";
@@ -48,13 +48,16 @@ export const TemplatePicker: React.FC<{
 
   return (
     <div>
+      <div className="mb-3 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-blue-900">
+        <ShieldCheckIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
+        <p className="text-sm leading-6">
+          <span className="font-semibold">Pelo WhatsApp oficial, a Meta só deixa iniciar conversa com um modelo aprovado.</span>{" "}
+          Escolha um modelo aprovado abaixo ou crie um novo e aguarde a aprovação.
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="block text-sm font-medium text-slate-800">Modelo aprovado pela Meta</p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Pelo WhatsApp oficial, a Meta só deixa iniciar conversa com um modelo aprovado.
-          </p>
-        </div>
+        <p className="block text-sm font-medium text-slate-800">Modelo aprovado pela Meta</p>
         <div className="flex items-center gap-2">
           {waiting.length > 0 && (
             <button
