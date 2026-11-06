@@ -51,8 +51,11 @@ export type ScheduledMessage = {
   finishedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  // Número de WhatsApp (QR Code) por onde sai; null = o conectado mais recente
+  // Número de WhatsApp por onde sai (QR Code ou oficial); null = o QR Code
+  // conectado mais recente
   channelConnectionId: string | null;
+  // Modelo aprovado pela Meta (só campanhas pelo WhatsApp oficial)
+  templateId: string | null;
   // Etiqueta que, colocada na conversa, conta como adesão
   conversionTagId: string | null;
   // Dias depois do envio em que resposta e adesão contam para a campanha
@@ -75,7 +78,7 @@ export type CampaignStats = {
 };
 
 // Linha da lista: a campanha sem os destinatários, com os números já somados
-export type CampaignSummary = Omit<ScheduledMessage, "recipients"> & {
+export type CampaignSummary = Omit<ScheduledMessage, "recipients" | "templateId"> & {
   stats: CampaignStats;
   previewNames: string[];
 };
@@ -105,6 +108,8 @@ export type SaveScheduledMessageInput = {
   channelConnectionId: string | null;
   conversionTagId: string | null;
   replyWindowDays: number;
+  // Obrigatório quando o número é o WhatsApp oficial
+  templateId: string | null;
 };
 
 export type WalletContact = {
@@ -131,4 +136,47 @@ export type ConversationCampaign = {
   convertedVia: ConversionVia | null;
   conversionValue: number | null;
   conversionTagId: string | null;
+};
+
+// WhatsApp oficial (Meta) da empresa: só ele usa modelos
+export type OfficialWhatsapp = {
+  id: string;
+  label: string;
+  connected: boolean;
+};
+
+export type MetaTemplateStatus =
+  | "draft"
+  | "submitted"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "paused"
+  | "disabled"
+  | "archived";
+
+export type MetaTemplateCategory = "marketing" | "utility" | "authentication";
+
+// Modelo de mensagem aprovado (ou não) pela Meta
+export type MetaTemplate = {
+  id: string;
+  name: string;
+  category: MetaTemplateCategory;
+  body: string;
+  footer: string | null;
+  buttons: string[];
+  status: MetaTemplateStatus;
+  rejectionReason: string | null;
+  channelConnectionId: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MetaTemplateInput = {
+  name: string;
+  category: "marketing" | "utility";
+  body: string;
+  footer: string;
+  buttons: string[];
 };

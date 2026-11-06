@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  BadgeCheckIcon,
   BookUserIcon,
   CalendarClockIcon,
   CheckIcon,
@@ -10,6 +11,7 @@ import {
   HashIcon,
   PencilIcon,
   PlusIcon,
+  QrCodeIcon,
   SearchIcon,
   SendIcon,
   ShieldCheckIcon,
@@ -24,6 +26,8 @@ import { useClinic } from "../../../contexts/ClinicContext";
 import {
   useCampaignAudience,
   useCampaignTags,
+  useMetaTemplates,
+  useOfficialWhatsapp,
   useQrWhatsappConnected,
   useQrWhatsappNumbers,
   useScheduledMessageActions,
@@ -54,7 +58,9 @@ import {
   toDateInputValue,
   toTimeInputValue,
 } from "../utils/schedule";
+import { renderTemplatePreview } from "../utils/templates";
 import { CAMPAIGNS_PATH } from "../paths";
+import { TemplatePicker } from "./TemplatePicker";
 import { WhatsappPreview } from "./WhatsappPreview";
 
 const MAX_NAME_LENGTH = 120;
@@ -71,6 +77,19 @@ const STEPS: { key: StepKey; label: string; description: string }[] = [
   { key: "audience", label: "Destinatários", description: "Quem vai receber" },
   { key: "delivery", label: "Envio", description: "Quando e por qual número" },
   { key: "review", label: "Revisão", description: "Confira antes de enviar" },
+];
+
+// Por onde a campanha sai: oficial usa modelo da Meta, QR Code usa texto livre
+type Channel = "official" | "qr";
+
+const CHANNELS: {
+  key: Channel;
+  label: string;
+  description: string;
+  icon: React.ElementType<{ className?: string }>;
+}[] = [
+  { key: "official", label: "WhatsApp oficial", description: "", icon: BadgeCheckIcon },
+  { key: "qr", label: "WhatsApp por QR Code", description: "Texto livre, sem aprovação", icon: QrCodeIcon },
 ];
 
 type Source = "all" | "tags" | "wallet" | "manual";
@@ -115,19 +134,38 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
   const [conversionTagId, setConversionTagId] = useState<string | null>(existing?.conversionTagId ?? null);
   const [replyWindowDays, setReplyWindowDays] = useState(existing?.replyWindowDays ?? DEFAULT_REPLY_WINDOW_DAYS);
 
-  const { numbers } = useQrWhatsappNumbers(clinicId);
-  const [connectionId, setConnectionId] = useState<string | null>(existing?.channelConnectionId ?? null);
+  const { numbers, loading: loadingNumbers } = useQrWhatsappNumbers(clinicId);
+  const [connectionId, setConnectionId] = useState<string | null>(
+    existing?.templateId ? null : (existing?.channelConnectionId ?? null),
+  );
   useEffect(() => {
     if (numbers.length === 0) return;
     if (connectionId && numbers.some((n) => n.id === connectionId)) return;
     setConnectionId((numbers.find((n) => n.connected) ?? numbers[0]).id);
   }, [numbers, connectionId]);
 
+  // WhatsApp oficial: a campanha sai com um modelo aprovado pela Meta
+  const { official } = useOfficialWhatsapp(clinicId);
+  const { templates, loading: loadingTemplates } = useMetaTemplates(clinicId, Boolean(official));
+  const [chosenChannel, setChosenChannel] = useState<Channel | null>(
+    existing ? (existing.templateId ? "official" : "qr") : null,
+  );
+  // Sem escolha: oficial quando é o único número da empresa
+  const channel: Channel =
+    chosenChannel ?? (official && !loadingNumbers && numbers.length === 0 ? "official" : "qr");
+  const isOfficial = channel === "official" && Boolean(official);
+  const [templateId, setTemplateId] = useState<string | null>(existing?.templateId ?? null);
+  const template = templates.find((t) => t.id === templateId) ?? null;
+
   const { tags } = useCampaignTags(clinicId);
 
   const scheduledAt = sendNow ? null : combineDateAndTime(date, time);
   const duration = formatDuration(estimateSendDurationMs(recipients.length));
-  const numberLabel = numbers.find((n) => n.id === connectionId)?.label ?? null;
+  const numberLabel = isOfficial
+    ? (official?.label ?? null)
+    : (numbers.find((n) => n.id === connectionId)?.label ?? null);
+  // Texto que vai para a revisão e para a prévia
+  const campaignText = isOfficial ? (template?.body ?? "") : message;
   const conversionTag = tags.find((t) => t.id === conversionTagId) ?? null;
 
   /* ------------------------------- Validação ------------------------------ */
@@ -136,6 +174,15 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
     switch (STEPS[index].key) {
       case "message":
         if (!name.trim()) return "Dê um nome para a campanha.";
+        if (isOfficial) {
+          if (!template) {
+            return templates.some((t) => t.status === "pending" || t.status === "submitted")
+              ? "O modelo ainda está em análise na Meta. Você pode continuar quando ele for aprovado."
+              : "Escolha um modelo aprovado pela Meta.";
+          }
+          if (template.status !== "approved") return "Escolha um modelo aprovado pela Meta.";
+          return null;
+        }
         if (!message.trim()) return "Escreva a mensagem.";
         return null;
       case "audience":
@@ -177,13 +224,14 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
       const savedId = await save({
         id: existing?.id ?? null,
         name,
-        message,
+        message: campaignText,
         scheduledAt,
         sendNow,
         recipients,
-        channelConnectionId: numbers.length > 0 ? connectionId : null,
+        channelConnectionId: isOfficial ? (official?.id ?? null) : numbers.length > 0 ? connectionId : null,
         conversionTagId,
         replyWindowDays,
+        templateId: isOfficial ? templateId : null,
       });
       toast.success(sendNow ? "Campanha enviada para a fila de envio." : "Campanha agendada.");
       // Enviando agora: abre o resultado para acompanhar o progresso
@@ -232,7 +280,34 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
         <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0">
             {STEPS[step].key === "message" && (
-              <MessageStep name={name} setName={setName} message={message} setMessage={setMessage} />
+              <MessageStep
+                name={name}
+                setName={setName}
+                message={message}
+                setMessage={setMessage}
+                channelChoice={
+                  official
+                    ? {
+                        channel,
+                        setChannel: setChosenChannel,
+                        officialLabel: official.label,
+                        hasQr: numbers.length > 0,
+                      }
+                    : null
+                }
+                templatePicker={
+                  isOfficial ? (
+                    <TemplatePicker
+                      clinicId={clinicId}
+                      templates={templates}
+                      loading={loadingTemplates}
+                      templateId={templateId}
+                      onChange={setTemplateId}
+                      campaignName={name}
+                    />
+                  ) : null
+                }
+              />
             )}
             {STEPS[step].key === "audience" && (
               <AudienceStep
@@ -250,7 +325,7 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
                 setDate={setDate}
                 time={time}
                 setTime={setTime}
-                numbers={numbers}
+                numbers={isOfficial ? [] : numbers}
                 connectionId={connectionId}
                 setConnectionId={setConnectionId}
                 recipientsCount={recipients.length}
@@ -265,15 +340,24 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
             {STEPS[step].key === "review" && (
               <ReviewStep
                 name={name}
-                message={message}
+                message={campaignText}
+                templateName={isOfficial ? (template?.name ?? null) : null}
                 recipients={recipients}
                 sendNow={sendNow}
                 scheduledAt={scheduledAt}
                 duration={duration}
-                numberLabel={numbers.length > 1 ? numberLabel : null}
+                numberLabel={isOfficial || numbers.length > 1 ? numberLabel : null}
                 conversionTag={conversionTag}
                 replyWindowDays={replyWindowDays}
-                qrConnected={qrConnected}
+                disconnectedWarning={
+                  isOfficial
+                    ? official && !official.connected
+                      ? "O WhatsApp oficial da empresa está desconectado. A campanha só sai se ele estiver conectado no horário do envio."
+                      : null
+                    : qrConnected
+                      ? null
+                      : "O WhatsApp por QR Code da empresa está desconectado. A campanha só sai se ele estiver conectado no horário do envio."
+                }
                 onEdit={(key) => goTo(STEPS.findIndex((s) => s.key === key))}
               />
             )}
@@ -281,7 +365,14 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
 
           <aside className={`xl:sticky xl:top-0 xl:block ${previewOnSmall ? "" : "hidden"}`}>
             <MessagePreview
-              text={previewMessageText(message, previewName)}
+              text={
+                isOfficial
+                  ? renderTemplatePreview(template?.body ?? "", previewName)
+                  : previewMessageText(message, previewName)
+              }
+              footer={isOfficial ? template?.footer : null}
+              buttons={isOfficial ? template?.buttons : undefined}
+              emptyText={isOfficial ? "Escolha um modelo aprovado." : undefined}
               recipientsCount={recipients.length}
               sendNow={sendNow}
               scheduledAt={scheduledAt}
@@ -426,7 +517,16 @@ const MessageStep: React.FC<{
   setName: (v: string) => void;
   message: string;
   setMessage: (v: string) => void;
-}> = ({ name, setName, message, setMessage }) => {
+  // Só quando a empresa tem o WhatsApp oficial
+  channelChoice: {
+    channel: Channel;
+    setChannel: (v: Channel) => void;
+    officialLabel: string;
+    hasQr: boolean;
+  } | null;
+  // Pelo oficial, a escolha do modelo entra no lugar do texto livre
+  templatePicker: React.ReactNode;
+}> = ({ name, setName, message, setMessage, channelChoice, templatePicker }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
   // Onde o cursor fica depois de inserir {nome}: aplicado só depois que o
   // texto novo já está no campo (antes disso o navegador o joga para o fim)
@@ -456,8 +556,58 @@ const MessageStep: React.FC<{
   };
 
   return (
-    <StepCard title="Escreva a mensagem" subtitle="Cada cliente recebe numa conversa individual, como se fosse só para ele.">
+    <StepCard
+      title={templatePicker ? "Escolha a mensagem" : "Escreva a mensagem"}
+      subtitle="Cada cliente recebe numa conversa individual, como se fosse só para ele."
+    >
       <div className="space-y-5">
+        {channelChoice?.hasQr && (
+          <fieldset>
+            <legend className={LABEL}>Enviar por</legend>
+            <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {CHANNELS.map((option) => {
+                const active = channelChoice.channel === option.key;
+                const Icon = option.icon;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => channelChoice.setChannel(option.key)}
+                    aria-pressed={active}
+                    className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${
+                      active
+                        ? "border-blue-500 bg-blue-50/70 ring-4 ring-blue-100"
+                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${
+                        active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-sm font-semibold ${active ? "text-blue-800" : "text-slate-800"}`}>
+                        {option.label}
+                      </span>
+                      <span className="block text-xs leading-5 text-slate-500">
+                        {option.key === "official" ? channelChoice.officialLabel : option.description}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        )}
+        {channelChoice && !channelChoice.hasQr && (
+          <p className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <BadgeCheckIcon className="h-4 w-4 flex-shrink-0 text-green-600" />
+            Sai pelo WhatsApp oficial · {channelChoice.officialLabel}
+          </p>
+        )}
+
         <div>
           <label htmlFor="campaign-name" className={LABEL}>
             Nome da campanha
@@ -475,6 +625,7 @@ const MessageStep: React.FC<{
           <p className={HINT}>Só a equipe vê. Ajuda a achar a campanha e aparece na conversa de quem responder.</p>
         </div>
 
+        {templatePicker ?? (
         <div>
           <div className="flex items-end justify-between gap-3">
             <label htmlFor="campaign-message" className={LABEL}>
@@ -508,6 +659,7 @@ const MessageStep: React.FC<{
             </span>
           </div>
         </div>
+        )}
       </div>
     </StepCard>
   );
@@ -1099,6 +1251,7 @@ const ReviewRow: React.FC<{
 const ReviewStep: React.FC<{
   name: string;
   message: string;
+  templateName: string | null;
   recipients: RecipientDraft[];
   sendNow: boolean;
   scheduledAt: Date | null;
@@ -1106,7 +1259,7 @@ const ReviewStep: React.FC<{
   numberLabel: string | null;
   conversionTag: CampaignTag | null;
   replyWindowDays: number;
-  qrConnected: boolean;
+  disconnectedWarning: string | null;
   onEdit: (key: StepKey) => void;
 }> = (props) => {
   const names = props.recipients.slice(0, 3).map(recipientLabel);
@@ -1114,16 +1267,18 @@ const ReviewStep: React.FC<{
 
   return (
     <div className="space-y-4">
-      {!props.qrConnected && (
+      {props.disconnectedWarning && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          O WhatsApp por QR Code da empresa está desconectado. A campanha só sai se ele estiver conectado no
-          horário do envio.
+          {props.disconnectedWarning}
         </div>
       )}
       <StepCard title="Tudo certo?" subtitle="Confira os detalhes. Você pode cancelar enquanto estiver enviando.">
         <div className="divide-y divide-slate-100">
           <ReviewRow label="Campanha" onEdit={() => props.onEdit("message")}>
             <p className="font-semibold">{props.name}</p>
+            {props.templateName && (
+              <p className="mt-1 text-xs font-medium text-green-700">Modelo aprovado: {props.templateName}</p>
+            )}
             <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-slate-600">{props.message}</p>
           </ReviewRow>
           <ReviewRow label="Destinatários" onEdit={() => props.onEdit("audience")}>
@@ -1164,10 +1319,13 @@ const ReviewStep: React.FC<{
 
 const MessagePreview: React.FC<{
   text: string;
+  footer?: string | null;
+  buttons?: string[];
+  emptyText?: string;
   recipientsCount: number;
   sendNow: boolean;
   scheduledAt: Date | null;
-}> = ({ text, recipientsCount, sendNow, scheduledAt }) => {
+}> = ({ text, footer, buttons, emptyText, recipientsCount, sendNow, scheduledAt }) => {
   const time = (sendNow || !scheduledAt ? new Date() : scheduledAt).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
@@ -1179,6 +1337,9 @@ const MessagePreview: React.FC<{
       meta={recipientsCount > 0 ? plural(recipientsCount, "destinatário", "destinatários") : "Sem destinatários"}
       text={text}
       time={time}
+      footer={footer}
+      buttons={buttons}
+      emptyText={emptyText}
     />
   );
 };

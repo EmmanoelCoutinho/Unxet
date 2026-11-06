@@ -1,9 +1,6 @@
 // Liga/desliga módulos que ainda não estão prontos para os clientes.
-// Desligado = some da navegação e a rota redireciona para o início.
-// (Envio em massa pelo WhatsApp QR Code fica em "Campanhas", sempre ligado.)
-export const FEATURES = {
-  // Depende do envio de templates para aprovação da Meta e da conta real de WhatsApp
-  marketingCampaigns: false,
-} as const;
+// Desligado = some da navegação (item do menu com `feature`).
+// (Envio em massa e modelos da Meta ficam em "Campanhas", sempre ligado.)
+export const FEATURES: Record<string, boolean> = {};
 
-export type FeatureKey = keyof typeof FEATURES;
+export type FeatureKey = string;

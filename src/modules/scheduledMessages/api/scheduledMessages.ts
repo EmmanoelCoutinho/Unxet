@@ -48,6 +48,7 @@ type CampaignBaseRow = {
 };
 
 type ScheduledMessageRow = CampaignBaseRow & {
+  template_id: string | null;
   recipients: RecipientRow[] | null;
 };
 
@@ -69,7 +70,7 @@ const BASE_COLUMNS =
   "id, clinic_id, created_by, name, message, scheduled_at, status, started_at, finished_at, created_at, updated_at, channel_connection_id, conversion_tag_id, reply_window_days";
 
 const SELECT =
-  `${BASE_COLUMNS}, ` +
+  `${BASE_COLUMNS}, template_id, ` +
   "recipients:scheduled_message_recipients(id, position, contact_id, name, phone, status, error, failure_kind, sent_at, conversation_id, delivered_at, read_at, replied_at, converted_at, converted_via, conversion_value)";
 
 const SUMMARY_SELECT =
@@ -104,6 +105,7 @@ const mapBase = (row: CampaignBaseRow) => ({
 
 const mapRow = (row: ScheduledMessageRow): ScheduledMessage => ({
   ...mapBase(row),
+  templateId: row.template_id ?? null,
   recipients: [...(row.recipients ?? [])]
     .sort((a, b) => a.position - b.position)
     .map((r) => ({
@@ -199,6 +201,7 @@ export const saveScheduledMessage = async (
     p_send_now: input.sendNow,
     p_conversion_tag_id: input.conversionTagId,
     p_reply_window_days: input.replyWindowDays,
+    p_template_id: input.templateId,
   });
 
   if (error) throw error;
@@ -277,7 +280,7 @@ export const listCampaignTags = async (
   return (data ?? []) as CampaignTag[];
 };
 
-// As campanhas saem pelo WhatsApp conectado por QR Code (Evolution)
+// Campanhas com texto livre saem pelo WhatsApp conectado por QR Code (Evolution)
 export const hasConnectedQrWhatsapp = async (
   clinicId: string | null,
 ): Promise<boolean> => {

@@ -76,6 +76,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
+    text: "Campanhas pelo WhatsApp oficial: em Campanhas, o botão Modelos da Meta cria a mensagem, envia para a Meta aprovar e mostra se ela está em análise, aprovada ou recusada (com o motivo). Ao criar uma campanha, escolha enviar pelo WhatsApp oficial e um modelo aprovado. O nome do cliente entra sozinho na mensagem, e os botões de resposta tocados pelo cliente chegam na conversa.",
+  },
+  {
+    kind: "new",
     text: "Tutoriais: vídeos curtos que mostram, passo a passo, como usar a Unxet. Fica no rodapé do menu lateral. São 18 vídeos, organizados em trilhas: primeiros passos (conectar o WhatsApp, criar departamentos e atendentes, automações), atendimento no dia a dia (a tela de atendimentos, transferir, mensagens rápidas, etiquetas, arquivos e chat interno), clientes e vendas, automação (campanhas e bot) e gestão (Painel e Relatórios). Eles também abrem pelo botão Ver tutorial nas telas de cada assunto.",
   },
   {
