@@ -82,15 +82,19 @@ const STEPS: { key: StepKey; label: string; description: string }[] = [
 // Por onde a campanha sai: oficial usa modelo da Meta, QR Code usa texto livre
 type Channel = "official" | "qr";
 
-const CHANNELS: {
-  key: Channel;
-  label: string;
-  description: string;
-  icon: React.ElementType<{ className?: string }>;
-}[] = [
-  { key: "official", label: "WhatsApp oficial", description: "", icon: BadgeCheckIcon },
-  { key: "qr", label: "WhatsApp por QR Code", description: "Texto livre, sem aprovação", icon: QrCodeIcon },
-];
+/**
+ * A empresa usa um tipo de WhatsApp por vez. Oficial conectado ganha; senão,
+ * QR Code se houver algum número. Nada conectado: oficial se for o único que
+ * existe (a revisão avisa que está desconectado), senão QR Code.
+ */
+const pickChannel = (
+  official: { connected: boolean } | null,
+  qrNumbers: { connected: boolean }[],
+): Channel => {
+  if (official?.connected) return "official";
+  if (qrNumbers.some((n) => n.connected)) return "qr";
+  return official && qrNumbers.length === 0 ? "official" : "qr";
+};
 
 type Source = "all" | "tags" | "wallet" | "manual";
 
@@ -145,14 +149,16 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
   }, [numbers, connectionId]);
 
   // WhatsApp oficial: a campanha sai com um modelo aprovado pela Meta
-  const { official } = useOfficialWhatsapp(clinicId);
+  const { official, loading: loadingOfficial } = useOfficialWhatsapp(clinicId);
   const { templates, loading: loadingTemplates } = useMetaTemplates(clinicId, Boolean(official));
-  const [chosenChannel, setChosenChannel] = useState<Channel | null>(
-    existing ? (existing.templateId ? "official" : "qr") : null,
-  );
-  // Sem escolha: oficial quando é o único número da empresa
-  const channel: Channel =
-    chosenChannel ?? (official && !loadingNumbers && numbers.length === 0 ? "official" : "qr");
+  // A empresa usa um tipo de WhatsApp por vez: a campanha sai pelo que está em
+  // uso, sem escolha. Campanha já salva continua pelo número com que foi criada.
+  const channelReady = Boolean(existing) || (!loadingOfficial && !loadingNumbers);
+  const channel: Channel = existing
+    ? existing.templateId
+      ? "official"
+      : "qr"
+    : pickChannel(official, numbers);
   const isOfficial = channel === "official" && Boolean(official);
   const [templateId, setTemplateId] = useState<string | null>(existing?.templateId ?? null);
   const template = templates.find((t) => t.id === templateId) ?? null;
@@ -285,15 +291,13 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
                 setName={setName}
                 message={message}
                 setMessage={setMessage}
-                channelChoice={
-                  official
-                    ? {
-                        channel,
-                        setChannel: setChosenChannel,
-                        officialLabel: official.label,
-                        hasQr: numbers.length > 0,
-                      }
-                    : null
+                channelReady={channelReady}
+                channelInfo={
+                  isOfficial
+                    ? `Sai pelo WhatsApp oficial · ${official?.label ?? ""}`
+                    : official
+                      ? "Sai pelo WhatsApp por QR Code"
+                      : null
                 }
                 templatePicker={
                   isOfficial ? (
@@ -517,16 +521,13 @@ const MessageStep: React.FC<{
   setName: (v: string) => void;
   message: string;
   setMessage: (v: string) => void;
-  // Só quando a empresa tem o WhatsApp oficial
-  channelChoice: {
-    channel: Channel;
-    setChannel: (v: Channel) => void;
-    officialLabel: string;
-    hasQr: boolean;
-  } | null;
+  // false enquanto ainda não se sabe qual WhatsApp a empresa usa
+  channelReady: boolean;
+  // Por onde sai (só quando a empresa tem o WhatsApp oficial); sem opção de trocar
+  channelInfo: string | null;
   // Pelo oficial, a escolha do modelo entra no lugar do texto livre
   templatePicker: React.ReactNode;
-}> = ({ name, setName, message, setMessage, channelChoice, templatePicker }) => {
+}> = ({ name, setName, message, setMessage, channelReady, channelInfo, templatePicker }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
   // Onde o cursor fica depois de inserir {nome}: aplicado só depois que o
   // texto novo já está no campo (antes disso o navegador o joga para o fim)
@@ -561,50 +562,14 @@ const MessageStep: React.FC<{
       subtitle="Cada cliente recebe numa conversa individual, como se fosse só para ele."
     >
       <div className="space-y-5">
-        {channelChoice?.hasQr && (
-          <fieldset>
-            <legend className={LABEL}>Enviar por</legend>
-            <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {CHANNELS.map((option) => {
-                const active = channelChoice.channel === option.key;
-                const Icon = option.icon;
-                return (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() => channelChoice.setChannel(option.key)}
-                    aria-pressed={active}
-                    className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${
-                      active
-                        ? "border-blue-500 bg-blue-50/70 ring-4 ring-blue-100"
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    <span
-                      className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${
-                        active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className={`block text-sm font-semibold ${active ? "text-blue-800" : "text-slate-800"}`}>
-                        {option.label}
-                      </span>
-                      <span className="block text-xs leading-5 text-slate-500">
-                        {option.key === "official" ? channelChoice.officialLabel : option.description}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
-        )}
-        {channelChoice && !channelChoice.hasQr && (
+        {channelInfo && (
           <p className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
-            <BadgeCheckIcon className="h-4 w-4 flex-shrink-0 text-green-600" />
-            Sai pelo WhatsApp oficial · {channelChoice.officialLabel}
+            {templatePicker ? (
+              <BadgeCheckIcon className="h-4 w-4 flex-shrink-0 text-green-600" />
+            ) : (
+              <QrCodeIcon className="h-4 w-4 flex-shrink-0 text-slate-500" />
+            )}
+            {channelInfo}
           </p>
         )}
 
@@ -625,7 +590,11 @@ const MessageStep: React.FC<{
           <p className={HINT}>Só a equipe vê. Ajuda a achar a campanha e aparece na conversa de quem responder.</p>
         </div>
 
-        {templatePicker ?? (
+        {!channelReady ? (
+          <div className="flex justify-center py-8">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+          </div>
+        ) : templatePicker ?? (
         <div>
           <div className="flex items-end justify-between gap-3">
             <label htmlFor="campaign-message" className={LABEL}>
