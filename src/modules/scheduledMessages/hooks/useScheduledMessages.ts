@@ -1,4 +1,12 @@
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  createMetaTemplate,
+  deleteMetaTemplate,
+  getOfficialWhatsapp,
+  listMetaTemplates,
+  syncMetaTemplates,
+} from "../api/templates";
 import {
   cancelScheduledMessage,
   deleteScheduledMessage,
@@ -15,6 +23,7 @@ import {
   setCampaignConversion,
 } from "../api/scheduledMessages";
 import type {
+  MetaTemplateInput,
   SaveScheduledMessageInput,
   ScheduledMessageStatus,
 } from "../types/scheduledMessages";
@@ -36,6 +45,10 @@ export const scheduledMessageQueryKeys = {
     [...scheduledMessageQueryKeys.all, "tags", clinicId] as const,
   conversation: (conversationId: string | null) =>
     [...scheduledMessageQueryKeys.all, "conversation", conversationId] as const,
+  officialWhatsapp: (clinicId: string | null) =>
+    [...scheduledMessageQueryKeys.all, "official-whatsapp", clinicId] as const,
+  templates: (clinicId: string | null) =>
+    [...scheduledMessageQueryKeys.all, "templates", clinicId] as const,
 };
 
 // Enquanto envia, a barra de progresso acompanha de perto
@@ -204,4 +217,91 @@ export const useCampaignConversion = (conversationId: string | null) => {
       queryClient.invalidateQueries({ queryKey: scheduledMessageQueryKeys.all });
     },
   });
+};
+
+/* ------------------------- WhatsApp oficial (Meta) ------------------------ */
+
+export const useOfficialWhatsapp = (clinicId: string | null) => {
+  const query = useQuery({
+    queryKey: scheduledMessageQueryKeys.officialWhatsapp(clinicId),
+    queryFn: () => getOfficialWhatsapp(clinicId),
+    enabled: Boolean(clinicId),
+  });
+
+  return { official: query.data ?? null, loading: query.isLoading };
+};
+
+// Enquanto houver modelo em análise, pergunta à Meta de tempos em tempos
+// (o webhook costuma chegar antes; isto cobre quando ele não chega)
+const TEMPLATE_SYNC_MS = 60 * 1000;
+
+export const useMetaTemplates = (clinicId: string | null, enabled = true) => {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: scheduledMessageQueryKeys.templates(clinicId),
+    queryFn: () => listMetaTemplates(clinicId),
+    enabled: Boolean(clinicId) && enabled,
+    staleTime: 0,
+  });
+
+  const templates = query.data ?? [];
+  const hasPending = templates.some((t) => t.status === "pending" || t.status === "submitted");
+  const syncing = useRef(false);
+
+  useEffect(() => {
+    if (!clinicId || !enabled || !hasPending) return;
+    const sync = async () => {
+      if (syncing.current) return;
+      syncing.current = true;
+      try {
+        const updated = await syncMetaTemplates();
+        if (updated > 0) {
+          await queryClient.invalidateQueries({
+            queryKey: scheduledMessageQueryKeys.templates(clinicId),
+          });
+        }
+      } catch {
+        // Sem a Meta agora: tenta de novo na próxima volta
+      } finally {
+        syncing.current = false;
+      }
+    };
+    void sync();
+    const timer = window.setInterval(sync, TEMPLATE_SYNC_MS);
+    return () => window.clearInterval(timer);
+  }, [clinicId, enabled, hasPending, queryClient]);
+
+  return {
+    templates,
+    loading: query.isLoading,
+    error: query.error instanceof Error ? query.error.message : null,
+  };
+};
+
+export const useMetaTemplateActions = (clinicId: string | null) => {
+  const queryClient = useQueryClient();
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: scheduledMessageQueryKeys.templates(clinicId) });
+
+  const createMutation = useMutation({
+    mutationFn: (input: MetaTemplateInput) => createMetaTemplate(input),
+    onSuccess: invalidate,
+  });
+  const syncMutation = useMutation({
+    mutationFn: () => syncMetaTemplates(),
+    onSettled: invalidate,
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteMetaTemplate(id),
+    onSettled: invalidate,
+  });
+
+  return {
+    create: createMutation.mutateAsync,
+    sync: syncMutation.mutateAsync,
+    remove: deleteMutation.mutateAsync,
+    creating: createMutation.isPending,
+    syncing: syncMutation.isPending,
+    removing: deleteMutation.isPending,
+  };
 };

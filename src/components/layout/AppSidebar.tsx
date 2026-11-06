@@ -128,15 +128,6 @@ const allSidebarItems: SidebarItem[] = [
     group: "vendas",
   },
   {
-    // Campanhas com templates aprovados pela Meta (WhatsApp oficial)
-    label: "Campanhas Meta",
-    icon: MegaphoneIcon,
-    path: "/inbox/marketing-campaigns",
-    feature: "marketingCampaigns",
-    adminOnly: true,
-    group: "vendas",
-  },
-  {
     label: "Carteira de clientes",
     icon: FiBookOpen,
     path: "/contacts",

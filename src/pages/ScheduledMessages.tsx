@@ -6,6 +6,7 @@ import {
   CalendarClockIcon,
   CheckCircle2Icon,
   CircleAlertIcon,
+  FileTextIcon,
   LoaderIcon,
   MegaphoneIcon,
   MessageCircleReplyIcon,
@@ -26,6 +27,7 @@ import { useClinicUserNames } from "../hooks/useClinicUserNames";
 import { useConfirm } from "../components/ui/ConfirmDialog";
 import { MessageStatusBadge } from "../modules/scheduledMessages/components/StatusBadge";
 import {
+  useOfficialWhatsapp,
   useQrWhatsappConnected,
   useScheduledMessageActions,
   useScheduledMessages,
@@ -97,6 +99,7 @@ export const ScheduledMessagesPage: React.FC = () => {
   const { scheduledMessages, loading, error, refetch } = useScheduledMessages(clinicId);
   const { cancel, remove } = useScheduledMessageActions();
   const qrConnected = useQrWhatsappConnected(clinicId);
+  const { official } = useOfficialWhatsapp(clinicId);
   // Só o admin vê campanhas de outras pessoas
   const userNames = useClinicUserNames(clinicId, isAdmin);
 
@@ -191,17 +194,29 @@ export const ScheduledMessagesPage: React.FC = () => {
                 <TutorialButton tutorialId="criar-campanha" className="mt-1" />
               </div>
             </div>
-            <button
-              type="button"
-              onClick={goToNew}
-              className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              <PlusIcon className="h-4 w-4" />
-              Nova campanha
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {official && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`${CAMPAIGNS_PATH}/templates`)}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <FileTextIcon className="h-4 w-4" />
+                  Modelos da Meta
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={goToNew}
+                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                <PlusIcon className="h-4 w-4" />
+                Nova campanha
+              </button>
+            </div>
           </div>
 
-          {!qrConnected && (
+          {!qrConnected && !official && (
             <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               <AlertTriangleIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
               <p>

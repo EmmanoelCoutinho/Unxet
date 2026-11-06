@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyMetaSignature } from "../_shared/security.ts";
 import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { metaContactsText } from "../_shared/contactCard.ts";
+import { describeRejection, mapMetaTemplateStatus } from "../_shared/metaTemplates.ts";
 // ---------------------------------------------------------------------------
 // ENV
 // ---------------------------------------------------------------------------
@@ -122,6 +123,30 @@ serve(async (req)=>{
     // PAYLOAD
     // -----------------------------------------------------------------------
     // -----------------------------------------------------------------------
+    // MODELOS DE MENSAGEM (aprovado / recusado / pausado pela Meta)
+    // -----------------------------------------------------------------------
+    const templateUpdates = (body.entry ?? []).flatMap((e)=>(e?.changes ?? []).filter((c)=>c?.field === "message_template_status_update" && c?.value));
+    if (templateUpdates.length > 0) {
+      for (const change of templateUpdates){
+        const value = change.value;
+        const metaTemplateId = String(value?.message_template_id ?? "").trim();
+        const status = mapMetaTemplateStatus(value?.event);
+        if (!metaTemplateId || !status) continue;
+        const nowIso = new Date().toISOString();
+        const { error } = await supabase.from("message_templates").update({
+          status,
+          rejection_reason: status === "rejected" ? describeRejection(value?.reason) : null,
+          last_meta_sync_at: nowIso,
+          updated_at: nowIso
+        }).eq("meta_template_id", metaTemplateId);
+        if (error) console.error("[TEMPLATE_STATUS_ERROR]", metaTemplateId, error);
+        else console.log("[TEMPLATE_STATUS]", metaTemplateId, status);
+      }
+      return new Response("Template status", {
+        status: 200
+      });
+    }
+    // -----------------------------------------------------------------------
     // STATUS DAS MENSAGENS ENVIADAS (ticks: delivered / read)
     // -----------------------------------------------------------------------
     const statuses = (body.entry ?? []).flatMap((e)=>(e?.changes ?? []).flatMap((c)=>Array.isArray(c?.value?.statuses) ? c.value.statuses : []));
@@ -202,8 +227,10 @@ serve(async (req)=>{
     const isDocumentMessage = rawType === "document";
     const isInteractiveMessage = rawType === "interactive";
     const isContactsMessage = rawType === "contacts";
-    // O banco não tem tipo "contacts": o contato recebido é gravado como texto
-    const messageType = isContactsMessage ? "text" : rawType;
+    // Toque num botão de resposta de um modelo (campanha pelo WhatsApp oficial)
+    const isTemplateButton = rawType === "button";
+    // O banco não tem tipo "contacts" nem "button": os dois são gravados como texto
+    const messageType = isContactsMessage || isTemplateButton ? "text" : rawType;
     // -----------------------------------------------------------------------
     // RESOLVE CONNECTION
     // -----------------------------------------------------------------------
@@ -262,6 +289,8 @@ serve(async (req)=>{
       text = interactiveReply.selectedTitle || interactiveReply.selectedId || "";
     } else if (isContactsMessage) {
       text = metaContactsText(message);
+    } else if (isTemplateButton) {
+      text = String(message.button?.text ?? message.button?.payload ?? "").trim();
     }
     // -----------------------------------------------------------------------
     // SHARED PAYLOAD

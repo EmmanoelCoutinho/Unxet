@@ -31,7 +31,6 @@ import { AuthCallback } from "./pages/Callback";
 import { SetPassword } from "./pages/SetPassword";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { FEATURES, type FeatureKey } from "./constants/features";
 import type { PlanFeature } from "./constants/plans";
 import { PlanUpgradeNotice } from "./components/PlanUpgradeNotice";
 
@@ -85,9 +84,9 @@ const QuickMessagesPage = lazy(() =>
   })),
 );
 const TutorialsPage = lazy(() => import("./pages/TutorialsPage"));
-const MarketingCampaignsPage = lazy(() =>
-  import("./pages/MarketingCampaignsPage").then((m) => ({
-    default: m.MarketingCampaignsPage,
+const MetaTemplatesPage = lazy(() =>
+  import("./pages/MetaTemplates").then((m) => ({
+    default: m.MetaTemplatesPage,
   })),
 );
 const ContactsPage = lazy(() =>
@@ -193,15 +192,6 @@ const PlanGate = ({
   return <>{children}</>;
 };
 
-// Módulos desligados em FEATURES redirecionam para o início do inbox
-const FeatureGate = ({
-  feature,
-  children,
-}: {
-  feature: FeatureKey;
-  children: ReactNode;
-}) => (FEATURES[feature] ? <>{children}</> : <Navigate to="/inbox" replace />);
-
 // "Mensagens programadas" virou "Campanhas": links e notificações antigos
 // (/inbox/scheduled-messages/...) continuam abrindo a mesma tela
 const LegacyCampaignRedirect = () => {
@@ -287,21 +277,14 @@ function RoutedApp() {
             <Route path="tutorials" element={<TutorialsPage />} />
             <Route path="leads" element={<PlanGate feature="scheduled_messages"><LeadsKanbanPage /></PlanGate>} />
             <Route path="campaigns" element={<PlanGate feature="scheduled_messages"><ScheduledMessagesPage /></PlanGate>} />
+            <Route path="campaigns/templates" element={<PlanGate feature="scheduled_messages"><MetaTemplatesPage /></PlanGate>} />
             <Route path="campaigns/new" element={<PlanGate feature="scheduled_messages"><ScheduledMessageEditorPage /></PlanGate>} />
             <Route path="campaigns/:id" element={<PlanGate feature="scheduled_messages"><ScheduledMessageEditorPage /></PlanGate>} />
             {/* Endereços antigos (Mensagens programadas e Mensagens em massa) */}
             <Route path="scheduled-messages/*" element={<LegacyCampaignRedirect />} />
             <Route path="mass-messages" element={<Navigate to="/inbox/campaigns" replace />} />
-            <Route
-              path="marketing-campaigns"
-              element={
-                <FeatureGate feature="marketingCampaigns">
-                  <AdminOnly>
-                    <MarketingCampaignsPage />
-                  </AdminOnly>
-                </FeatureGate>
-              }
-            />
+            {/* "Campanhas Meta" (desligada) virou Modelos da Meta, dentro de Campanhas */}
+            <Route path="marketing-campaigns" element={<Navigate to="/inbox/campaigns/templates" replace />} />
 
             <Route
               path="settings/integrations/meta"
