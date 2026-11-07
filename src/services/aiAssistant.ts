@@ -63,21 +63,32 @@ export const aiAssistantService = {
     settings: AiSettings,
     userId: string | null,
   ): Promise<void> {
-    const { error } = await supabase.from("clinic_ai_settings").upsert(
-      {
-        clinic_id: clinicId,
-        assistant_name: settings.assistant_name.trim() || "Assistente",
-        tone: settings.tone,
-        use_emojis: settings.use_emojis,
-        business_info: settings.business_info.trim(),
-        faq: settings.faq.trim(),
-        rules: settings.rules.trim(),
-        updated_at: new Date().toISOString(),
-        updated_by: userId,
-      },
-      { onConflict: "clinic_id" },
-    );
-    if (error) throw toError(error);
+    const values = {
+      assistant_name: settings.assistant_name.trim() || "Assistente",
+      tone: settings.tone,
+      use_emojis: settings.use_emojis,
+      business_info: settings.business_info.trim(),
+      faq: settings.faq.trim(),
+      rules: settings.rules.trim(),
+      updated_at: new Date().toISOString(),
+      updated_by: userId,
+    };
+
+    // Sem upsert: o ON CONFLICT DO UPDATE regrava o clinic_id, e a empresa
+    // não tem permissão de alterar essa coluna. Atualiza e, se a empresa
+    // ainda não tem configuração, insere.
+    const { data: updated, error: updateError } = await supabase
+      .from("clinic_ai_settings")
+      .update(values)
+      .eq("clinic_id", clinicId)
+      .select("clinic_id");
+    if (updateError) throw toError(updateError);
+    if (updated && updated.length > 0) return;
+
+    const { error: insertError } = await supabase
+      .from("clinic_ai_settings")
+      .insert({ clinic_id: clinicId, ...values });
+    if (insertError) throw toError(insertError);
   },
 
   // Respostas da IA usadas no mês atual
