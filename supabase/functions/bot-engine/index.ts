@@ -935,9 +935,12 @@ async function getDepartmentName(supabase, clinicId, departmentId) {
   const { data } = await supabase.from("departments").select("name").eq("id", departmentId).eq("clinic_id", clinicId).maybeSingle();
   return data?.name ?? null;
 }
-async function getAiHistory(supabase, conversationId, sessionStartedAt) {
-  // A mensagem que abriu a sessão chega segundos antes dela
-  const since = new Date(new Date(sessionStartedAt).getTime() - 60_000).toISOString();
+async function getAiHistory(supabase, conversationId, sessionStartedAt, claimedAt = null) {
+  // A mensagem que abriu a sessão chega antes dela; a que está sendo
+  // respondida entra mesmo se a fila de entrada atrasou
+  const sessionStart = new Date(sessionStartedAt).getTime() - 60_000;
+  const claimed = claimedAt ? new Date(claimedAt).getTime() : Infinity;
+  const since = new Date(Math.min(sessionStart, claimed)).toISOString();
   const { data, error } = await supabase.from("messages").select("direction, type, text, transcript_text, created_at").eq("conversation_id", conversationId).gte("created_at", since).order("created_at", {
     ascending: false
   }).limit(AI_MAX_HISTORY_MESSAGES);
@@ -1132,7 +1135,7 @@ async function recordAiTokens(supabase, clinicId, usage) {
     getAiSettings(supabase, clinicId),
     getClinicName(supabase, clinicId),
     getDepartmentName(supabase, clinicId, node.ai_handoff_department_id),
-    getAiHistory(supabase, conversationId, session.started_at)
+    getAiHistory(supabase, conversationId, session.started_at, params.claimedAt ?? null)
   ]);
   const turns = buildChatTurns(history);
   if (turns.length === 0) return;

@@ -28,6 +28,9 @@ export type ChatTurn = { role: "user" | "assistant"; content: string };
 export const AI_TOOL_TRANSFER = "transferir_para_atendente";
 export const AI_TOOL_END = "encerrar_conversa";
 
+// Avisos do sistema no histórico: não são falas do cliente
+const SYSTEM_NOTE_PREFIX = "(Nota do sistema:";
+
 // Camada 1: igual para todas as empresas
 const BASE_PROMPT = `Você atende clientes de uma empresa pelo WhatsApp, em nome dela. As informações da empresa e do atendimento estão abaixo.
 
@@ -49,7 +52,9 @@ Antes de transferir, escreva uma frase curta avisando o cliente.
 
 Quando encerrar (ferramenta ${AI_TOOL_END}): o cliente se despediu ou disse que não precisa de mais nada. Escreva uma despedida curta antes.
 
-Mensagens entre colchetes, como [áudio] ou [foto], são arquivos que o cliente mandou e você não consegue ver. Se o conteúdo for importante, peça para o cliente escrever ou transfira.`;
+Mensagens entre colchetes, como [áudio] ou [foto], são arquivos que o cliente mandou e você não consegue ver. Se o conteúdo for importante, peça para o cliente escrever ou transfira.
+
+Textos entre parênteses que começam com "Nota do sistema" são avisos do sistema, não falas do cliente: siga o que dizem e nunca os mencione. Suas mensagens anteriores na conversa podem incluir mensagens automáticas da empresa, como boas-vindas e menus: continue a partir delas, sem repetir a apresentação.`;
 
 const section = (title: string, body: string | null | undefined) => {
   const text = String(body ?? "").trim();
@@ -135,12 +140,27 @@ export const buildChatTurns = (messages: HistoryMessage[]): ChatTurn[] => {
       turns.push({ role, content });
     }
   }
-  if (turns[0]?.role === "assistant") {
-    turns.unshift({ role: "user", content: "[o cliente iniciou a conversa]" });
+  // Sem mensagem do cliente não há o que responder
+  if (!turns.some((t) => t.role === "user")) return [];
+
+  // A última fala precisa ser do cliente. Mensagens automáticas enviadas
+  // depois dela (boas-vindas, menu) entram como aviso do sistema junto da
+  // mensagem do cliente, e não como uma fala inventada dele.
+  const tail = turns[turns.length - 1];
+  if (tail.role === "assistant") {
+    turns.pop();
+    const last = turns[turns.length - 1];
+    last.content =
+      `${last.content}\n\n${SYSTEM_NOTE_PREFIX} depois desta mensagem do cliente, ` +
+      `a empresa já enviou automaticamente: "${tail.content}". Não repita nem ` +
+      `se apresente de novo: continue a conversa a partir daí, respondendo ao cliente.)`;
   }
-  // A IA responde ao cliente: a última fala precisa ser dele
-  if (turns.length > 0 && turns[turns.length - 1].role === "assistant") {
-    turns.push({ role: "user", content: "[o cliente aguarda a resposta]" });
+
+  if (turns[0].role === "assistant") {
+    turns.unshift({
+      role: "user",
+      content: `${SYSTEM_NOTE_PREFIX} a conversa começou com mensagens automáticas da empresa.)`,
+    });
   }
   return turns;
 };
