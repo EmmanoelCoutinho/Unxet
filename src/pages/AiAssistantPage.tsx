@@ -189,6 +189,32 @@ export const AiAssistantPage: React.FC = () => {
           </div>
         ) : (
           <div className="mx-auto flex max-w-3xl flex-col gap-4">
+            <div className="flex flex-col gap-4 rounded-2xl border border-blue-200 bg-blue-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex gap-3">
+                <SparklesIcon className="mt-0.5 h-5 w-5 flex-none text-blue-700" />
+                <div>
+                  <div className="text-sm font-semibold text-blue-900">
+                    A IA só atende pelo bot
+                  </div>
+                  <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-sm leading-relaxed text-blue-900">
+                    <li>Preencha abaixo o que a IA precisa saber sobre a empresa.</li>
+                    <li>
+                      No editor do bot, crie uma etapa do tipo{" "}
+                      <strong>Atendimento com IA</strong> com o objetivo dela e o
+                      setor que recebe a conversa.
+                    </li>
+                    <li>Ative o bot.</li>
+                  </ol>
+                </div>
+              </div>
+              <Link
+                to="/inbox/bots"
+                className="inline-flex flex-none items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                Abrir editor do bot
+              </Link>
+            </div>
+
             <div className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-sm font-semibold text-slate-900">Uso neste mês</div>
@@ -294,12 +320,6 @@ export const AiAssistantPage: React.FC = () => {
                 />
               </Field>
             </div>
-
-            <p className="pb-4 text-xs leading-relaxed text-slate-500">
-              Para a IA atender, adicione uma etapa do tipo "Atendimento com IA"
-              no <Link to="/inbox/bots" className="text-blue-700 hover:text-blue-900">editor do bot</Link>.
-              Lá você define o objetivo de cada etapa e para qual setor ela passa a conversa.
-            </p>
           </div>
         )}
       </div>
