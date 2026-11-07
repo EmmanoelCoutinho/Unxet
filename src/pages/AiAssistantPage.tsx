@@ -243,7 +243,7 @@ export const AiAssistantPage: React.FC = () => {
                     className={fieldClass}
                   />
                 </Field>
-                <Field id="ai-tone" label="Tom de voz">
+                <Field id="ai-tone" label="Tom de voz" help="Como a IA trata o cliente nas mensagens.">
                   <select
                     id="ai-tone"
                     value={form.tone}
