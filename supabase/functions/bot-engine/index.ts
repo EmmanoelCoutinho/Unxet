@@ -1074,11 +1074,13 @@ async function recordAiTokens(supabase, clinicId, usage) {
       }
     }
     await handoffConversation(supabase, conversationId, node.ai_handoff_department_id ?? null);
+    // O resumo aparece na conversa só para a equipe (eventos não vão ao cliente)
     await insertConversationEvent(supabase, conversationId, "bot_handoff_to_human", {
       bot_id: bot.id,
       conversation_bot_session_id: session.id,
       reason,
-      ai_summary: summary
+      ai_summary: summary,
+      to_department_name: await getDepartmentName(supabase, clinicId, node.ai_handoff_department_id)
     });
     await insertBotEvent(supabase, {
       clinicId,
