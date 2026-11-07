@@ -76,6 +76,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
+    text: "Assistente com IA (adicional): no editor do bot, uma etapa pode ser Atendimento com IA. A IA conversa com o cliente, tira dúvidas e passa para a equipe quando precisa, com um resumo da conversa. Em Assistente com IA, no menu lateral, você ensina sobre a empresa, as perguntas frequentes e as regras. Para contratar, fale com a Unxet.",
+    adminOnly: true,
+  },
+  {
+    kind: "new",
     text: "Campanhas pelo WhatsApp oficial: em Campanhas, o botão Modelos da Meta cria a mensagem, envia para a Meta aprovar e mostra se ela está em análise, aprovada ou recusada (com o motivo). Ao criar uma campanha, escolha enviar pelo WhatsApp oficial e um modelo aprovado. O nome do cliente entra sozinho na mensagem, e os botões de resposta tocados pelo cliente chegam na conversa.",
   },
   {
