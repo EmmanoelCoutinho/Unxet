@@ -55,18 +55,39 @@ describe("buildChatTurns", () => {
       { direction: "inbound", text: "oi" },
       { direction: "inbound", text: "quanto custa?" },
     ]);
-    expect(turns).toEqual([
-      { role: "user", content: "[o cliente iniciou a conversa]" },
-      { role: "assistant", content: "Olá! Como posso ajudar?" },
-      { role: "user", content: "oi\nquanto custa?" },
-    ]);
+    expect(turns).toHaveLength(3);
+    expect(turns[0].role).toBe("user");
+    expect(turns[0].content).toMatch(/^\(Nota do sistema:/);
+    expect(turns[1]).toEqual({ role: "assistant", content: "Olá! Como posso ajudar?" });
+    expect(turns[2]).toEqual({ role: "user", content: "oi\nquanto custa?" });
   });
 
-  it("termina com o cliente", () => {
+  it("boas-vindas depois do cliente viram aviso junto da mensagem dele", () => {
+    // Bot com boas-vindas e primeira etapa de IA: cliente → boas-vindas → IA
     const turns = buildChatTurns([
       { direction: "inbound", text: "oi" },
-      { direction: "outbound", text: "Escolha uma opção" },
+      { direction: "outbound", text: "Oi! Eu sou a Uni, da Unxet." },
     ]);
-    expect(turns[turns.length - 1].role).toBe("user");
+    expect(turns).toHaveLength(1);
+    expect(turns[0].role).toBe("user");
+    expect(turns[0].content).toMatch(/^oi\n\n\(Nota do sistema:/);
+    expect(turns[0].content).toContain("Oi! Eu sou a Uni, da Unxet.");
+    // Nenhuma fala inventada do cliente
+    expect(turns[0].content).not.toContain("aguarda");
+  });
+
+  it("menu e botão escolhido terminam na escolha do cliente", () => {
+    const turns = buildChatTurns([
+      { direction: "inbound", text: "oi" },
+      { direction: "outbound", text: "Bem-vindo!" },
+      { direction: "outbound", text: "Escolha: Conhecer a Unxet / Já sou cliente" },
+      { direction: "inbound", text: "Conhecer a Unxet" },
+    ]);
+    expect(turns.map((t) => t.role)).toEqual(["user", "assistant", "user"]);
+    expect(turns[2].content).toBe("Conhecer a Unxet");
+  });
+
+  it("sem mensagem do cliente não monta histórico", () => {
+    expect(buildChatTurns([{ direction: "outbound", text: "Olá" }])).toEqual([]);
   });
 });
