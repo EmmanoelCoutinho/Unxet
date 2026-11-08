@@ -440,9 +440,6 @@ verify_jwt = true
 [functions.archive-evolution-connection]
 verify_jwt = true
 
-[functions.evolution-webhook]
-verify_jwt = true
-
 [functions.convert-audio]
 verify_jwt = true
 
