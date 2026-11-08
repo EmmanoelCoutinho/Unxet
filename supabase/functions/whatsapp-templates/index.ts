@@ -152,7 +152,9 @@ async function createTemplate(supabase, ctx, body) {
     updated: 0
   });
   const remote = new Map();
-  let path = `${encodeURIComponent(ctx.connection.wabaId)}/message_templates?fields=id,name,language,status,category,rejected_reason&limit=100`;
+  // Só dá para dizer que um modelo foi apagado na Meta se todas as páginas vieram
+  let complete = false;
+  let path =`${encodeURIComponent(ctx.connection.wabaId)}/message_templates?fields=id,name,language,status,category,rejected_reason&limit=100`;
   for(let page = 0; page < SYNC_MAX_PAGES && path; page++){
     const resp = await graph("GET", path, ctx.connection.token);
     if (!resp.ok) {
@@ -164,13 +166,19 @@ async function createTemplate(supabase, ctx, body) {
       if (item?.id) remote.set(String(item.id), item);
     }
     const next = String(resp.body?.paging?.next ?? "");
+    if (!next) {
+      complete = true;
+      break;
+    }
     path = next.startsWith(`${GRAPH}/`) ? next.slice(GRAPH.length + 1) : "";
   }
   const now = new Date().toISOString();
   let updated = 0;
   for (const row of rows){
     const item = remote.get(String(row.meta_template_id));
-    // Apagado direto no Gerenciador do WhatsApp: deixa de poder ser usado
+    // Apagado direto no Gerenciador do WhatsApp: deixa de poder ser usado.
+    // Lista incompleta (muitos modelos): quem não veio fica como está.
+    if (!item && !complete) continue;
     const status = item ? mapMetaTemplateStatus(item.status) : "disabled";
     if (!status) continue;
     const rejection = status === "rejected" ? describeRejection(item?.rejected_reason) : null;

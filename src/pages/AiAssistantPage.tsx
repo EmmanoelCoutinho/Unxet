@@ -116,6 +116,17 @@ export const AiAssistantPage: React.FC = () => {
     [saved, form],
   );
 
+  // Fechar ou recarregar a aba com alterações sem salvar pede confirmação
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
   const tooLong =
     form.business_info.length > AI_SETTINGS_LIMITS.business_info ||
     form.faq.length > AI_SETTINGS_LIMITS.faq ||

@@ -75,6 +75,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "fixed",
+    text: "Assistente com IA: fechar ou recarregar a página com alterações não salvas agora pede confirmação. A IA também deixa de considerar mensagens apagadas pela equipe e fica mais protegida contra clientes que tentam mudar as regras dela pela conversa.",
+    adminOnly: true,
+  },
+  {
     kind: "new",
     text: "Assistente com IA (adicional): no editor do bot, uma etapa pode ser Atendimento com IA. A IA conversa com o cliente, tira dúvidas e passa para a equipe quando precisa, com um resumo da conversa. Em Assistente com IA, no menu lateral, você ensina sobre a empresa, as perguntas frequentes e as regras. Para contratar, fale com a Unxet.",
     adminOnly: true,

@@ -941,7 +941,9 @@ async function getAiHistory(supabase, conversationId, sessionStartedAt, claimedA
   const sessionStart = new Date(sessionStartedAt).getTime() - 60_000;
   const claimed = claimedAt ? new Date(claimedAt).getTime() : Infinity;
   const since = new Date(Math.min(sessionStart, claimed)).toISOString();
-  const { data, error } = await supabase.from("messages").select("direction, type, text, transcript_text, created_at").eq("conversation_id", conversationId).gte("created_at", since).order("created_at", {
+  const { data, error } = await supabase.from("messages").select("direction, type, text, transcript_text, created_at").eq("conversation_id", conversationId)
+  // Mensagem apagada pela equipe não vale mais para a IA
+  .is("deleted_at", null).gte("created_at", since).order("created_at", {
     ascending: false
   }).limit(AI_MAX_HISTORY_MESSAGES);
   if (error) {
@@ -1120,6 +1122,15 @@ async function recordAiTokens(supabase, clinicId, usage) {
     console.error("runAiReply: ANTHROPIC_API_KEY não configurada");
     return handoff("ai_not_configured", UNRECOGNIZED_HANDOFF_TEXT);
   }
+  const [settings, companyName, departmentName, history] = await Promise.all([
+    getAiSettings(supabase, clinicId),
+    getClinicName(supabase, clinicId),
+    getDepartmentName(supabase, clinicId, node.ai_handoff_department_id),
+    getAiHistory(supabase, conversationId, session.started_at, params.claimedAt ?? null)
+  ]);
+  const turns = buildChatTurns(history);
+  // Nada do cliente para responder: não gasta resposta do mês
+  if (turns.length === 0) return;
   const { data: allowed, error: quotaErr } = await supabase.rpc("clinic_ai_try_consume", {
     p_clinic_id: clinicId
   });
@@ -1131,14 +1142,6 @@ async function recordAiTokens(supabase, clinicId, usage) {
     });
     return handoff("ai_unavailable", UNRECOGNIZED_HANDOFF_TEXT);
   }
-  const [settings, companyName, departmentName, history] = await Promise.all([
-    getAiSettings(supabase, clinicId),
-    getClinicName(supabase, clinicId),
-    getDepartmentName(supabase, clinicId, node.ai_handoff_department_id),
-    getAiHistory(supabase, conversationId, session.started_at, params.claimedAt ?? null)
-  ]);
-  const turns = buildChatTurns(history);
-  if (turns.length === 0) return;
   const system = buildSystemPrompt({
     companyName,
     settings,
