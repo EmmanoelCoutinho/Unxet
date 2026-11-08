@@ -17,39 +17,85 @@ export const TEMPLATE_NAME_FALLBACK = "cliente";
 const NAME_TAG = /\{nome\}/gi;
 const OTHER_VARIABLE = /\{\{[^}]*\}\}|\{(?!nome\})[^{}\s]*\}/i;
 
-export const validateTemplateDraft = (input: MetaTemplateInput): string | null => {
+export type TemplateFieldErrors = {
+  name?: string;
+  body?: string;
+  footer?: string;
+  /** Erro de um botão, pelo índice dele na lista */
+  buttons?: Record<number, string>;
+  /** Erro do conjunto de botões (quantidade, repetidos) */
+  buttonsGroup?: string;
+};
+
+/**
+ * Confere o modelo e devolve o erro de cada campo, para mostrar ao lado dele.
+ * Objeto vazio: tudo certo.
+ */
+export const validateTemplateFields = (input: MetaTemplateInput): TemplateFieldErrors => {
+  const errors: TemplateFieldErrors = {};
   const name = input.name.trim();
   const body = input.body.trim();
   const footer = input.footer.trim();
-  const buttons = input.buttons.map((b) => b.trim()).filter(Boolean);
 
-  if (!name) return "Dê um nome para o modelo.";
-  if (name.length > TEMPLATE_NAME_MAX) {
-    return `O nome do modelo pode ter no máximo ${TEMPLATE_NAME_MAX} caracteres.`;
+  if (!name) errors.name = "Dê um nome para o modelo.";
+  else if (name.length > TEMPLATE_NAME_MAX) {
+    errors.name = `O nome do modelo pode ter no máximo ${TEMPLATE_NAME_MAX} caracteres.`;
   }
-  if (body.length < 10) return "Escreva a mensagem do modelo.";
-  if (body.length > TEMPLATE_BODY_MAX) {
-    return `A mensagem do modelo pode ter no máximo ${TEMPLATE_BODY_MAX} caracteres.`;
+
+  if (body.length < 10) {
+    errors.body = body ? "A mensagem precisa ter pelo menos 10 caracteres." : "Escreva a mensagem do modelo.";
+  } else if (body.length > TEMPLATE_BODY_MAX) {
+    errors.body = `A mensagem do modelo pode ter no máximo ${TEMPLATE_BODY_MAX} caracteres.`;
+  } else if (OTHER_VARIABLE.test(body)) {
+    errors.body = "Use só {nome} como variável. Tire as outras marcações entre chaves.";
+  } else if ((body.match(NAME_TAG) ?? []).length > 1) {
+    errors.body = "Use {nome} só uma vez na mensagem.";
+  } else if (/^{nome}/i.test(body) || /{nome}[s.!?,;:]*$/i.test(body)) {
+    errors.body = "A Meta não aceita {nome} no começo nem no fim da mensagem. Coloque algum texto antes e depois.";
   }
-  if (OTHER_VARIABLE.test(body)) {
-    return "Use só {nome} como variável. Tire as outras marcações entre chaves.";
-  }
-  if ((body.match(NAME_TAG) ?? []).length > 1) return "Use {nome} só uma vez na mensagem.";
-  if (/^\{nome\}/i.test(body) || /\{nome\}[\s.!?,;:]*$/i.test(body)) {
-    return "A Meta não aceita {nome} no começo nem no fim da mensagem. Coloque algum texto antes e depois.";
-  }
+
   if (footer.length > TEMPLATE_FOOTER_MAX) {
-    return `O rodapé pode ter no máximo ${TEMPLATE_FOOTER_MAX} caracteres.`;
+    errors.footer = `O rodapé pode ter no máximo ${TEMPLATE_FOOTER_MAX} caracteres.`;
+  } else if (/[{}]/.test(footer)) {
+    errors.footer = "O rodapé não pode ter variáveis.";
   }
-  if (/[{}]/.test(footer)) return "O rodapé não pode ter variáveis.";
-  if (buttons.length > TEMPLATE_BUTTONS_MAX) return `Use no máximo ${TEMPLATE_BUTTONS_MAX} botões.`;
-  if (buttons.some((b) => b.length > TEMPLATE_BUTTON_TEXT_MAX)) {
-    return `Cada botão pode ter no máximo ${TEMPLATE_BUTTON_TEXT_MAX} caracteres.`;
+
+  const buttonErrors: Record<number, string> = {};
+  const seen = new Map<string, number>();
+  input.buttons.forEach((raw, index) => {
+    const text = raw.trim();
+    if (!text) {
+      buttonErrors[index] = "Escreva o texto do botão ou remova o botão.";
+    } else if (text.length > TEMPLATE_BUTTON_TEXT_MAX) {
+      buttonErrors[index] = `O botão pode ter no máximo ${TEMPLATE_BUTTON_TEXT_MAX} caracteres.`;
+    } else if (seen.has(text.toLowerCase())) {
+      buttonErrors[index] = "Este botão repete o texto de outro.";
+    } else {
+      seen.set(text.toLowerCase(), index);
+    }
+  });
+  if (Object.keys(buttonErrors).length > 0) errors.buttons = buttonErrors;
+  if (input.buttons.length > TEMPLATE_BUTTONS_MAX) {
+    errors.buttonsGroup = `Use no máximo ${TEMPLATE_BUTTONS_MAX} botões.`;
   }
-  if (new Set(buttons.map((b) => b.toLowerCase())).size !== buttons.length) {
-    return "Os botões precisam ter textos diferentes.";
-  }
-  return null;
+
+  return errors;
+};
+
+export const hasTemplateErrors = (errors: TemplateFieldErrors) =>
+  Boolean(errors.name || errors.body || errors.footer || errors.buttons || errors.buttonsGroup);
+
+/** Primeiro erro do modelo, ou null. */
+export const validateTemplateDraft = (input: MetaTemplateInput): string | null => {
+  const errors = validateTemplateFields(input);
+  return (
+    errors.name ??
+    errors.body ??
+    errors.footer ??
+    errors.buttonsGroup ??
+    Object.values(errors.buttons ?? {})[0] ??
+    null
+  );
 };
 
 /** Texto do modelo como o cliente recebe (sem nome, a Meta exige um substituto). */

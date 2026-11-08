@@ -10,8 +10,9 @@ import {
   TEMPLATE_CATEGORIES,
   TEMPLATE_FOOTER_MAX,
   TEMPLATE_NAME_MAX,
+  hasTemplateErrors,
   renderTemplatePreview,
-  validateTemplateDraft,
+  validateTemplateFields,
 } from "../utils/templates";
 import { WhatsappPreview } from "./WhatsappPreview";
 
@@ -19,6 +20,20 @@ const FIELD =
   "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100";
 const LABEL = "block text-sm font-medium text-slate-800";
 const HINT = "mt-1.5 text-xs leading-5 text-slate-500";
+// Campo com erro: troca a cor da borda (somar as duas classes não funciona,
+// a borda cinza vence no CSS)
+const invalidField = (className: string) =>
+  className
+    .replace("border-slate-200", "border-red-400")
+    .replace("focus:border-blue-400", "focus:border-red-500")
+    .replace("focus:ring-blue-100", "focus:ring-red-100");
+
+const FieldError: React.FC<{ id: string; message?: string }> = ({ id, message }) =>
+  message ? (
+    <p id={id} className="mt-1.5 text-xs leading-5 text-red-600">
+      {message}
+    </p>
+  ) : null;
 
 /**
  * Cria um modelo de mensagem e envia para a Meta aprovar. A aprovação costuma
@@ -35,6 +50,10 @@ export const TemplateFormModal: React.FC<{
   const [body, setBody] = useState("");
   const [footer, setFooter] = useState("");
   const [buttons, setButtons] = useState<string[]>([]);
+  // Os erros aparecem depois da primeira tentativa de enviar e somem conforme
+  // a pessoa corrige
+  const [showErrors, setShowErrors] = useState(false);
+  const errors = showErrors ? validateTemplateFields({ name, category, body, footer, buttons }) : {};
 
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const pendingCursor = useRef<number | null>(null);
@@ -76,10 +95,21 @@ export const TemplateFormModal: React.FC<{
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const input = { name, category, body, footer, buttons };
-    const error = validateTemplateDraft(input);
-    if (error) {
-      toast.error(error);
+    const found = validateTemplateFields({ name, category, body, footer, buttons });
+    if (hasTemplateErrors(found)) {
+      setShowErrors(true);
+      // Leva a pessoa até o primeiro campo com problema
+      const firstButton = Object.keys(found.buttons ?? {})[0];
+      const target = found.name
+        ? "template-name"
+        : found.body
+          ? "template-body"
+          : found.footer
+            ? "template-footer"
+            : firstButton !== undefined
+              ? `template-button-${firstButton}`
+              : null;
+      if (target) document.getElementById(target)?.focus();
       return;
     }
     await onSubmit({
@@ -129,8 +159,11 @@ export const TemplateFormModal: React.FC<{
                   maxLength={TEMPLATE_NAME_MAX}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Ex.: Promoção de novembro"
-                  className={`${FIELD} mt-1.5`}
+                  aria-invalid={Boolean(errors.name)}
+                  aria-describedby={errors.name ? "template-name-error" : undefined}
+                  className={`${errors.name ? invalidField(FIELD) : FIELD} mt-1.5`}
                 />
+                <FieldError id="template-name-error" message={errors.name} />
                 <p className={HINT}>Só a equipe vê. Ajuda a achar o modelo na hora de criar a campanha.</p>
               </div>
 
@@ -179,8 +212,11 @@ export const TemplateFormModal: React.FC<{
                   maxLength={TEMPLATE_BODY_MAX}
                   onChange={(event) => setBody(event.target.value)}
                   placeholder="Ex.: Olá {nome}! Em novembro todos os serviços estão com 20% de desconto. Responda esta mensagem para agendar."
-                  className={`${FIELD} mt-1.5 resize-y leading-6`}
+                  aria-invalid={Boolean(errors.body)}
+                  aria-describedby={errors.body ? "template-body-error" : undefined}
+                  className={`${errors.body ? invalidField(FIELD) : FIELD} mt-1.5 resize-y leading-6`}
                 />
+                <FieldError id="template-body-error" message={errors.body} />
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
@@ -207,8 +243,11 @@ export const TemplateFormModal: React.FC<{
                   maxLength={TEMPLATE_FOOTER_MAX}
                   onChange={(event) => setFooter(event.target.value)}
                   placeholder="Ex.: Responda SAIR para não receber mais"
-                  className={`${FIELD} mt-1.5`}
+                  aria-invalid={Boolean(errors.footer)}
+                  aria-describedby={errors.footer ? "template-footer-error" : undefined}
+                  className={`${errors.footer ? invalidField(FIELD) : FIELD} mt-1.5`}
                 />
+                <FieldError id="template-footer-error" message={errors.footer} />
               </div>
 
               <div>
@@ -220,30 +259,37 @@ export const TemplateFormModal: React.FC<{
                 </p>
                 <div className="mt-2 space-y-2">
                   {buttons.map((label, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={label}
-                        maxLength={TEMPLATE_BUTTON_TEXT_MAX}
-                        onChange={(event) =>
-                          setButtons((list) => list.map((b, i) => (i === index ? event.target.value : b)))
-                        }
-                        // Só monta quando a pessoa adiciona o botão: o cursor já vai para ele
-                        autoFocus
-                        placeholder={index === 0 ? "Ex.: Quero agendar" : "Ex.: Agora não"}
-                        aria-label={`Botão ${index + 1}`}
-                        className={FIELD}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setButtons((list) => list.filter((_, i) => i !== index))}
-                        className="rounded-full p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
-                        aria-label={`Remover botão ${index + 1}`}
-                      >
-                        <Trash2Icon className="h-4 w-4" />
-                      </button>
+                    <div key={index}>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id={`template-button-${index}`}
+                          type="text"
+                          value={label}
+                          maxLength={TEMPLATE_BUTTON_TEXT_MAX}
+                          onChange={(event) =>
+                            setButtons((list) => list.map((b, i) => (i === index ? event.target.value : b)))
+                          }
+                          // Só monta quando a pessoa adiciona o botão: o cursor já vai para ele
+                          autoFocus
+                          placeholder={index === 0 ? "Ex.: Quero agendar" : "Ex.: Agora não"}
+                          aria-label={`Botão ${index + 1}`}
+                          aria-invalid={Boolean(errors.buttons?.[index])}
+                          aria-describedby={errors.buttons?.[index] ? `template-button-${index}-error` : undefined}
+                          className={errors.buttons?.[index] ? invalidField(FIELD) : FIELD}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setButtons((list) => list.filter((_, i) => i !== index))}
+                          className="rounded-full p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                          aria-label={`Remover botão ${index + 1}`}
+                        >
+                          <Trash2Icon className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <FieldError id={`template-button-${index}-error`} message={errors.buttons?.[index]} />
                     </div>
                   ))}
+                  <FieldError id="template-buttons-error" message={errors.buttonsGroup} />
                   {buttons.length < TEMPLATE_BUTTONS_MAX && (
                     <button
                       type="button"
