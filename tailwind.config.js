@@ -90,19 +90,20 @@ export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
-      // Sino chacoalha quando chega notificação nova
+      // Sino balança em ciclo enquanto há notificação não lida: uma
+      // balançada (~0,9 s) e uma pausa, a cada 3 s
       keyframes: {
-        "bell-shake": {
-          "0%, 100%": { transform: "rotate(0)" },
-          "15%": { transform: "rotate(14deg)" },
-          "30%": { transform: "rotate(-12deg)" },
-          "45%": { transform: "rotate(9deg)" },
-          "60%": { transform: "rotate(-6deg)" },
-          "75%": { transform: "rotate(3deg)" },
+        "bell-ring": {
+          "0%, 30%, 100%": { transform: "rotate(0)" },
+          "5%": { transform: "rotate(14deg)" },
+          "10%": { transform: "rotate(-12deg)" },
+          "15%": { transform: "rotate(9deg)" },
+          "20%": { transform: "rotate(-6deg)" },
+          "25%": { transform: "rotate(3deg)" },
         },
       },
       animation: {
-        "bell-shake": "bell-shake 0.9s ease-in-out",
+        "bell-ring": "bell-ring 3s ease-in-out infinite",
       },
       colors: palettes.base,
       backgroundColor: { ...palettes.bg, white: ref("--c-bg-white") },

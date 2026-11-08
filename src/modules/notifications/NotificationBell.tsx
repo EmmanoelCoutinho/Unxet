@@ -49,8 +49,8 @@ type BellItem = {
 
 /**
  * Sino do topo: avisos do sistema para a pessoa (limite da IA, sistema
- * atualizado...). Cada aviso leva para a tela do assunto. Chacoalha quando
- * chega algo novo.
+ * atualizado...). Cada aviso leva para a tela do assunto. Balança de tempos
+ * em tempos enquanto houver aviso não lido.
  */
 export const NotificationBell = ({ userId }: { userId?: string }) => {
   const navigate = useNavigate();
@@ -58,10 +58,8 @@ export const NotificationBell = ({ userId }: { userId?: string }) => {
   const [open, setOpen] = useState(false);
   const [seenRelease, setSeenRelease] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [shaking, setShaking] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const lastUnread = useRef(0);
 
   const notice = useMemo(() => releaseNotice(undefined, undefined, IS_PRODUCTION), []);
 
@@ -99,17 +97,6 @@ export const NotificationBell = ({ userId }: { userId?: string }) => {
   }, [items, notice, loaded, seenRelease]);
 
   const unreadCount = list.filter((i) => i.unread).length;
-
-  // Chacoalha ao carregar com algo novo e quando chega aviso novo
-  useEffect(() => {
-    if (unreadCount > lastUnread.current) {
-      setShaking(true);
-      const timer = window.setTimeout(() => setShaking(false), 1000);
-      lastUnread.current = unreadCount;
-      return () => window.clearTimeout(timer);
-    }
-    lastUnread.current = unreadCount;
-  }, [unreadCount]);
 
   const markReleaseSeen = () => {
     if (!userId) return;
@@ -165,7 +152,10 @@ export const NotificationBell = ({ userId }: { userId?: string }) => {
         aria-label={label}
         title={label}
       >
-        <BellIcon className={`h-5 w-5 origin-top ${shaking ? "animate-bell-shake motion-reduce:animate-none" : ""}`} />
+        {/* Balança em ciclo até a pessoa abrir o que é novo */}
+        <BellIcon
+          className={`h-5 w-5 origin-top ${unreadCount > 0 ? "animate-bell-ring motion-reduce:animate-none" : ""}`}
+        />
         {unreadCount > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
             {unreadCount > 9 ? "9+" : unreadCount}
