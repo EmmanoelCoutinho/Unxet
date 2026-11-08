@@ -38,8 +38,20 @@ const wipe = (db) =>
     delete from tags where id = '${TAG}';
   `);
 
+// Este vídeo mostra o caminho do QR Code (texto livre), o da maioria das
+// empresas. Com o WhatsApp oficial conectado a campanha usaria modelo da
+// Meta (vídeo "modelos-meta"), então o oficial fica desconectado durante a
+// gravação e volta no fim.
+const officialRows = (db) =>
+  db.sql(`select id, status from channel_connections
+          where clinic_id = '${CLINIC}' and provider = 'meta' and channel = 'whatsapp';`)
+    .map((line) => { const [id, status] = line.split("|"); return { id, status }; });
+
 export async function prepare(db) {
   wipe(db);
+  const official = officialRows(db);
+  db.sql(`update channel_connections set status = 'disconnected'
+          where clinic_id = '${CLINIC}' and provider = 'meta' and channel = 'whatsapp';`);
   // Seis conversas de WhatsApp com telefone, de clientes diferentes
   db.sql(`
     insert into tags (id, clinic_id, name, color, created_at)
@@ -52,10 +64,14 @@ export async function prepare(db) {
     order by c.contact_id, c.last_message_at desc
     limit 6;
   `);
+  return official;
 }
 
-export async function restore(db) {
+export async function restore(db, official = []) {
   wipe(db);
+  for (const row of official) {
+    db.sql(`update channel_connections set status = ${db.lit(row.status)} where id = ${db.lit(row.id)};`);
+  }
 }
 
 const tomorrow = () => {

@@ -39,7 +39,7 @@ export async function run(page, d) {
 
   // 1. Criar (administrador)
   await d.caption("Etiquetas marcam as conversas para achar e agrupar depois", { hold: 2200 });
-  await d.caption("Quem cria é o administrador: abra Etiquetas no menu", { step: 1, hold: 300 });
+  await d.caption("Quem cria é o administrador (ou um cargo com essa permissão): abra Etiquetas", { step: 1, hold: 300 });
   await page.mouse.move(32, 300, { steps: 18 });
   await d.wait(450);
   await d.click(menuItem, { before: 1000, after: 1200 });
