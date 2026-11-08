@@ -52,10 +52,12 @@ type DropTarget = { stageId: string; index: number };
 export const LeadsKanbanPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { clinicId, membership } = useClinic();
+  const { clinicId, membership, can } = useClinic();
   const { authUser } = useAuth();
   const currentUserId = authUser?.id ?? null;
   const isAdmin = membership?.role === "admin";
+  // Negociações de toda a equipe (cargo); as etapas do funil continuam só do admin
+  const seesAllLeads = can("leads.all");
 
   const { pipelines, loading: loadingPipelines, error: pipelinesError } = usePipelines(clinicId);
   const lossReasons = useLossReasons(clinicId);
@@ -99,7 +101,7 @@ export const LeadsKanbanPage: React.FC = () => {
 
   const ownerOptions: OwnerOption[] = useMemo(() => {
     const meLabel = currentUserId && userNames[currentUserId] ? `Você (${userNames[currentUserId]})` : "Você";
-    if (!isAdmin) {
+    if (!seesAllLeads) {
       return [
         { id: currentUserId, label: meLabel },
         { id: null, label: "Sem responsável" },
@@ -110,7 +112,7 @@ export const LeadsKanbanPage: React.FC = () => {
       .sort((a, b) => a[1].localeCompare(b[1]))
       .map(([id, label]) => ({ id, label }));
     return [{ id: currentUserId, label: meLabel }, ...others, { id: null, label: "Sem responsável" }];
-  }, [isAdmin, currentUserId, userNames]);
+  }, [seesAllLeads, currentUserId, userNames]);
 
   const visibleDeals = useMemo(
     () => filterDeals(deals, filters, currentUserId),
@@ -300,7 +302,7 @@ export const LeadsKanbanPage: React.FC = () => {
             <option value="all">Todos os responsáveis</option>
             <option value="mine">Minhas</option>
             <option value="none">Sem responsável</option>
-            {isAdmin &&
+            {seesAllLeads &&
               Object.entries(userNames)
                 .filter(([id]) => id !== currentUserId)
                 .sort((a, b) => a[1].localeCompare(b[1]))
@@ -460,7 +462,7 @@ export const LeadsKanbanPage: React.FC = () => {
           ownerOptions={ownerOptions}
           userNames={userNames}
           currentUserId={currentUserId}
-          isAdmin={isAdmin}
+          seesAllLeads={seesAllLeads}
           clinicId={clinicId}
           onClose={closeDeal}
           onMove={(deal, stage) => requestMove(deal, stage)}

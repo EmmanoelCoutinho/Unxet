@@ -17,7 +17,7 @@
  *           enviando usa o modelo. Só admin ou quem criou.
  */ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAuthenticatedUser } from "../_shared/security.ts";
+import { getAuthenticatedUser, hasClinicPermission } from "../_shared/security.ts";
 import { clinicHasFeature, clinicIsSuspended } from "../_shared/plan.ts";
 import { TEMPLATE_LANGUAGE, buildTemplateComponents, describeMetaError, describeRejection, mapMetaTemplateStatus, normalizeTemplateInput, toMetaTemplateName, validateTemplateInput } from "../_shared/metaTemplates.ts";
 // META_GRAPH_URL só no ambiente local (simulador da Meta); sem ela, a Graph API real
@@ -259,6 +259,9 @@ serve(async (req)=>{
     }
     const body = await req.json().catch(()=>({}));
     const action = String(body?.action ?? "");
+    if (action === "create" && !await hasClinicPermission(supabase, authUser.id, clinicId, "meta_templates.create")) {
+      return fail(403, "Seu cargo não permite criar modelos da Meta. Fale com um administrador.");
+    }
     if (action === "create" && await clinicIsSuspended(supabase, clinicId)) {
       return fail(403, "O acesso da empresa está pausado.");
     }

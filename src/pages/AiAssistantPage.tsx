@@ -77,9 +77,9 @@ const NotContracted = () => (
 );
 
 export const AiAssistantPage: React.FC = () => {
-  const { clinicId, subscription, membership } = useClinic();
+  const { clinicId, subscription, can } = useClinic();
   const { authUser } = useAuth();
-  const isAdmin = membership?.role === "admin";
+  const canManageAi = can("ai.manage");
   const limit = subscription?.ai_replies_addon ?? null;
 
   const [saved, setSaved] = useState<AiSettings | null>(null);
@@ -139,7 +139,7 @@ export const AiAssistantPage: React.FC = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = async () => {
-    if (!clinicId || !isAdmin) return;
+    if (!clinicId || !canManageAi) return;
     setSaving(true);
     try {
       await aiAssistantService.saveSettings(clinicId, form, authUser?.id ?? null);
@@ -154,7 +154,7 @@ export const AiAssistantPage: React.FC = () => {
     }
   };
 
-  const editable = isAdmin && !saving;
+  const editable = canManageAi && !saving;
 
   return (
     <div className="flex h-full flex-col bg-slate-50">
@@ -183,7 +183,7 @@ export const AiAssistantPage: React.FC = () => {
                 size="sm"
                 onClick={handleSave}
                 isLoading={saving}
-                disabled={!dirty || saving || tooLong || maxRepliesInvalid || !isAdmin}
+                disabled={!dirty || saving || tooLong || maxRepliesInvalid || !canManageAi}
               >
                 Salvar
               </Button>

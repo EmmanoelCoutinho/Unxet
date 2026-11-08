@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { hasClinicPermission } from "../_shared/security.ts";
 import { clinicHasFeature, PLAN_LIMIT_MESSAGES } from "../_shared/plan.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -104,9 +105,10 @@ serve(async (req)=>{
     if (!await clinicHasFeature(admin, conv.clinic_id, "departments")) {
       return reject(403, PLAN_LIMIT_MESSAGES.departments, "plan_limit");
     }
-    // 3) quem pode transferir: admin, o responsável pela conversa ou, se ela
-    // está na fila (sem responsável), um membro do setor atual
-    const isAdmin = String(membership.role ?? "").toLowerCase() === "admin";
+    // 3) quem pode transferir: admin ou cargo que atende todos os setores, o
+    // responsável pela conversa ou, se ela está na fila (sem responsável), um
+    // membro do setor atual
+    const isAdmin = String(membership.role ?? "").toLowerCase() === "admin" || await hasClinicPermission(admin, user.id, conv.clinic_id, "conversations.all");
     let allowed = isAdmin || conv.assigned_user_id === user.id;
     if (!allowed && !conv.assigned_user_id) {
       allowed = membership.department_id === conv.department_id;
@@ -116,7 +118,7 @@ serve(async (req)=>{
       }
     }
     if (!allowed) {
-      return reject(403, "Apenas o responsável pela conversa ou um administrador pode transferi-la.");
+      return reject(403, "Apenas o responsável pela conversa ou quem atende todos os setores pode transferi-la.");
     }
     if (conv.status === "closed") {
       return reject(409, "Esta conversa já foi finalizada e não pode ser transferida.", "conversation_closed");

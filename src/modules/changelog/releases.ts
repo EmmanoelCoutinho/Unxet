@@ -75,6 +75,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "new",
+    text: "Cargos personalizados: em Atendentes, o botão Cargos e permissões cria cargos como \"Supervisor\" ou \"Marketing\", marcando o que cada um pode fazer (Painel, Relatórios, todas as conversas, campanhas e funil de toda a equipe, bots, etiquetas e outros). Depois é só escolher o cargo ao convidar ou editar a pessoa. Administrador e Atendente continuam como antes.",
+    adminOnly: true,
+  },
+  {
     kind: "improved",
     text: "Assistente com IA: novo campo Respostas por atendimento, para escolher quantas mensagens a IA pode enviar para o mesmo cliente. Ao chegar no limite, ela avisa o cliente com educação e passa a conversa para um atendente.",
     adminOnly: true,

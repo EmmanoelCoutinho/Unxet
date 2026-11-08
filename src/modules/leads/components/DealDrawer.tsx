@@ -68,7 +68,7 @@ export const DealDrawer: React.FC<{
   ownerOptions: OwnerOption[];
   userNames: Record<string, string>;
   currentUserId: string | null;
-  isAdmin: boolean;
+  seesAllLeads: boolean;
   clinicId: string | null;
   onClose: () => void;
   // Mover pela tela principal (ela pede o motivo quando é perda)
@@ -130,7 +130,7 @@ const DealDetails: React.FC<{
   ownerOptions: OwnerOption[];
   userNames: Record<string, string>;
   currentUserId: string | null;
-  isAdmin: boolean;
+  seesAllLeads: boolean;
   clinicId: string | null;
   onClose: () => void;
   onMove: (deal: Deal, stage: PipelineStage) => void;
@@ -142,7 +142,7 @@ const DealDetails: React.FC<{
   ownerOptions,
   userNames,
   currentUserId,
-  isAdmin,
+  seesAllLeads,
   clinicId,
   onClose,
   onMove,
@@ -275,7 +275,7 @@ const DealDetails: React.FC<{
             >
               <MessageCircleIcon className="h-5 w-5" />
             </button>
-            {isAdmin && <HeaderMenu onDelete={remove} />}
+            {seesAllLeads && <HeaderMenu onDelete={remove} />}
             <button
               type="button"
               onClick={onClose}

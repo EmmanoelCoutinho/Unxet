@@ -220,11 +220,11 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const isFloating = variant === "floating";
   const { getDraft, setDraft } = useFloatingChats();
   const { authUser } = useAuth();
-  const { clinicId, membership, hasFeature } = useClinic();
+  const { clinicId, membership, can, hasFeature } = useClinic();
   const { refetch: refetchConversationList } = useConversationList();
   const { hasMultiple: hasMultipleWhatsapp } = useWhatsappConnections(clinicId);
-  const isAdmin = membership?.role === "admin";
-  const userNames = useClinicUserNames(clinicId, isAdmin);
+  const seesAllConversations = can("conversations.all");
+  const userNames = useClinicUserNames(clinicId, seesAllConversations);
 
   const didInitialConversationLoadRef = useRef(false);
   const activeRouteConversationIdRef = useRef<string | undefined>(id);
@@ -551,10 +551,10 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
       if (shouldHardLoad) setLoadingConversation(true);
 
-      const accessibleDepartmentIds = isAdmin
+      const accessibleDepartmentIds = seesAllConversations
         ? []
         : await getAccessibleDepartmentIds();
-      if (!isAdmin && accessibleDepartmentIds.length === 0) {
+      if (!seesAllConversations && accessibleDepartmentIds.length === 0) {
         if (
           requestId !== conversationLoadRequestRef.current ||
           activeRouteConversationIdRef.current !== requestedId
@@ -612,7 +612,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         .eq("id", requestedId)
         .eq("clinic_id", clinicId);
       // Admin abre conversas de qualquer setor
-      if (!isAdmin) {
+      if (!seesAllConversations) {
         conversationQuery = conversationQuery.in(
           "department_id",
           accessibleDepartmentIds,
@@ -716,7 +716,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       setLoadingConversation(false);
       didInitialConversationLoadRef.current = true;
     },
-    [id, clinicId, isAdmin, getAccessibleDepartmentIds],
+    [id, clinicId, seesAllConversations, getAccessibleDepartmentIds],
   );
 
   useEffect(() => {
@@ -1471,7 +1471,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           onPopOut={onPopOut}
           conversation={conversation}
           assigneeName={
-            isAdmin
+            seesAllConversations
               ? getAssigneeLabel(conversation.assignedTo, authUser?.id, userNames)
               : undefined
           }
@@ -1500,14 +1500,14 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
             !authUser ||
             conversation.status === "closed" ||
             // mesma regra da função: só o responsável ou um admin finaliza
-            (!isAdmin && conversation.assignedTo !== authUser.id)
+            (!seesAllConversations && conversation.assignedTo !== authUser.id)
           }
           transferDisabled={
             transferringConversation ||
             !authUser ||
             conversation.status === "closed" ||
             // conversa de outro atendente: só ele ou um admin transfere
-            (!isAdmin &&
+            (!seesAllConversations &&
               !!conversation.assignedTo &&
               conversation.assignedTo !== authUser.id)
           }

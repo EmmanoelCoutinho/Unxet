@@ -92,16 +92,17 @@ const normalize = (value: string | null | undefined) =>
 export const ScheduledMessagesPage: React.FC = () => {
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { clinicId, membership } = useClinic();
+  const { clinicId, membership, can } = useClinic();
   const { authUser } = useAuth();
   const isAdmin = membership?.role === "admin";
+  const seesAllCampaigns = can("campaigns.all");
 
   const { scheduledMessages, loading, error, refetch } = useScheduledMessages(clinicId);
   const { cancel, remove } = useScheduledMessageActions();
   const qrConnected = useQrWhatsappConnected(clinicId);
   const { official } = useOfficialWhatsapp(clinicId);
   // Só o admin vê campanhas de outras pessoas
-  const userNames = useClinicUserNames(clinicId, isAdmin);
+  const userNames = useClinicUserNames(clinicId, seesAllCampaigns);
 
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
@@ -334,7 +335,7 @@ export const ScheduledMessagesPage: React.FC = () => {
                     item={item}
                     status={status}
                     createdBy={
-                      isAdmin && item.createdBy !== authUser?.id
+                      seesAllCampaigns && item.createdBy !== authUser?.id
                         ? (item.createdBy && userNames[item.createdBy]) || "atendente removido"
                         : null
                     }

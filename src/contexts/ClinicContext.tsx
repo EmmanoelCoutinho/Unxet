@@ -17,6 +17,7 @@ import type {
   SubscriptionPlan,
   SubscriptionStatus,
 } from "../constants/plans";
+import { resolvePermissions, type Permission } from "../modules/roles/permissions";
 
 type Clinic = {
   id: string;
@@ -29,9 +30,13 @@ type ClinicMembership = {
   clinic_id: string;
   user_id: string;
   role?: string | null;
+  // Cargo personalizado (clinic_roles); null = Administrador ou Atendente
+  role_id?: string | null;
   department_id?: string | null;
   // outros campos do clinic_users
 };
+
+type CustomRole = { id: string; name: string; permissions: string[] };
 
 export type ClinicSubscription = {
   plan: SubscriptionPlan;
@@ -56,6 +61,11 @@ type ClinicContextType = {
   // null enquanto carrega ou se a leitura falhar: nada é escondido
   subscription: ClinicSubscription | null;
   hasFeature: (feature: PlanFeature) => boolean;
+  // Permissão do cargo de quem está logado (admin pode tudo). O banco confere
+  // de novo: aqui é só o que aparece na tela.
+  can: (permission: Permission) => boolean;
+  // Nome do cargo para mostrar: "Administrador", "Atendente" ou o personalizado
+  roleName: string;
   loading: boolean;
   error: any;
   refetch: () => Promise<void>;
@@ -69,6 +79,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   const [clinic, setClinic] = useState<Clinic | null>(null);
   const [membership, setMembership] = useState<ClinicMembership | null>(null);
+  const [customRole, setCustomRole] = useState<CustomRole | null>(null);
   const [subscription, setSubscription] = useState<ClinicSubscription | null>(
     null,
   );
@@ -86,6 +97,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
       loadedUserIdRef.current = null;
       setClinic(null);
       setMembership(null);
+      setCustomRole(null);
       setSubscription(null);
       setLoading(false);
       return;
@@ -96,11 +108,19 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     // 1) pega membership do usuário
-    const { data: membershipRow, error: memErr } = await supabase
+    let { data: membershipRow, error: memErr } = await supabase
       .from("clinic_users")
-      .select("clinic_id, user_id, role, department_id")
+      .select("clinic_id, user_id, role, role_id, department_id")
       .eq("user_id", userId)
       .maybeSingle();
+    // Banco sem a coluna role_id (migration de cargos ainda não aplicada)
+    if (memErr?.code === "42703") {
+      ({ data: membershipRow, error: memErr } = await supabase
+        .from("clinic_users")
+        .select("clinic_id, user_id, role, department_id")
+        .eq("user_id", userId)
+        .maybeSingle());
+    }
 
     if (memErr) {
       setError(memErr);
@@ -120,6 +140,19 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     }
 
     setMembership(membershipRow as ClinicMembership);
+
+    // Cargo personalizado: sem conseguir ler, fica com o padrão do Atendente
+    const roleId = (membershipRow as ClinicMembership).role_id ?? null;
+    if (roleId) {
+      const { data: roleRow } = await supabase
+        .from("clinic_roles")
+        .select("id, name, permissions")
+        .eq("id", roleId)
+        .maybeSingle();
+      setCustomRole((roleRow as CustomRole | null) ?? null);
+    } else {
+      setCustomRole(null);
+    }
 
     // 2) pega dados da clínica
     const { data: clinicRow, error: clinicErr } = await supabase
@@ -204,6 +237,14 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     [subscription],
   );
 
+  const permissions = useMemo(
+    () => resolvePermissions(membership?.role, customRole?.permissions ?? null),
+    [membership?.role, customRole],
+  );
+  const can = useCallback((permission: Permission) => permissions.has(permission), [permissions]);
+  const roleName =
+    membership?.role === "admin" ? "Administrador" : customRole?.name ?? "Atendente";
+
   const value: ClinicContextType = useMemo(
     () => ({
       clinic,
@@ -211,11 +252,13 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
       membership,
       subscription,
       hasFeature,
+      can,
+      roleName,
       loading,
       error,
       refetch: fetchClinic,
     }),
-    [clinic, clinicId, membership, subscription, hasFeature, loading, error, fetchClinic]
+    [clinic, clinicId, membership, subscription, hasFeature, can, roleName, loading, error, fetchClinic]
   );
 
   return (

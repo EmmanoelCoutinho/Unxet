@@ -12,7 +12,7 @@
  */
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAuthenticatedUser, getClinicMembership } from "../_shared/security.ts";
+import { getAuthenticatedUser, getClinicMembership, hasClinicPermission } from "../_shared/security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -79,10 +79,12 @@ serve(async (req) => {
 
     const conversation = message.conversations;
 
-    // Autorização: admin da clínica ou responsável pela conversa
+    // Autorização: admin (ou cargo que atende todos os setores) ou responsável pela conversa
     const membership = await getClinicMembership(admin, user.id, conversation.clinic_id);
     const allowed = !!membership && (
-      membership.role === "admin" || conversation.assigned_user_id === user.id
+      membership.role === "admin" ||
+      conversation.assigned_user_id === user.id ||
+      await hasClinicPermission(admin, user.id, conversation.clinic_id, "conversations.all")
     );
     if (!allowed) return json(403, { error: "Not allowed" });
 

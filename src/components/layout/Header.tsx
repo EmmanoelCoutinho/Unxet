@@ -28,7 +28,7 @@ function getInitials(name: string) {
 export const Header = () => {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const { clinic } = useClinic();
+  const { clinic, roleName } = useClinic();
 
   const initials = useMemo(
     () => getInitials(profile?.name || ""),
@@ -144,7 +144,7 @@ export const Header = () => {
               )}
               {profile?.role && (
                 <div className="text-sm text-gray-600">
-                  {profile?.role === "admin" ? "Administrador" : "Usuário"}
+                  {roleName}
                 </div>
               )}
             </div>
