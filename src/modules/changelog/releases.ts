@@ -81,6 +81,11 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
     date: "2026-11-08",
     changes: [
       {
+        kind: "fixed",
+        text: "WhatsApp via QR Code: ao reconectar, o QR Code às vezes aparecia como imagem quebrada. Agora ele aparece certo e, se não carregar, um botão Tentar novamente gera outro.",
+        adminOnly: true,
+      },
+      {
         kind: "improved",
         text: "Sino de notificações: o sino do topo agora mostra os avisos do sistema, como o limite do Assistente com IA, e cada aviso leva para a tela do assunto. Quando a Unxet é atualizada, chega um aviso que abre a tela Novidades, com o histórico do que mudou. O sino balança quando chega algo novo.",
       },
