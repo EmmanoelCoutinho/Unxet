@@ -8,7 +8,7 @@ import { ProfileModal } from "./ProfileModal";
 import { MobileNav } from "./MobileNav";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { useInternalUnreadTotal } from "../../modules/internalChat/hooks/useInternalChat";
-import { ChangelogBell } from "../../modules/changelog/ChangelogBell";
+import { NotificationBell } from "../../modules/notifications/NotificationBell";
 import {
   CURRENT_RELEASE,
   formatReleaseDate,
@@ -111,7 +111,7 @@ export const Header = () => {
               <span className="truncate">{clinic.name}</span>
             </span>
           )}
-          <ChangelogBell userId={profile?.user_id} isAdmin={isAdmin} />
+          <NotificationBell userId={profile?.user_id} />
           <button
             ref={buttonRef}
             onClick={() => setOpen((v) => !v)}

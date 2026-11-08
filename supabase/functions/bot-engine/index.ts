@@ -4,7 +4,8 @@ import { timingSafeEqual } from "../_shared/security.ts";
 import { clinicHasFeature } from "../_shared/plan.ts";
 import { classifyUnmatchedInput } from "../_shared/botInput.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@1.3.0";
-import { AI_TOOL_END, AI_TOOL_TRANSFER, buildChatTurns, buildSystemPrompt } from "../_shared/aiAssistant.ts";
+import { AI_TOOL_END, AI_TOOL_TRANSFER, aiUsageNotification, buildChatTurns, buildSystemPrompt } from "../_shared/aiAssistant.ts";
+import { sendPushToUsers } from "../_shared/push.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -1052,6 +1053,50 @@ async function callClaude(system, turns) {
   }
   return client.messages.create(request);
 }
+/**
+ * Depois de gastar uma resposta: avisa quem cuida da IA quando o mês chegou a
+ * 80% ou acabou (uma vez cada). Falha no aviso não atrapalha a resposta.
+ */ async function notifyAiUsage(supabase, clinicId) {
+  try {
+    const { data: warning, error } = await supabase.rpc("clinic_ai_usage_warning", {
+      p_clinic_id: clinicId
+    });
+    if (error) {
+      console.error("clinic_ai_usage_warning error:", error);
+      return;
+    }
+    if (warning !== "warn_80" && warning !== "exhausted") return;
+    const notification = aiUsageNotification(warning);
+    const url = "/inbox/ai-assistant";
+    // Sino de cada pessoa que cuida da IA; devolve quem recebeu
+    const { data: users, error: usersErr } = await supabase.rpc("notify_clinic_permission", {
+      p_clinic_id: clinicId,
+      p_permission: "ai.manage",
+      p_kind: `ai_usage_${warning}`,
+      p_title: notification.title,
+      p_body: notification.body,
+      p_url: url
+    });
+    if (usersErr) {
+      console.error("notify_clinic_permission error:", usersErr);
+      return;
+    }
+    const userIds = (users ?? []).map((row)=>typeof row === "string" ? row : row?.notify_clinic_permission).filter(Boolean);
+    logStep("ai_usage_warning", {
+      clinicId,
+      warning,
+      recipients: userIds.length
+    });
+    await sendPushToUsers(supabase, userIds, {
+      ...notification,
+      // Agrupa os avisos da IA no aparelho (ver public/sw.js)
+      conversationId: `ai-usage:${clinicId}`,
+      url
+    });
+  } catch (err) {
+    console.error("notifyAiUsage error:", err);
+  }
+}
 async function recordAiTokens(supabase, clinicId, usage) {
   if (!usage) return;
   const input = (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
@@ -1173,6 +1218,7 @@ async function recordAiTokens(supabase, clinicId, usage) {
     });
     return handoff("ai_unavailable", UNRECOGNIZED_HANDOFF_TEXT);
   }
+  await notifyAiUsage(supabase, clinicId);
   const system = buildSystemPrompt({
     companyName,
     settings,

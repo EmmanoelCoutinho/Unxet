@@ -176,3 +176,23 @@ export const buildChatTurns = (messages: HistoryMessage[]): ChatTurn[] => {
   }
   return turns;
 };
+
+export type AiUsageWarning = "warn_80" | "exhausted";
+
+// Notificação para quem cuida da IA quando o limite do mês está acabando ou
+// acabou (clinic_ai_usage_warning). Sem dado de cliente: aparece na tela
+// bloqueada do celular.
+export const aiUsageNotification = (warning: AiUsageWarning) =>
+  warning === "exhausted"
+    ? {
+        title: "Assistente com IA: respostas do mês acabaram",
+        body:
+          "Até o dia 1º, as conversas da etapa de IA vão direto para a equipe. " +
+          "Fale com a Unxet para aumentar o limite.",
+      }
+    : {
+        title: "Assistente com IA: 80% das respostas do mês usadas",
+        body:
+          "Quando acabarem, as conversas da etapa de IA vão direto para a equipe. " +
+          "Fale com a Unxet se precisar de mais.",
+      };

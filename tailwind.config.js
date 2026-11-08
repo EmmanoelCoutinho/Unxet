@@ -90,6 +90,21 @@ export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      // Sino balança em ciclo enquanto há notificação não lida: uma
+      // balançada (~0,9 s) e uma pausa, a cada 3 s
+      keyframes: {
+        "bell-ring": {
+          "0%, 30%, 100%": { transform: "rotate(0)" },
+          "5%": { transform: "rotate(14deg)" },
+          "10%": { transform: "rotate(-12deg)" },
+          "15%": { transform: "rotate(9deg)" },
+          "20%": { transform: "rotate(-6deg)" },
+          "25%": { transform: "rotate(3deg)" },
+        },
+      },
+      animation: {
+        "bell-ring": "bell-ring 3s ease-in-out infinite",
+      },
       colors: palettes.base,
       backgroundColor: { ...palettes.bg, white: ref("--c-bg-white") },
       textColor: palettes.text,

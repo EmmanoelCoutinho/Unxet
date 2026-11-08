@@ -9,6 +9,7 @@ import { useClinic } from "../contexts/ClinicContext";
 import {
   AI_SETTINGS_LIMITS,
   aiAssistantService,
+  aiUsageLevel,
   DEFAULT_AI_SETTINGS,
   isValidMaxReplies,
   type AiSettings,
@@ -229,21 +230,63 @@ export const AiAssistantPage: React.FC = () => {
               </Link>
             </div>
 
-            <div className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-slate-900">Uso neste mês</div>
-                <div className="text-xs text-slate-500">
-                  Cada mensagem que a IA envia conta uma resposta. Quando o
-                  limite acaba, as conversas vão direto para a equipe.
+            {(() => {
+              const level = used === null ? "ok" : aiUsageLevel(used, limit);
+              const percent = used === null ? 0 : Math.min(100, Math.round((used / limit) * 100));
+              return (
+                <div
+                  className={`flex flex-col gap-3 rounded-2xl border bg-white p-5 ${
+                    level === "exhausted"
+                      ? "border-rose-300"
+                      : level === "warning"
+                        ? "border-amber-300"
+                        : "border-slate-200"
+                  }`}
+                >
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Uso neste mês</div>
+                      <div className="text-xs text-slate-500">
+                        Cada mensagem que a IA envia conta uma resposta. O contador volta a zero no dia 1º.
+                      </div>
+                    </div>
+                    <div className="whitespace-nowrap text-lg font-bold text-slate-900">
+                      {used === null ? "—" : used.toLocaleString("pt-BR")}
+                      <span className="text-sm font-medium text-slate-500">
+                        {" "}de {limit.toLocaleString("pt-BR")} respostas
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className="h-2 w-full overflow-hidden rounded-full bg-slate-100"
+                    role="progressbar"
+                    aria-label="Respostas usadas no mês"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={percent}
+                  >
+                    <div
+                      className={`h-full rounded-full ${
+                        level === "exhausted" ? "bg-rose-500" : level === "warning" ? "bg-amber-500" : "bg-blue-500"
+                      }`}
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                  {level === "exhausted" ? (
+                    <p className="rounded-xl bg-rose-50 p-3 text-xs leading-5 text-rose-800">
+                      <strong>As respostas deste mês acabaram.</strong> Até o dia 1º, quando um cliente chega na
+                      etapa de IA, o bot avisa que vai passar para um atendente e a conversa vai direto para a
+                      equipe. Para aumentar o limite agora, fale com a Unxet.
+                    </p>
+                  ) : level === "warning" ? (
+                    <p className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                      Faltam {(limit - (used ?? 0)).toLocaleString("pt-BR")} respostas. Quando acabarem, as conversas da
+                      etapa de IA vão direto para a equipe até o dia 1º. Se precisar de mais, fale com a Unxet.
+                    </p>
+                  ) : null}
                 </div>
-              </div>
-              <div className="whitespace-nowrap text-lg font-bold text-slate-900">
-                {used === null ? "—" : used.toLocaleString("pt-BR")}
-                <span className="text-sm font-medium text-slate-500">
-                  {" "}de {limit.toLocaleString("pt-BR")} respostas
-                </span>
-              </div>
-            </div>
+              );
+            })()}
 
             <div className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5">
               <div className="grid gap-5 sm:grid-cols-2">

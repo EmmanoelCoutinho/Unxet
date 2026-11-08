@@ -4,10 +4,24 @@ import { toast } from "react-toastify";
 import { Card } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { adminSupabase } from "../lib/adminSupabaseClient";
+import { aiUsageLevel, type AiUsageLevel } from "../../../lib/aiUsage";
 
 // Adicional "Assistente com IA": a Unxet liga por empresa com um limite de
 // respostas por mês e, no plano sob medida, escreve instruções extras que só
 // a Unxet vê (a empresa edita o resto em "Assistente com IA").
+
+const levelOf = (row: { ai_replies_addon: number | null; replies_this_month: number }): AiUsageLevel | null =>
+  row.ai_replies_addon === null ? null : aiUsageLevel(row.replies_this_month, row.ai_replies_addon);
+
+// Esgotadas primeiro, depois as perto do limite, as ligadas e as desligadas
+const LEVEL_ORDER: Record<string, number> = { exhausted: 0, warning: 1, ok: 2, off: 3 };
+
+const UsageBadge: React.FC<{ level: AiUsageLevel | null }> = ({ level }) =>
+  level === "exhausted" ? (
+    <span className="ml-2 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">Esgotou</span>
+  ) : level === "warning" ? (
+    <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">Acima de 80%</span>
+  ) : null;
 
 type AiClinicRow = {
   clinic_id: string;
@@ -166,12 +180,19 @@ export const AiAddonPage: React.FC = () => {
     const filtered = term
       ? all.filter((r) => r.clinic_name.toLowerCase().includes(term))
       : all;
-    // Quem tem o adicional aparece primeiro
+    // Quem precisa de atenção (esgotou ou passou de 80%) aparece primeiro
     return [...filtered].sort(
-      (a, b) =>
-        Number(b.ai_replies_addon !== null) - Number(a.ai_replies_addon !== null),
+      (a, b) => LEVEL_ORDER[levelOf(a) ?? "off"] - LEVEL_ORDER[levelOf(b) ?? "off"],
     );
   }, [query.data, search]);
+
+  const attention = useMemo(() => {
+    const all = query.data ?? [];
+    return {
+      exhausted: all.filter((r) => levelOf(r) === "exhausted").length,
+      warning: all.filter((r) => levelOf(r) === "warning").length,
+    };
+  }, [query.data]);
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
@@ -182,6 +203,19 @@ export const AiAddonPage: React.FC = () => {
           escreva instruções sob medida. O consumo zera todo dia 1º.
         </p>
       </div>
+
+      {attention.exhausted + attention.warning > 0 ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {attention.exhausted > 0
+            ? `${attention.exhausted} ${attention.exhausted === 1 ? "empresa esgotou" : "empresas esgotaram"} as respostas do mês`
+            : null}
+          {attention.exhausted > 0 && attention.warning > 0 ? " e " : null}
+          {attention.warning > 0
+            ? `${attention.warning} ${attention.warning === 1 ? "está" : "estão"} acima de 80%`
+            : null}
+          . Bom momento para oferecer um limite maior.
+        </div>
+      ) : null}
 
       <input
         type="search"
@@ -216,8 +250,9 @@ export const AiAddonPage: React.FC = () => {
                     className="flex w-full flex-col gap-1 px-4 py-3 text-left hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between sm:px-5"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-gray-900">
-                        {row.clinic_name || "Empresa sem nome"}
+                      <span className="flex items-center truncate text-sm font-medium text-gray-900">
+                        <span className="truncate">{row.clinic_name || "Empresa sem nome"}</span>
+                        <UsageBadge level={levelOf(row)} />
                       </span>
                       <span className="text-xs text-gray-500">
                         {on
