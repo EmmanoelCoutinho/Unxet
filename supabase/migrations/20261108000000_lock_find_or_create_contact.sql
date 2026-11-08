@@ -9,10 +9,21 @@
 --
 -- Nenhuma tela nem edge function usa a função hoje; ela fica disponível só
 -- para o service role.
+--
+-- Nem todo banco tem a função (o develop nunca recebeu a migration que a
+-- cria): sem ela, não há o que fechar.
 -- =============================================================================
 
-revoke execute on function public.find_or_create_contact_for_conversation(uuid, text, text, text, text)
-  from public, anon, authenticated;
+do $$
+begin
+  if to_regprocedure('public.find_or_create_contact_for_conversation(uuid, text, text, text, text)') is null then
+    raise notice 'find_or_create_contact_for_conversation não existe neste banco; nada a fazer.';
+    return;
+  end if;
 
-grant execute on function public.find_or_create_contact_for_conversation(uuid, text, text, text, text)
-  to service_role;
+  revoke execute on function public.find_or_create_contact_for_conversation(uuid, text, text, text, text)
+    from public, anon, authenticated;
+  grant execute on function public.find_or_create_contact_for_conversation(uuid, text, text, text, text)
+    to service_role;
+end;
+$$;
