@@ -75,6 +75,15 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "improved",
+    text: "Assistente com IA: novo campo Respostas por atendimento, para escolher quantas mensagens a IA pode enviar para o mesmo cliente. Ao chegar no limite, ela avisa o cliente com educação e passa a conversa para um atendente.",
+    adminOnly: true,
+  },
+  {
+    kind: "improved",
+    text: "Modelos da Meta: os erros do formulário agora aparecem embaixo de cada campo, e não mais num aviso que some.",
+  },
+  {
     kind: "fixed",
     text: "Assistente com IA: fechar ou recarregar a página com alterações não salvas agora pede confirmação. A IA também deixa de considerar mensagens apagadas pela equipe e fica mais protegida contra clientes que tentam mudar as regras dela pela conversa.",
     adminOnly: true,

@@ -10,6 +10,7 @@ import {
   AI_SETTINGS_LIMITS,
   aiAssistantService,
   DEFAULT_AI_SETTINGS,
+  isValidMaxReplies,
   type AiSettings,
 } from "../services/aiAssistant";
 
@@ -132,6 +133,8 @@ export const AiAssistantPage: React.FC = () => {
     form.faq.length > AI_SETTINGS_LIMITS.faq ||
     form.rules.length > AI_SETTINGS_LIMITS.rules;
 
+  const maxRepliesInvalid = !isValidMaxReplies(form.max_replies_per_conversation);
+
   const set = <K extends keyof AiSettings>(key: K, value: AiSettings[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -180,7 +183,7 @@ export const AiAssistantPage: React.FC = () => {
                 size="sm"
                 onClick={handleSave}
                 isLoading={saving}
-                disabled={!dirty || saving || tooLong || !isAdmin}
+                disabled={!dirty || saving || tooLong || maxRepliesInvalid || !isAdmin}
               >
                 Salvar
               </Button>
@@ -277,6 +280,40 @@ export const AiAssistantPage: React.FC = () => {
                 />
                 Pode usar emojis
               </label>
+              <Field
+                id="ai-max-replies"
+                label="Respostas por atendimento"
+                help={`Quantas mensagens a IA pode enviar para o mesmo cliente num atendimento. Ao chegar no limite, ela avisa o cliente que vai passar para um atendente e transfere a conversa. Use de ${AI_SETTINGS_LIMITS.max_replies_min} a ${AI_SETTINGS_LIMITS.max_replies_max}.`}
+              >
+                <input
+                  id="ai-max-replies"
+                  type="number"
+                  inputMode="numeric"
+                  min={AI_SETTINGS_LIMITS.max_replies_min}
+                  max={AI_SETTINGS_LIMITS.max_replies_max}
+                  value={Number.isFinite(form.max_replies_per_conversation) ? form.max_replies_per_conversation : ""}
+                  disabled={!editable}
+                  onChange={(e) =>
+                    set(
+                      "max_replies_per_conversation",
+                      e.target.value === "" ? Number.NaN : Math.trunc(Number(e.target.value)),
+                    )
+                  }
+                  aria-invalid={maxRepliesInvalid}
+                  aria-describedby={maxRepliesInvalid ? "ai-max-replies-error" : undefined}
+                  className={
+                    fieldClass +
+                    " sm:max-w-[160px]" +
+                    (maxRepliesInvalid ? " border-red-400 focus:border-red-500 focus:ring-red-500/20" : "")
+                  }
+                />
+                {maxRepliesInvalid ? (
+                  <p id="ai-max-replies-error" className="mt-1.5 text-xs text-red-600">
+                    Escolha um número de {AI_SETTINGS_LIMITS.max_replies_min} a{" "}
+                    {AI_SETTINGS_LIMITS.max_replies_max}.
+                  </p>
+                ) : null}
+              </Field>
             </div>
 
             <div className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5">
