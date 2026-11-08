@@ -286,7 +286,12 @@ serve(async (req)=>{
       }
     });
     const connectData = await connectResponse.json();
-    const qrCode = connectData?.base64 || connectData?.qrcode?.base64 || connectData?.code || connectData?.qrcode || null;
+    // Só a imagem (data URL) serve para a tela; o "code" cru não abre no <img>
+    const qrCode = [
+      connectData?.base64,
+      connectData?.qrcode?.base64,
+      connectData?.qrcode
+    ].find((value)=>typeof value === "string" && value.startsWith("data:image/")) ?? null;
     // O QR Code conecta o WhatsApp de quem o ler: não vai para o log
     console.log("Connect response:", {
       status: connectResponse.status,

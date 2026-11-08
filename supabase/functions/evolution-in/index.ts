@@ -439,7 +439,16 @@ serve(async (req)=>{
     // QR CODE UPDATED
     // ─────────────────────────────────────────────────────────────────────
     if (event === "QRCODE_UPDATED" || event === "qrcode.updated") {
-      const qrCode = body?.data?.qrcode ?? body?.data?.base64 ?? body?.qrcode ?? body?.base64 ?? null;
+      // Na v2 o "qrcode" é um objeto { base64, code, ... }: só a imagem serve para a tela
+      const qrCandidates = [
+        body?.data?.qrcode?.base64,
+        body?.data?.base64,
+        body?.qrcode?.base64,
+        body?.base64,
+        body?.data?.qrcode,
+        body?.qrcode
+      ];
+      const qrCode = qrCandidates.find((value)=>typeof value === "string" && value.startsWith("data:image/")) ?? null;
       console.log("[QRCODE_UPDATED]", {
         instanceName,
         hasQr: !!qrCode
