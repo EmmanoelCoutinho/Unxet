@@ -90,6 +90,20 @@ export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      // Sino chacoalha quando chega notificação nova
+      keyframes: {
+        "bell-shake": {
+          "0%, 100%": { transform: "rotate(0)" },
+          "15%": { transform: "rotate(14deg)" },
+          "30%": { transform: "rotate(-12deg)" },
+          "45%": { transform: "rotate(9deg)" },
+          "60%": { transform: "rotate(-6deg)" },
+          "75%": { transform: "rotate(3deg)" },
+        },
+      },
+      animation: {
+        "bell-shake": "bell-shake 0.9s ease-in-out",
+      },
       colors: palettes.base,
       backgroundColor: { ...palettes.bg, white: ref("--c-bg-white") },
       textColor: palettes.text,

@@ -76,6 +76,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "improved",
+    text: "Sino de notificações: o sino do topo agora mostra os avisos do sistema, como o limite do Assistente com IA, e cada aviso leva para a tela do assunto. Quando a Unxet é atualizada, chega um aviso que abre a tela Novidades, com o histórico do que mudou. O sino balança quando chega algo novo.",
+  },
+  {
+    kind: "improved",
     text: "Assistente com IA: quando a empresa usa 80% das respostas do mês e quando elas acabam, quem cuida da IA recebe uma notificação e vê um aviso no topo do app. A tela do Assistente com IA mostra o consumo com uma barra e explica o que acontece quando acaba.",
     adminOnly: true,
   },
@@ -279,4 +283,39 @@ export const UPCOMING_RELEASE = previewNextRelease(NEXT_RELEASE);
 export function formatReleaseDate(date: string) {
   const [y, m, d] = date.split("-");
   return `${d}/${m}/${y}`;
+}
+
+export type ReleaseNotice = {
+  /** Muda a cada versão nova (e a cada novidade em teste fora da produção) */
+  key: string;
+  title: string;
+  body: string;
+  /** AAAA-MM-DD da versão, ou null para a versão em teste */
+  date: string | null;
+};
+
+/**
+ * Aviso "sistema atualizado" do sino. Na produção, uma vez por versão; fora
+ * dela, também quando entra novidade na versão em teste.
+ */
+export function releaseNotice(
+  current: Release = CURRENT_RELEASE,
+  upcoming: Omit<Release, "date"> | null = UPCOMING_RELEASE,
+  isProduction = false,
+): ReleaseNotice {
+  if (!isProduction && upcoming && upcoming.changes.length > 0) {
+    const n = upcoming.changes.length;
+    return {
+      key: `${upcoming.version}-teste-${n}`,
+      title: `Novidades em teste na versão ${upcoming.version}`,
+      body: `${n} ${n === 1 ? "mudança" : "mudanças"} para testar antes do lançamento. Toque para ver.`,
+      date: null,
+    };
+  }
+  return {
+    key: current.version,
+    title: `A Unxet foi atualizada para a versão ${current.version}`,
+    body: "Veja o que mudou: novidades, melhorias e correções.",
+    date: current.date,
+  };
 }

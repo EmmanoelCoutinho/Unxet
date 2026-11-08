@@ -1066,25 +1066,32 @@ async function callClaude(system, turns) {
       return;
     }
     if (warning !== "warn_80" && warning !== "exhausted") return;
-    const { data: users, error: usersErr } = await supabase.rpc("clinic_users_with_permission", {
+    const notification = aiUsageNotification(warning);
+    const url = "/inbox/ai-assistant";
+    // Sino de cada pessoa que cuida da IA; devolve quem recebeu
+    const { data: users, error: usersErr } = await supabase.rpc("notify_clinic_permission", {
       p_clinic_id: clinicId,
-      p_permission: "ai.manage"
+      p_permission: "ai.manage",
+      p_kind: `ai_usage_${warning}`,
+      p_title: notification.title,
+      p_body: notification.body,
+      p_url: url
     });
     if (usersErr) {
-      console.error("clinic_users_with_permission error:", usersErr);
+      console.error("notify_clinic_permission error:", usersErr);
       return;
     }
-    const userIds = (users ?? []).map((row)=>typeof row === "string" ? row : row?.clinic_users_with_permission).filter(Boolean);
+    const userIds = (users ?? []).map((row)=>typeof row === "string" ? row : row?.notify_clinic_permission).filter(Boolean);
     logStep("ai_usage_warning", {
       clinicId,
       warning,
       recipients: userIds.length
     });
     await sendPushToUsers(supabase, userIds, {
-      ...aiUsageNotification(warning),
+      ...notification,
       // Agrupa os avisos da IA no aparelho (ver public/sw.js)
       conversationId: `ai-usage:${clinicId}`,
-      url: "/inbox/ai-assistant"
+      url
     });
   } catch (err) {
     console.error("notifyAiUsage error:", err);
