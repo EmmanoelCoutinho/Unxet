@@ -75,6 +75,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "improved",
+    text: "Assistente com IA: quando a empresa usa 80% das respostas do mês e quando elas acabam, quem cuida da IA recebe uma notificação e vê um aviso no topo do app. A tela do Assistente com IA mostra o consumo com uma barra e explica o que acontece quando acaba.",
+    adminOnly: true,
+  },
+  {
     kind: "new",
     text: "Cargos personalizados: em Atendentes, o botão Cargos e permissões cria cargos como \"Supervisor\" ou \"Marketing\", marcando o que cada um pode fazer (Painel, Relatórios, todas as conversas, campanhas e funil de toda a equipe, bots, etiquetas e outros). Depois é só escolher o cargo ao convidar ou editar a pessoa. Administrador e Atendente continuam como antes.",
     adminOnly: true,

@@ -55,6 +55,8 @@ export const currentAiMonth = (now = new Date()) => {
   return `${year}-${month}-01`;
 };
 
+export { aiUsageLevel, aiWarningThreshold, type AiUsageLevel } from "../lib/aiUsage";
+
 const toError = (error: { message?: string } | null) =>
   new Error(error?.message || "Não foi possível concluir a operação.");
 

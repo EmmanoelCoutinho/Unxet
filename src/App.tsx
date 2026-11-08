@@ -15,6 +15,7 @@ import { Chat } from "./pages/Chat";
 import { Header } from "./components/layout/Header";
 import { MaintenanceBanner } from "./components/layout/MaintenanceBanner";
 import { BillingBanner } from "./components/layout/BillingBanner";
+import { AiUsageBanner } from "./components/layout/AiUsageBanner";
 import { AccessSuspended } from "./pages/AccessSuspended";
 import { PushNotificationsBridge } from "./components/PushNotificationsBridge";
 import { PresenceHeartbeat } from "./components/PresenceHeartbeat";
@@ -254,6 +255,7 @@ function RoutedApp() {
       >
         {showHeader && <MaintenanceBanner />}
         {showHeader && <BillingBanner />}
+        {showHeader && <AiUsageBanner />}
         <div className={showHeader ? "min-h-0 flex-1" : undefined}>
         <AppErrorBoundary resetKey={location.pathname}>
         <Suspense fallback={<PageLoading />}>

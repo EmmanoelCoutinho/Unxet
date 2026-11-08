@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildChatTurns, buildSystemPrompt, messageToText } from "./aiAssistant";
+import { aiUsageNotification, buildChatTurns, buildSystemPrompt, messageToText } from "./aiAssistant";
 
 describe("buildSystemPrompt", () => {
   it("junta base, empresa e etapa", () => {
@@ -110,5 +110,13 @@ describe("buildChatTurns", () => {
 
   it("sem mensagem do cliente não monta histórico", () => {
     expect(buildChatTurns([{ direction: "outbound", text: "Olá" }])).toEqual([]);
+  });
+});
+
+describe("aiUsageNotification", () => {
+  it("avisa 80% e esgotado sem dado de cliente", () => {
+    expect(aiUsageNotification("warn_80").title).toMatch(/80%/);
+    expect(aiUsageNotification("exhausted").title).toMatch(/acabaram/);
+    expect(aiUsageNotification("exhausted").body).toMatch(/dia 1º/);
   });
 });
