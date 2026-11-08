@@ -153,7 +153,7 @@ export const ShareContactModal: React.FC<{
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar por nome ou telefone"
-                className="w-full rounded-lg border border-[#E5E7EB] py-2 pl-9 pr-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+                className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
               />
             </div>
 
@@ -207,7 +207,7 @@ export const ShareContactModal: React.FC<{
                 onChange={(e) => setManualName(e.target.value)}
                 maxLength={100}
                 placeholder="Ex.: Recepção Unidade Centro"
-                className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
               />
             </div>
             <div>
@@ -219,7 +219,7 @@ export const ShareContactModal: React.FC<{
                 onChange={(e) => setManualPhone(e.target.value)}
                 inputMode="tel"
                 placeholder="(11) 99999-9999"
-                className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
               />
               <p
                 className={`mt-1 text-xs ${

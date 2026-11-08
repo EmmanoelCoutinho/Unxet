@@ -11,6 +11,8 @@ export type AiSettings = {
   business_info: string;
   faq: string;
   rules: string;
+  /** Respostas da IA para o mesmo cliente num atendimento */
+  max_replies_per_conversation: number;
 };
 
 export const AI_SETTINGS_LIMITS = {
@@ -18,7 +20,15 @@ export const AI_SETTINGS_LIMITS = {
   business_info: 20000,
   faq: 30000,
   rules: 10000,
+  // Mesma regra do banco (clinic_ai_settings)
+  max_replies_min: 1,
+  max_replies_max: 200,
 } as const;
+
+export const isValidMaxReplies = (value: number) =>
+  Number.isInteger(value) &&
+  value >= AI_SETTINGS_LIMITS.max_replies_min &&
+  value <= AI_SETTINGS_LIMITS.max_replies_max;
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {
   assistant_name: "Assistente",
@@ -27,10 +37,11 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   business_info: "",
   faq: "",
   rules: "",
+  max_replies_per_conversation: 20,
 };
 
 const SETTINGS_COLUMNS =
-  "assistant_name, tone, use_emojis, business_info, faq, rules";
+  "assistant_name, tone, use_emojis, business_info, faq, rules, max_replies_per_conversation";
 
 // Mês de consumo no horário de Brasília (o mesmo do banco), "AAAA-MM-01"
 export const currentAiMonth = (now = new Date()) => {
@@ -43,6 +54,8 @@ export const currentAiMonth = (now = new Date()) => {
   const month = parts.find((p) => p.type === "month")?.value;
   return `${year}-${month}-01`;
 };
+
+export { aiUsageLevel, aiWarningThreshold, type AiUsageLevel } from "../lib/aiUsage";
 
 const toError = (error: { message?: string } | null) =>
   new Error(error?.message || "Não foi possível concluir a operação.");
@@ -63,21 +76,33 @@ export const aiAssistantService = {
     settings: AiSettings,
     userId: string | null,
   ): Promise<void> {
-    const { error } = await supabase.from("clinic_ai_settings").upsert(
-      {
-        clinic_id: clinicId,
-        assistant_name: settings.assistant_name.trim() || "Assistente",
-        tone: settings.tone,
-        use_emojis: settings.use_emojis,
-        business_info: settings.business_info.trim(),
-        faq: settings.faq.trim(),
-        rules: settings.rules.trim(),
-        updated_at: new Date().toISOString(),
-        updated_by: userId,
-      },
-      { onConflict: "clinic_id" },
-    );
-    if (error) throw toError(error);
+    const values = {
+      assistant_name: settings.assistant_name.trim() || "Assistente",
+      tone: settings.tone,
+      use_emojis: settings.use_emojis,
+      business_info: settings.business_info.trim(),
+      faq: settings.faq.trim(),
+      rules: settings.rules.trim(),
+      max_replies_per_conversation: settings.max_replies_per_conversation,
+      updated_at: new Date().toISOString(),
+      updated_by: userId,
+    };
+
+    // Sem upsert: o ON CONFLICT DO UPDATE regrava o clinic_id, e a empresa
+    // não tem permissão de alterar essa coluna. Atualiza e, se a empresa
+    // ainda não tem configuração, insere.
+    const { data: updated, error: updateError } = await supabase
+      .from("clinic_ai_settings")
+      .update(values)
+      .eq("clinic_id", clinicId)
+      .select("clinic_id");
+    if (updateError) throw toError(updateError);
+    if (updated && updated.length > 0) return;
+
+    const { error: insertError } = await supabase
+      .from("clinic_ai_settings")
+      .insert({ clinic_id: clinicId, ...values });
+    if (insertError) throw toError(insertError);
   },
 
   // Respostas da IA usadas no mês atual

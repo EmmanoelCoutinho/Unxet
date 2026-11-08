@@ -69,8 +69,8 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const location = useLocation();
-  const { clinicId, membership } = useClinic();
-  const isAdmin = membership?.role === "admin";
+  const { clinicId, can } = useClinic();
+  const canManageBots = can("bots.manage");
 
   const isNew = mode === "new";
   const { botId: routeBotId } = useParams<{ botId?: string }>();
@@ -189,7 +189,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
 
   const handleSave = async () => {
     if (!clinicId) return;
-    if (!isAdmin) {
+    if (!canManageBots) {
       toast.error("Você não tem permissão para esta ação.");
       return;
     }
@@ -290,7 +290,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
 
   const handleDelete = async () => {
     if (!clinicId || !bot?.id) return;
-    if (!isAdmin) {
+    if (!canManageBots) {
       toast.error("Você não tem permissão para esta ação.");
       return;
     }
@@ -370,7 +370,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                   size="sm"
                   onClick={handleSave}
                   isLoading={saving}
-                  disabled={!clinicId || !isAdmin || loading}
+                  disabled={!clinicId || !canManageBots || loading}
                 >
                   {isNew ? "Criar bot" : "Salvar"}
                 </Button>
@@ -380,7 +380,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                 size="sm"
                 className="text-red-600 hover:bg-red-50"
                 onClick={handleDelete}
-                disabled={!bot?.id || !isAdmin || deleting || loading}
+                disabled={!bot?.id || !canManageBots || deleting || loading}
               >
                 <span className="flex items-center gap-2">
                   <Trash size={14} />
@@ -440,7 +440,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
               </Card>
             )}
 
-            {!isAdmin && (
+            {!canManageBots && (
               <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
                 Você está em modo somente leitura (apenas administrador pode editar bots).
               </div>
@@ -465,7 +465,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                       setForm((p) => ({ ...p, name: e.target.value }))
                     }
                     error={errors.name}
-                    disabled={!isAdmin || saving}
+                    disabled={!canManageBots || saving}
                   />
                   <Input
                     label="Descrição"
@@ -473,7 +473,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                     onChange={(e) =>
                       setForm((p) => ({ ...p, description: e.target.value }))
                     }
-                    disabled={!isAdmin || saving}
+                    disabled={!canManageBots || saving}
                   />
                 </div>
 
@@ -486,7 +486,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="w-full">
-                      <label className="block text-sm font-medium text-[#1E1E1E] mb-1">
+                      <label className="block text-sm font-medium text-gray-900 mb-1">
                         Status
                       </label>
                       <select
@@ -494,8 +494,8 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                         onChange={(e) =>
                           setForm((p) => ({ ...p, status: e.target.value as BotRow["status"] }))
                         }
-                        disabled={!isAdmin || saving}
-                        className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
+                        disabled={!canManageBots || saving}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
                       >
                         <option value="active">Ativo</option>
                         <option value="inactive">Inativo</option>
@@ -523,7 +523,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                         }))
                       }
                       error={errors.max_invalid_attempts}
-                      disabled={!isAdmin || saving}
+                      disabled={!canManageBots || saving}
                     />
                     <div className="mt-1 text-xs text-slate-500">
                       Ao atingir o limite o bot para de responder e a conversa
@@ -532,7 +532,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                   </div>
 
                   <div className="w-full">
-                    <label className="block text-sm font-medium text-[#1E1E1E] mb-1">
+                    <label className="block text-sm font-medium text-gray-900 mb-1">
                       Encerrar sessão por inatividade
                     </label>
                     <select
@@ -543,8 +543,8 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                           session_timeout_hours: Number(e.target.value),
                         }))
                       }
-                      disabled={!isAdmin || saving}
-                      className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
+                      disabled={!canManageBots || saving}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
                     >
                       {BOT_SESSION_TIMEOUT_HOUR_OPTIONS.map((hours) => (
                         <option key={hours} value={hours}>
@@ -570,7 +570,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                         timeout_message: e.target.value,
                       }))
                     }
-                    disabled={!isAdmin || saving}
+                    disabled={!canManageBots || saving}
                     placeholder="Ex: Encerramos o atendimento automático por falta de resposta. Se precisar, é só mandar uma nova mensagem."
                   />
                   <div className="mt-1 text-xs text-slate-500">
@@ -587,7 +587,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                       setForm((p) => ({ ...p, start_message: e.target.value }))
                     }
                     error={errors.start_message}
-                    disabled={!isAdmin || saving}
+                    disabled={!canManageBots || saving}
                     placeholder="Ex: Olá! Bem-vindo. Escolha uma opção:"
                   />
                   <Textarea
@@ -600,7 +600,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
                       }))
                     }
                     error={errors.invalid_option_message}
-                    disabled={!isAdmin || saving}
+                    disabled={!canManageBots || saving}
                     placeholder="Ex: Não entendi. Responda com o número de uma opção."
                   />
                 </div>
@@ -622,7 +622,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
           <BotNodesEditor
             clinicId={clinicId!}
             botId={bot!.id}
-            isAdmin={isAdmin}
+            canManageBots={canManageBots}
             startMessage={bot!.start_message ?? ""}
             onDirtyChange={setFlowDirty}
           />
@@ -631,7 +631,7 @@ export const BotEditorPage: React.FC<BotEditorPageProps> = ({ mode }) => {
             clinicId={clinicId!}
             botId={bot!.id}
             botStatus={bot!.status}
-            isAdmin={isAdmin}
+            canManageBots={canManageBots}
           />
         ) : null}
       </div>

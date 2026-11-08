@@ -78,6 +78,99 @@ export const NEXT_RELEASE: ReleaseChange[] = [
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    date: "2026-11-08",
+    changes: [
+      {
+        kind: "improved",
+        text: "Sino de notificações: o sino do topo agora mostra os avisos do sistema, como o limite do Assistente com IA, e cada aviso leva para a tela do assunto. Quando a Unxet é atualizada, chega um aviso que abre a tela Novidades, com o histórico do que mudou. O sino balança quando chega algo novo.",
+      },
+      {
+        kind: "improved",
+        text: "Assistente com IA: quando a empresa usa 80% das respostas do mês e quando elas acabam, quem cuida da IA recebe uma notificação e vê um aviso no topo do app. A tela do Assistente com IA mostra o consumo com uma barra e explica o que acontece quando acaba.",
+        adminOnly: true,
+      },
+      {
+        kind: "new",
+        text: "Cargos personalizados: em Atendentes, o botão Cargos e permissões cria cargos como \"Supervisor\" ou \"Marketing\", marcando o que cada um pode fazer (Painel, Relatórios, todas as conversas, campanhas e funil de toda a equipe, bots, etiquetas e outros). Depois é só escolher o cargo ao convidar ou editar a pessoa. Administrador e Atendente continuam como antes.",
+        adminOnly: true,
+      },
+      {
+        kind: "improved",
+        text: "Assistente com IA: novo campo Respostas por atendimento, para escolher quantas mensagens a IA pode enviar para o mesmo cliente. Ao chegar no limite, ela avisa o cliente com educação e passa a conversa para um atendente.",
+        adminOnly: true,
+      },
+      {
+        kind: "improved",
+        text: "Modelos da Meta: os erros do formulário agora aparecem embaixo de cada campo, e não mais num aviso que some.",
+      },
+      {
+        kind: "fixed",
+        text: "Assistente com IA: fechar ou recarregar a página com alterações não salvas agora pede confirmação. A IA também deixa de considerar mensagens apagadas pela equipe e fica mais protegida contra clientes que tentam mudar as regras dela pela conversa.",
+        adminOnly: true,
+      },
+      {
+        kind: "new",
+        text: "Assistente com IA (adicional): no editor do bot, uma etapa pode ser Atendimento com IA. A IA conversa com o cliente, tira dúvidas e passa para a equipe quando precisa, com um resumo da conversa. Em Assistente com IA, no menu lateral, você ensina sobre a empresa, as perguntas frequentes e as regras. Para contratar, fale com a Unxet.",
+        adminOnly: true,
+      },
+      {
+        kind: "new",
+        text: "Campanhas pelo WhatsApp oficial: em Campanhas, o botão Modelos da Meta cria a mensagem, envia para a Meta aprovar e mostra se ela está em análise, aprovada ou recusada (com o motivo). Ao criar uma campanha, escolha enviar pelo WhatsApp oficial e um modelo aprovado. O nome do cliente entra sozinho na mensagem, e os botões de resposta tocados pelo cliente chegam na conversa.",
+      },
+      {
+        kind: "new",
+        text: "Tutoriais: vídeos curtos que mostram, passo a passo, como usar a Unxet. Fica no rodapé do menu lateral. São 18 vídeos, organizados em trilhas: primeiros passos (conectar o WhatsApp, criar departamentos e atendentes, automações), atendimento no dia a dia (a tela de atendimentos, transferir, mensagens rápidas, etiquetas, arquivos e chat interno), clientes e vendas, automação (campanhas e bot) e gestão (Painel e Relatórios). Eles também abrem pelo botão Ver tutorial nas telas de cada assunto.",
+      },
+      {
+        kind: "new",
+        text: "Modo escuro: no menu do seu perfil (canto superior direito), escolha entre tema Claro, Escuro ou Automático, que acompanha o modo do celular ou do computador.",
+      },
+      {
+        kind: "improved",
+        text: "Conversas mais confortáveis de ler: os balões de mensagem ficaram mais largos no computador, a janela flutuante de conversa ficou maior e o cabeçalho dela foi reorganizado.",
+      },
+      {
+        kind: "improved",
+        text: "O campo de mensagem cresce conforme você digita, sem mostrar a barra de rolagem logo na segunda linha. As barras de rolagem do sistema também ficaram mais finas e discretas.",
+      },
+      {
+        kind: "improved",
+        text: "As janelas do sistema agora fecham pelo X no canto superior, no lugar do botão Fechar.",
+      },
+      {
+        kind: "improved",
+        text: "Funil de vendas: clique e arraste o fundo do quadro para ver as outras etapas para os lados.",
+      },
+      {
+        kind: "fixed",
+        text: "Na tela Departamentos, a coluna que indica o departamento padrão aparecia como Default; agora se chama Padrão.",
+        adminOnly: true,
+      },
+      {
+        kind: "improved",
+        text: "Os botões de salvar nas janelas de Atendentes e Departamentos e na tela de criar senha agora seguem o azul da Unxet, e o de excluir departamento ficou vermelho.",
+      },
+      {
+        kind: "fixed",
+        text: "Avisos dentro da conversa feitos por outra pessoa (como aceitar ou transferir) e mensagens rápidas novas agora aparecem na hora, sem precisar recarregar a página.",
+      },
+      {
+        kind: "fixed",
+        text: "O andamento das Campanhas Meta agora atualiza sozinho durante o envio.",
+        adminOnly: true,
+      },
+      {
+        kind: "fixed",
+        text: "Ao transferir uma conversa para outro setor, ela agora sai na hora da sua lista de atendimentos. Antes, continuava lá até recarregar a página.",
+      },
+      {
+        kind: "new",
+        text: "Novos tutoriais em vídeo: modelos da Meta nas campanhas, cargos e permissões e assistente com IA. Os vídeos de campanha e de criar atendente foram atualizados para as telas novas.",
+        adminOnly: true,
+      },
+    ],
+  },
+  {
     date: "2026-11-04",
     changes: [
       {
@@ -200,4 +293,39 @@ export const UPCOMING_RELEASE = previewNextRelease(NEXT_RELEASE);
 export function formatReleaseDate(date: string) {
   const [y, m, d] = date.split("-");
   return `${d}/${m}/${y}`;
+}
+
+export type ReleaseNotice = {
+  /** Muda a cada versão nova (e a cada novidade em teste fora da produção) */
+  key: string;
+  title: string;
+  body: string;
+  /** AAAA-MM-DD da versão, ou null para a versão em teste */
+  date: string | null;
+};
+
+/**
+ * Aviso "sistema atualizado" do sino. Na produção, uma vez por versão; fora
+ * dela, também quando entra novidade na versão em teste.
+ */
+export function releaseNotice(
+  current: Release = CURRENT_RELEASE,
+  upcoming: Omit<Release, "date"> | null = UPCOMING_RELEASE,
+  isProduction = false,
+): ReleaseNotice {
+  if (!isProduction && upcoming && upcoming.changes.length > 0) {
+    const n = upcoming.changes.length;
+    return {
+      key: `${upcoming.version}-teste-${n}`,
+      title: `Novidades em teste na versão ${upcoming.version}`,
+      body: `${n} ${n === 1 ? "mudança" : "mudanças"} para testar antes do lançamento. Toque para ver.`,
+      date: null,
+    };
+  }
+  return {
+    key: current.version,
+    title: `A Unxet foi atualizada para a versão ${current.version}`,
+    body: "Veja o que mudou: novidades, melhorias e correções.",
+    date: current.date,
+  };
 }

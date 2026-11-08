@@ -19,6 +19,7 @@ import { botsService } from "../services/bots";
 import type { BotRow } from "../types/bots";
 import { isBotSupportedChannel } from "../types/bots";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return "-";
@@ -42,8 +43,8 @@ const getActiveBotConflictMessage = (activeBotName: string) =>
 export const BotsSettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { clinicId, membership } = useClinic();
-  const isAdmin = membership?.role === "admin";
+  const { clinicId, can } = useClinic();
+  const canManageBots = can("bots.manage");
 
   const [bots, setBots] = useState<BotRow[]>([]);
   const [bindingsCountByBotId, setBindingsCountByBotId] = useState<
@@ -219,6 +220,7 @@ export const BotsSettingsPage: React.FC = () => {
                 Configure fluxos de triagem e vincule bots aos canais da
                 Empresa.
               </p>
+              <TutorialButton tutorialId="criar-bot" className="mt-1" />
             </div>
           </div>
 
@@ -227,7 +229,7 @@ export const BotsSettingsPage: React.FC = () => {
               variant="primary"
               size="sm"
               onClick={() => navigate("/inbox/bots/new")}
-              disabled={!clinicId || !isAdmin}
+              disabled={!clinicId || !canManageBots}
             >
               <span className="flex items-center gap-2 whitespace-nowrap">
                 <PlusIcon className="h-4 w-4" />
@@ -250,7 +252,7 @@ export const BotsSettingsPage: React.FC = () => {
               />
 
               <div className="w-full">
-                <label className="block text-sm font-medium text-[#1E1E1E] mb-1">
+                <label className="block text-sm font-medium text-gray-900 mb-1">
                   Status
                 </label>
                 <select
@@ -258,7 +260,7 @@ export const BotsSettingsPage: React.FC = () => {
                   onChange={(e) =>
                     setStatusFilter(e.target.value as BotRow["status"] | "all")
                   }
-                  className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white"
                 >
                   <option value="all">Todos</option>
                   <option value="active">Ativo</option>
@@ -313,7 +315,7 @@ export const BotsSettingsPage: React.FC = () => {
                   variant="primary"
                   size="sm"
                   onClick={() => navigate("/inbox/bots/new")}
-                  disabled={!clinicId || !isAdmin}
+                  disabled={!clinicId || !canManageBots}
                 >
                   <span className="flex items-center gap-2">
                     <PlusIcon className="h-4 w-4" />
@@ -369,7 +371,7 @@ export const BotsSettingsPage: React.FC = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => navigate(`/inbox/bots/edit/${bot.id}`)}
-                          disabled={!isAdmin}
+                          disabled={!canManageBots}
                         >
                           <span className="flex items-center gap-2">
                             <PencilIcon className="h-4 w-4" />
@@ -381,7 +383,7 @@ export const BotsSettingsPage: React.FC = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDuplicate(bot)}
-                          disabled={!isAdmin || isActing}
+                          disabled={!canManageBots || isActing}
                         >
                           <span className="flex items-center gap-2">
                             <CopyIcon className="h-4 w-4" />
@@ -393,7 +395,7 @@ export const BotsSettingsPage: React.FC = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleToggleStatus(bot)}
-                          disabled={!isAdmin || isActing}
+                          disabled={!canManageBots || isActing}
                         >
                           <span className="flex items-center gap-2">
                             <PowerIcon className="h-4 w-4" />
@@ -406,7 +408,7 @@ export const BotsSettingsPage: React.FC = () => {
                           size="sm"
                           className="text-red-600 hover:bg-red-50"
                           onClick={() => handleDelete(bot)}
-                          disabled={!isAdmin || isActing}
+                          disabled={!canManageBots || isActing}
                         >
                           <span className="flex items-center gap-2">
                             <Trash2Icon className="h-4 w-4" />

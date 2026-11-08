@@ -6,6 +6,7 @@ import {
   FilterIcon,
   Loader2Icon,
   SendIcon,
+  ShieldIcon,
   Trash2Icon,
   UserXIcon,
   UsersIcon,
@@ -17,7 +18,10 @@ import { getAuthCallbackUrl } from "../lib/appUrl";
 import { useClinic } from "../contexts/ClinicContext";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "react-toastify";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { RolesManager } from "../modules/roles/RolesManager";
+import { clinicRolesService, type ClinicRole } from "../services/clinicRoles";
 
 type Role = "admin" | "agent";
 
@@ -25,6 +29,8 @@ type ClinicUser = {
   clinic_id: string;
   user_id: string;
   role: Role;
+  // Cargo personalizado (só para atendente)
+  role_id?: string | null;
   name: string | null;
   department_id: string | null;
   email?: string | null;
@@ -55,7 +61,8 @@ type ActionError = {
   isPermission: boolean;
 };
 
-type RoleFilter = "all" | Role;
+// "all", "admin", "agent" (sem cargo personalizado) ou o id de um cargo
+type RoleFilter = string;
 
 type ModalMode = "edit" | "remove" | "delete" | "invite";
 
@@ -189,10 +196,41 @@ const getFunctionResponseMessage = async (error: any) => {
   }
 };
 
-const RoleBadge: React.FC<{ role: Role }> = ({ role }) => (
-  <Badge variant={role === "admin" ? "success" : "default"}>
-    {role === "admin" ? "Administrador" : "Atendente"}
-  </Badge>
+const RoleBadge: React.FC<{ role: Role; customName?: string | null }> = ({ role, customName }) =>
+  role !== "admin" && customName ? (
+    <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+      {customName}
+    </span>
+  ) : (
+    <Badge variant={role === "admin" ? "success" : "default"}>
+      {role === "admin" ? "Administrador" : "Atendente"}
+    </Badge>
+  );
+
+// Cargo escolhido nas listas: "admin", "agent" ou o id de um cargo personalizado
+const cargoOf = (role: Role, roleId?: string | null) =>
+  role === "admin" ? "admin" : roleId ?? "agent";
+const fromCargo = (value: string): { role: Role; roleId: string | null } =>
+  value === "admin"
+    ? { role: "admin", roleId: null }
+    : value === "agent"
+      ? { role: "agent", roleId: null }
+      : { role: "agent", roleId: value };
+
+const CargoOptions: React.FC<{ roles: ClinicRole[] }> = ({ roles }) => (
+  <>
+    <option value="admin">Administrador</option>
+    <option value="agent">Atendente</option>
+    {roles.length > 0 ? (
+      <optgroup label="Cargos da empresa">
+        {roles.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.name}
+          </option>
+        ))}
+      </optgroup>
+    ) : null}
+  </>
 );
 
 const isInvitePending = (user: ClinicUser) => !user.accepted_at;
@@ -320,6 +358,9 @@ export const AttendantsPage: React.FC = () => {
   const [activeModal, setActiveModal] = useState<ModalMode | null>(null);
   const [editingUser, setEditingUser] = useState<ClinicUser | null>(null);
   const [editRole, setEditRole] = useState<Role>("agent");
+  const [editRoleId, setEditRoleId] = useState<string | null>(null);
+  const [roles, setRoles] = useState<ClinicRole[]>([]);
+  const [rolesOpen, setRolesOpen] = useState(false);
   const [editDepartmentId, setEditDepartmentId] = useState<string | null>(null);
   const [editDepartments, setEditDepartments] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -331,6 +372,7 @@ export const AttendantsPage: React.FC = () => {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("agent");
+  const [inviteRoleId, setInviteRoleId] = useState<string | null>(null);
   const [inviteDepartmentId, setInviteDepartmentId] = useState<string | null>(
     null,
   );
@@ -356,7 +398,11 @@ export const AttendantsPage: React.FC = () => {
         user.name?.toLowerCase().includes(query) ||
         user.email?.toLowerCase().includes(query) ||
         user.user_id.toLowerCase().includes(query);
-      const matchesRole = roleFilter === "all" || user.role === roleFilter;
+      const matchesRole =
+        roleFilter === "all" ||
+        (roleFilter === "admin" && user.role === "admin") ||
+        (roleFilter === "agent" && user.role === "agent" && !user.role_id) ||
+        user.role_id === roleFilter;
       const matchesDepartment =
         departmentFilter === "all" || user.department_id === departmentFilter;
       return matchesSearch && matchesRole && matchesDepartment;
@@ -399,7 +445,7 @@ export const AttendantsPage: React.FC = () => {
     const { data, error: fetchError } = await supabase
       .from("clinic_users")
       .select(
-        "clinic_id, user_id, role, name, department_id, email, invited_at, accepted_at",
+        "clinic_id, user_id, role, role_id, name, department_id, email, invited_at, accepted_at",
       )
       .eq("clinic_id", clinicId)
       .order("role", { ascending: false })
@@ -467,12 +513,12 @@ export const AttendantsPage: React.FC = () => {
   );
 
   const updateClinicUserRole = useCallback(
-    async (userId: string, role: Role) => {
+    async (userId: string, role: Role, roleId: string | null) => {
       if (!clinicId) return;
 
       const { error: updateError } = await supabase
         .from("clinic_users")
-        .update({ role })
+        .update({ role, role_id: role === "admin" ? null : roleId })
         .eq("clinic_id", clinicId)
         .eq("user_id", userId);
 
@@ -546,10 +592,13 @@ export const AttendantsPage: React.FC = () => {
     setError(null);
 
     try {
-      const [users, departments] = await Promise.all([
+      const [users, departments, clinicRoles] = await Promise.all([
         fetchClinicUsers(),
         fetchDepartments(),
+        // Sem conseguir ler os cargos, a tela segue só com os padrão
+        clinicRolesService.list(clinicId).catch(() => [] as ClinicRole[]),
       ]);
+      setRoles(clinicRoles);
       const adminCountValue = await countAdmins();
 
       setClinicUsers(users);
@@ -583,6 +632,7 @@ export const AttendantsPage: React.FC = () => {
   const handleOpenEdit = (user: ClinicUser) => {
     setEditingUser(user);
     setEditRole(user.role);
+    setEditRoleId(user.role === "admin" ? null : user.role_id ?? null);
     setEditDepartmentId(user.department_id ?? null);
     const memberDepartments = departmentMembers[user.user_id] ?? [];
     setEditDepartments(memberDepartments);
@@ -596,11 +646,14 @@ export const AttendantsPage: React.FC = () => {
     setInviteEmail("");
     setInviteName("");
     setInviteRole("agent");
+    setInviteRoleId(null);
     setInviteDepartmentId(null);
   };
 
-  const handleRoleChange = (value: Role) => {
-    setEditRole(value);
+  const handleRoleChange = (value: string) => {
+    const next = fromCargo(value);
+    setEditRole(next.role);
+    setEditRoleId(next.roleId);
   };
 
   const handleDepartmentChange = (value: string) => {
@@ -649,8 +702,11 @@ export const AttendantsPage: React.FC = () => {
     try {
       const updates: Promise<void>[] = [];
 
-      if (editingUser.role !== editRole) {
-        updates.push(updateClinicUserRole(editingUser.user_id, editRole));
+      if (
+        editingUser.role !== editRole ||
+        (editingUser.role_id ?? null) !== (editRole === "admin" ? null : editRoleId)
+      ) {
+        updates.push(updateClinicUserRole(editingUser.user_id, editRole, editRoleId));
       }
 
       if (editingUser.department_id !== editDepartmentId) {
@@ -770,6 +826,7 @@ export const AttendantsPage: React.FC = () => {
             email,
             name: inviteName.trim() || null,
             role: inviteRole,
+            role_id: inviteRole === "agent" ? inviteRoleId : null,
             department_id: inviteDepartmentId ?? null,
             redirect_to: getAuthCallbackUrl(),
           },
@@ -845,7 +902,7 @@ export const AttendantsPage: React.FC = () => {
                   Atendentes
                 </h1>
                 <p className="mt-1 text-sm text-gray-500">
-                  Apenas administradores podem editar permissões e vínculos.
+                  Apenas administradores convidam pessoas e mudam cargos e vínculos.
                 </p>
                 {subscription && !isLoading && (
                   <p
@@ -860,10 +917,21 @@ export const AttendantsPage: React.FC = () => {
                       ". Para convidar mais pessoas, fale com a Unxet sobre mudar de plano."}
                   </p>
                 )}
+                <TutorialButton tutorialId="criar-atendente" className="mt-1" />
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={() => setRolesOpen(true)}
+                className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                <ShieldIcon className="h-4 w-4" />
+                Cargos e permissões
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={handleOpenInvite}
@@ -908,8 +976,7 @@ export const AttendantsPage: React.FC = () => {
                     className="w-full appearance-none rounded-full sm:w-36 border border-gray-200 bg-white px-3 py-2 pr-8 text-sm text-gray-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="all">Todos</option>
-                    <option value="admin">Administrador</option>
-                    <option value="agent">Atendente</option>
+                    <CargoOptions roles={roles} />
                   </select>
                   <ChevronDownIcon className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-gray-400" />
                 </div>
@@ -1016,7 +1083,10 @@ export const AttendantsPage: React.FC = () => {
                   </div>
                   <div className="flex flex-wrap items-center gap-2 2xl:contents">
                     <div>
-                      <RoleBadge role={user.role} />
+                      <RoleBadge
+                        role={user.role}
+                        customName={roles.find((r) => r.id === user.role_id)?.name}
+                      />
                     </div>
                     <div className="flex min-w-0 items-center gap-2 2xl:block">
                       <div className="text-sm text-gray-700">
@@ -1094,13 +1164,12 @@ export const AttendantsPage: React.FC = () => {
               <label className="text-sm font-medium text-gray-700">
                 Cargo
                 <select
-                  value={editRole}
-                  onChange={(e) => handleRoleChange(e.target.value as Role)}
+                  value={cargoOf(editRole, editRoleId)}
+                  onChange={(e) => handleRoleChange(e.target.value)}
                   disabled={!isAdmin}
                   className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-50"
                 >
-                  <option value="admin">Administrador</option>
-                  <option value="agent">Atendente</option>
+                  <CargoOptions roles={roles} />
                 </select>
               </label>
               <label className="text-sm font-medium text-gray-700">
@@ -1206,7 +1275,7 @@ export const AttendantsPage: React.FC = () => {
                   type="button"
                   onClick={handleSave}
                   disabled={!isAdmin || isSaving}
-                  className="rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+                  className="rounded-full bg-[#0A84FF] hover:bg-[#0A84FF]/90 px-5 py-2 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
                   {isSaving ? "Salvando..." : "Salvar alterações"}
                 </button>
@@ -1335,13 +1404,16 @@ export const AttendantsPage: React.FC = () => {
             <label className="text-sm font-medium text-gray-700">
               Cargo
               <select
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value as Role)}
+                value={cargoOf(inviteRole, inviteRoleId)}
+                onChange={(e) => {
+                  const next = fromCargo(e.target.value);
+                  setInviteRole(next.role);
+                  setInviteRoleId(next.roleId);
+                }}
                 disabled={!isAdmin}
                 className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-50"
               >
-                <option value="admin">Administrador</option>
-                <option value="agent">Atendente</option>
+                <CargoOptions roles={roles} />
               </select>
             </label>
           </div>
@@ -1384,6 +1456,19 @@ export const AttendantsPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {rolesOpen && clinicId ? (
+        <RolesManager
+          clinicId={clinicId}
+          roles={roles}
+          membersByRole={clinicUsers.reduce<Record<string, number>>((acc, user) => {
+            if (user.role_id) acc[user.role_id] = (acc[user.role_id] ?? 0) + 1;
+            return acc;
+          }, {})}
+          onChanged={refreshData}
+          onClose={() => setRolesOpen(false)}
+        />
+      ) : null}
     </div>
   );
 };

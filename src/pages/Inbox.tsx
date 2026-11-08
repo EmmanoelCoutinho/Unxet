@@ -48,13 +48,13 @@ export const Inbox: React.FC = () => {
   const openConversation = useOpenConversation();
 
   const { authUser } = useAuth();
-  const { clinicId, membership, hasFeature } = useClinic();
-  const isAdmin = membership?.role === "admin";
+  const { clinicId, hasFeature, can } = useClinic();
+    const seesAllConversations = can("conversations.all");
   // No início do inbox o admin vê o painel ao lado da lista; o atendente,
   // uma tela vazia, que dá lugar à lista inteira
   const listFillsScreen =
-    isInboxRoot && !(isAdmin && hasFeature("analytics"));
-  const userNames = useClinicUserNames(clinicId, isAdmin);
+    isInboxRoot && !(can("dashboard.view") && hasFeature("analytics"));
+  const userNames = useClinicUserNames(clinicId, seesAllConversations);
   const { hasMultiple: hasMultipleWhatsapp } = useWhatsappConnections(clinicId);
 
   useEffect(() => {
@@ -178,7 +178,7 @@ export const Inbox: React.FC = () => {
                 "relative flex h-[42px] w-[42px] flex-shrink-0 items-center justify-center rounded-lg border transition lg:hidden",
                 filtersOpen || activeFiltersCount > 0
                   ? "border-blue-500 bg-blue-50 text-blue-600"
-                  : "border-[#E5E7EB] text-gray-600 hover:bg-gray-50",
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50",
               ].join(" ")}
               aria-label="Filtros"
               aria-expanded={filtersOpen}
@@ -305,7 +305,7 @@ export const Inbox: React.FC = () => {
                   key={conversation.id}
                   conversation={conversation}
                   assigneeName={
-                    isAdmin
+                    seesAllConversations
                       ? getAssigneeLabel(
                           conversation.assignedTo,
                           authUser?.id,

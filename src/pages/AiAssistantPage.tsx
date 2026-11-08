@@ -9,7 +9,9 @@ import { useClinic } from "../contexts/ClinicContext";
 import {
   AI_SETTINGS_LIMITS,
   aiAssistantService,
+  aiUsageLevel,
   DEFAULT_AI_SETTINGS,
+  isValidMaxReplies,
   type AiSettings,
 } from "../services/aiAssistant";
 
@@ -76,9 +78,9 @@ const NotContracted = () => (
 );
 
 export const AiAssistantPage: React.FC = () => {
-  const { clinicId, subscription, membership } = useClinic();
+  const { clinicId, subscription, can } = useClinic();
   const { authUser } = useAuth();
-  const isAdmin = membership?.role === "admin";
+  const canManageAi = can("ai.manage");
   const limit = subscription?.ai_replies_addon ?? null;
 
   const [saved, setSaved] = useState<AiSettings | null>(null);
@@ -116,16 +118,29 @@ export const AiAssistantPage: React.FC = () => {
     [saved, form],
   );
 
+  // Fechar ou recarregar a aba com alterações sem salvar pede confirmação
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
   const tooLong =
     form.business_info.length > AI_SETTINGS_LIMITS.business_info ||
     form.faq.length > AI_SETTINGS_LIMITS.faq ||
     form.rules.length > AI_SETTINGS_LIMITS.rules;
 
+  const maxRepliesInvalid = !isValidMaxReplies(form.max_replies_per_conversation);
+
   const set = <K extends keyof AiSettings>(key: K, value: AiSettings[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = async () => {
-    if (!clinicId || !isAdmin) return;
+    if (!clinicId || !canManageAi) return;
     setSaving(true);
     try {
       await aiAssistantService.saveSettings(clinicId, form, authUser?.id ?? null);
@@ -140,7 +155,7 @@ export const AiAssistantPage: React.FC = () => {
     }
   };
 
-  const editable = isAdmin && !saving;
+  const editable = canManageAi && !saving;
 
   return (
     <div className="flex h-full flex-col bg-slate-50">
@@ -169,7 +184,7 @@ export const AiAssistantPage: React.FC = () => {
                 size="sm"
                 onClick={handleSave}
                 isLoading={saving}
-                disabled={!dirty || saving || tooLong || !isAdmin}
+                disabled={!dirty || saving || tooLong || maxRepliesInvalid || !canManageAi}
               >
                 Salvar
               </Button>
@@ -189,21 +204,89 @@ export const AiAssistantPage: React.FC = () => {
           </div>
         ) : (
           <div className="mx-auto flex max-w-3xl flex-col gap-4">
-            <div className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-slate-900">Uso neste mês</div>
-                <div className="text-xs text-slate-500">
-                  Cada mensagem que a IA envia conta uma resposta. Quando o
-                  limite acaba, as conversas vão direto para a equipe.
+            <div className="flex flex-col gap-4 rounded-2xl border border-blue-200 bg-blue-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex gap-3">
+                <SparklesIcon className="mt-0.5 h-5 w-5 flex-none text-blue-700" />
+                <div>
+                  <div className="text-sm font-semibold text-blue-900">
+                    A IA só atende pelo bot
+                  </div>
+                  <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-sm leading-relaxed text-blue-900">
+                    <li>Preencha abaixo o que a IA precisa saber sobre a empresa.</li>
+                    <li>
+                      No editor do bot, crie uma etapa do tipo{" "}
+                      <strong>Atendimento com IA</strong> com o objetivo dela e o
+                      setor que recebe a conversa.
+                    </li>
+                    <li>Ative o bot.</li>
+                  </ol>
                 </div>
               </div>
-              <div className="whitespace-nowrap text-lg font-bold text-slate-900">
-                {used === null ? "—" : used.toLocaleString("pt-BR")}
-                <span className="text-sm font-medium text-slate-500">
-                  {" "}de {limit.toLocaleString("pt-BR")} respostas
-                </span>
-              </div>
+              <Link
+                to="/inbox/bots"
+                className="inline-flex flex-none items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                Abrir editor do bot
+              </Link>
             </div>
+
+            {(() => {
+              const level = used === null ? "ok" : aiUsageLevel(used, limit);
+              const percent = used === null ? 0 : Math.min(100, Math.round((used / limit) * 100));
+              return (
+                <div
+                  className={`flex flex-col gap-3 rounded-2xl border bg-white p-5 ${
+                    level === "exhausted"
+                      ? "border-rose-300"
+                      : level === "warning"
+                        ? "border-amber-300"
+                        : "border-slate-200"
+                  }`}
+                >
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Uso neste mês</div>
+                      <div className="text-xs text-slate-500">
+                        Cada mensagem que a IA envia conta uma resposta. O contador volta a zero no dia 1º.
+                      </div>
+                    </div>
+                    <div className="whitespace-nowrap text-lg font-bold text-slate-900">
+                      {used === null ? "—" : used.toLocaleString("pt-BR")}
+                      <span className="text-sm font-medium text-slate-500">
+                        {" "}de {limit.toLocaleString("pt-BR")} respostas
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className="h-2 w-full overflow-hidden rounded-full bg-slate-100"
+                    role="progressbar"
+                    aria-label="Respostas usadas no mês"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={percent}
+                  >
+                    <div
+                      className={`h-full rounded-full ${
+                        level === "exhausted" ? "bg-rose-500" : level === "warning" ? "bg-amber-500" : "bg-blue-500"
+                      }`}
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                  {level === "exhausted" ? (
+                    <p className="rounded-xl bg-rose-50 p-3 text-xs leading-5 text-rose-800">
+                      <strong>As respostas deste mês acabaram.</strong> Até o dia 1º, quando um cliente chega na
+                      etapa de IA, o bot avisa que vai passar para um atendente e a conversa vai direto para a
+                      equipe. Para aumentar o limite agora, fale com a Unxet.
+                    </p>
+                  ) : level === "warning" ? (
+                    <p className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                      Faltam {(limit - (used ?? 0)).toLocaleString("pt-BR")} respostas. Quando acabarem, as conversas da
+                      etapa de IA vão direto para a equipe até o dia 1º. Se precisar de mais, fale com a Unxet.
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })()}
 
             <div className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5">
               <div className="grid gap-5 sm:grid-cols-2">
@@ -217,7 +300,7 @@ export const AiAssistantPage: React.FC = () => {
                     className={fieldClass}
                   />
                 </Field>
-                <Field id="ai-tone" label="Tom de voz">
+                <Field id="ai-tone" label="Tom de voz" help="Como a IA trata o cliente nas mensagens.">
                   <select
                     id="ai-tone"
                     value={form.tone}
@@ -240,6 +323,40 @@ export const AiAssistantPage: React.FC = () => {
                 />
                 Pode usar emojis
               </label>
+              <Field
+                id="ai-max-replies"
+                label="Respostas por atendimento"
+                help={`Quantas mensagens a IA pode enviar para o mesmo cliente num atendimento. Ao chegar no limite, ela avisa o cliente que vai passar para um atendente e transfere a conversa. Use de ${AI_SETTINGS_LIMITS.max_replies_min} a ${AI_SETTINGS_LIMITS.max_replies_max}.`}
+              >
+                <input
+                  id="ai-max-replies"
+                  type="number"
+                  inputMode="numeric"
+                  min={AI_SETTINGS_LIMITS.max_replies_min}
+                  max={AI_SETTINGS_LIMITS.max_replies_max}
+                  value={Number.isFinite(form.max_replies_per_conversation) ? form.max_replies_per_conversation : ""}
+                  disabled={!editable}
+                  onChange={(e) =>
+                    set(
+                      "max_replies_per_conversation",
+                      e.target.value === "" ? Number.NaN : Math.trunc(Number(e.target.value)),
+                    )
+                  }
+                  aria-invalid={maxRepliesInvalid}
+                  aria-describedby={maxRepliesInvalid ? "ai-max-replies-error" : undefined}
+                  className={
+                    fieldClass +
+                    " sm:max-w-[160px]" +
+                    (maxRepliesInvalid ? " border-red-400 focus:border-red-500 focus:ring-red-500/20" : "")
+                  }
+                />
+                {maxRepliesInvalid ? (
+                  <p id="ai-max-replies-error" className="mt-1.5 text-xs text-red-600">
+                    Escolha um número de {AI_SETTINGS_LIMITS.max_replies_min} a{" "}
+                    {AI_SETTINGS_LIMITS.max_replies_max}.
+                  </p>
+                ) : null}
+              </Field>
             </div>
 
             <div className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5">
@@ -294,12 +411,6 @@ export const AiAssistantPage: React.FC = () => {
                 />
               </Field>
             </div>
-
-            <p className="pb-4 text-xs leading-relaxed text-slate-500">
-              Para a IA atender, adicione uma etapa do tipo "Atendimento com IA"
-              no <Link to="/inbox/bots" className="text-blue-700 hover:text-blue-900">editor do bot</Link>.
-              Lá você define o objetivo de cada etapa e para qual setor ela passa a conversa.
-            </p>
           </div>
         )}
       </div>

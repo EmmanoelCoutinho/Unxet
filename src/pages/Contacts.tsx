@@ -17,6 +17,7 @@ import type {
   Contact,
   ContactListFilters,
 } from "../modules/contacts/types/contacts";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 const DEFAULT_FILTERS: ContactListFilters = {
   search: "",
@@ -91,7 +92,7 @@ export const ContactsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full min-h-0 w-full overflow-hidden bg-[#F7F8FA]">
+    <div className="flex h-full min-h-0 w-full overflow-hidden bg-gray-50">
       <AppSidebar />
       <div
         ref={scrollRef}
@@ -126,6 +127,7 @@ export const ContactsPage: React.FC = () => {
             <p className="mt-1 text-sm text-gray-500">
               CRM leve para contatos que já conversaram com a empresa.
             </p>
+            <TutorialButton tutorialId="carteira-clientes" className="mt-1" />
           </div>
           {emptyStateLabel ? (
             <span className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">

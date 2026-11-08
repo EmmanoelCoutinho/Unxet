@@ -29,3 +29,8 @@ dist-ssr
 # Supabase CLI (estado local)
 supabase/.temp
 supabase/.branches
+
+# Gravação dos tutoriais (temporário)
+scripts/tutorials/.videos
+scripts/tutorials/erro.png
+scripts/tutorials/trilha-previa.wav

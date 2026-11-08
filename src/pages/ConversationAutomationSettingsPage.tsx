@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Textarea } from "../components/ui/Textarea";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import { Card } from "../components/ui/Card";
 import { SettingsTabs } from "../components/settings/SettingsTabs";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
@@ -372,7 +373,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             Automações do chat
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Carregando configurações da clínica...
+            Carregando configurações da empresa...
           </p>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6">
@@ -401,6 +402,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             <p className="mt-1 text-sm text-slate-500">
               Configure regras automáticas de SLA e ciclo de vida das conversas.
             </p>
+            <TutorialButton tutorialId="automacoes-conversa" className="mt-1" />
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 pt-2 sm:py-4">

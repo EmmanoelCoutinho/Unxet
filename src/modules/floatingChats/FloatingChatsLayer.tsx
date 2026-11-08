@@ -97,7 +97,7 @@ const MinimizedBar: React.FC<{
         title={`Abrir conversa com ${name}`}
       >
         <Avatar name={name} avatar={conversation?.contactAvatar} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#1E1E1E]">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">
           {name}
         </span>
         <UnreadBadge count={unread} />
@@ -159,7 +159,7 @@ const OverflowMenu: React.FC<{
                   className="flex min-w-0 flex-1 items-center gap-2 text-left"
                 >
                   <Avatar name={name} avatar={conversationOf(box)?.contactAvatar} />
-                  <span className="min-w-0 flex-1 truncate text-sm text-[#1E1E1E]">
+                  <span className="min-w-0 flex-1 truncate text-sm text-gray-900">
                     {name}
                   </span>
                   <UnreadBadge count={conversationOf(box)?.unreadCount ?? 0} />
@@ -230,7 +230,7 @@ export function FloatingChatsLayer() {
           <section
             key={box.id}
             aria-label={`Conversa com ${nameOf(box)}`}
-            className="pointer-events-auto flex h-[min(560px,calc(100dvh-5.5rem))] w-[360px] flex-col overflow-hidden rounded-t-xl border border-b-0 border-gray-200 bg-white shadow-2xl"
+            className="pointer-events-auto flex h-[min(560px,calc(100dvh-5.5rem))] w-[400px] flex-col overflow-hidden rounded-t-xl border border-b-0 border-gray-200 bg-white shadow-2xl"
           >
             <BoxErrorBoundary onClose={() => close(box.id)}>
               <ConversationView

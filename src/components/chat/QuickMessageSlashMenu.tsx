@@ -29,10 +29,10 @@ export const QuickMessageSlashMenu: React.FC<QuickMessageSlashMenuProps> = ({
       aria-label="Mensagens rápidas"
       // Clicar no menu não tira o foco do campo de texto
       onMouseDown={(event) => event.preventDefault()}
-      className="absolute bottom-full left-0 right-0 z-30 mb-2 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-lg"
+      className="absolute bottom-full left-0 right-0 z-30 mb-2 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
     >
-      <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-xs text-[#6B7280]">
-        <span className="flex items-center gap-1.5 font-medium text-[#1F2937]">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5 font-medium text-gray-800">
           <MessageSquareTextIcon className="h-3.5 w-3.5" />
           Mensagens rápidas
         </span>
@@ -52,7 +52,7 @@ export const QuickMessageSlashMenu: React.FC<QuickMessageSlashMenuProps> = ({
             ))}
           </div>
         ) : items.length === 0 ? (
-          <p className="px-3 py-3 text-sm text-[#6B7280]">
+          <p className="px-3 py-3 text-sm text-gray-500">
             Nenhuma mensagem rápida cadastrada. Cadastre em Mensagens rápidas,
             na área administrativa.
           </p>
@@ -70,8 +70,8 @@ export const QuickMessageSlashMenu: React.FC<QuickMessageSlashMenuProps> = ({
                 onClick={() => onSelect(item)}
                 className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
                   active
-                    ? "bg-blue-50 text-[#1F2937]"
-                    : "text-[#374151] hover:bg-[#F3F4F6]"
+                    ? "bg-blue-50 text-gray-800"
+                    : "text-gray-700 hover:bg-gray-100"
                 }`}
               >
                 <span className="line-clamp-2 whitespace-pre-wrap">

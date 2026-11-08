@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import { useClinic } from "../contexts/ClinicContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useClinicUserNames } from "../hooks/useClinicUserNames";
+import { useDragToScroll } from "../hooks/useDragToScroll";
 import { Button } from "../components/ui/Button";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { useCampaignTags } from "../modules/scheduledMessages/hooks/useScheduledMessages";
@@ -30,6 +31,7 @@ import {
   stageTotals,
   topPosition,
 } from "../modules/leads/utils/board";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 export const LEADS_PATH = "/inbox/leads";
 const PIPELINE_STORAGE_KEY = "unxet:leads:pipeline";
@@ -50,10 +52,12 @@ type DropTarget = { stageId: string; index: number };
 export const LeadsKanbanPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { clinicId, membership } = useClinic();
+  const { clinicId, membership, can } = useClinic();
   const { authUser } = useAuth();
   const currentUserId = authUser?.id ?? null;
   const isAdmin = membership?.role === "admin";
+  // Negociações de toda a equipe (cargo); as etapas do funil continuam só do admin
+  const seesAllLeads = can("leads.all");
 
   const { pipelines, loading: loadingPipelines, error: pipelinesError } = usePipelines(clinicId);
   const lossReasons = useLossReasons(clinicId);
@@ -82,6 +86,8 @@ export const LeadsKanbanPage: React.FC = () => {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // Clicar e arrastar o fundo do quadro rola as etapas para os lados
+  const boardScroll = useDragToScroll<HTMLDivElement>();
 
   // ?deal=<id> (lembrete por push, link da conversa) abre o cartão
   useDealFromQuery(location.search, (id) => setOpenDealId(id));
@@ -95,7 +101,7 @@ export const LeadsKanbanPage: React.FC = () => {
 
   const ownerOptions: OwnerOption[] = useMemo(() => {
     const meLabel = currentUserId && userNames[currentUserId] ? `Você (${userNames[currentUserId]})` : "Você";
-    if (!isAdmin) {
+    if (!seesAllLeads) {
       return [
         { id: currentUserId, label: meLabel },
         { id: null, label: "Sem responsável" },
@@ -106,7 +112,7 @@ export const LeadsKanbanPage: React.FC = () => {
       .sort((a, b) => a[1].localeCompare(b[1]))
       .map(([id, label]) => ({ id, label }));
     return [{ id: currentUserId, label: meLabel }, ...others, { id: null, label: "Sem responsável" }];
-  }, [isAdmin, currentUserId, userNames]);
+  }, [seesAllLeads, currentUserId, userNames]);
 
   const visibleDeals = useMemo(
     () => filterDeals(deals, filters, currentUserId),
@@ -248,6 +254,7 @@ export const LeadsKanbanPage: React.FC = () => {
                 {openTotals.value > 0 ? ` · ${formatCompactCurrency(openTotals.value)} em negociação` : ""}
                 {` · ganhos e perdidos dos últimos ${CLOSED_VISIBLE_DAYS} dias`}
               </p>
+              <TutorialButton tutorialId="funil-vendas" className="mt-1" />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -295,7 +302,7 @@ export const LeadsKanbanPage: React.FC = () => {
             <option value="all">Todos os responsáveis</option>
             <option value="mine">Minhas</option>
             <option value="none">Sem responsável</option>
-            {isAdmin &&
+            {seesAllLeads &&
               Object.entries(userNames)
                 .filter(([id]) => id !== currentUserId)
                 .sort((a, b) => a[1].localeCompare(b[1]))
@@ -345,7 +352,13 @@ export const LeadsKanbanPage: React.FC = () => {
       </div>
 
       {/* Quadro */}
-      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
+      <div
+        ref={boardScroll.ref}
+        onPointerDown={boardScroll.onPointerDown}
+        className={`min-h-0 flex-1 overflow-x-auto overflow-y-hidden ${
+          boardScroll.dragging ? "cursor-grabbing select-none" : "cursor-grab"
+        }`}
+      >
         {loadingPipelines || (loadingDeals && deals.length === 0) ? (
           <div className="flex h-full gap-4 p-4 sm:p-6">
             {[1, 2, 3, 4].map((i) => (
@@ -449,7 +462,7 @@ export const LeadsKanbanPage: React.FC = () => {
           ownerOptions={ownerOptions}
           userNames={userNames}
           currentUserId={currentUserId}
-          isAdmin={isAdmin}
+          seesAllLeads={seesAllLeads}
           clinicId={clinicId}
           onClose={closeDeal}
           onMove={(deal, stage) => requestMove(deal, stage)}

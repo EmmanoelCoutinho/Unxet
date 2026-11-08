@@ -8,9 +8,11 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { Input } from "../components/ui/Input";
+import { CloseButton } from "../components/ui/CloseButton";
 import { supabase } from "../lib/supabaseClient";
 import { useClinic } from "../contexts/ClinicContext";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 type Department = {
   id: string;
@@ -628,17 +630,20 @@ export const DepartmentsPage: React.FC = () => {
               <p className="text-sm text-gray-500">
                 Apenas administradores podem alterar departamentos.
               </p>
+              <TutorialButton tutorialId="criar-departamentos" className="mt-1" />
             </div>
           </div>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            disabled={!isAdmin}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <PlusIcon className="h-4 w-4" />
-            Criar departamento
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={openCreateModal}
+              disabled={!isAdmin}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <PlusIcon className="h-4 w-4" />
+              Criar departamento
+            </button>
+          </div>
         </div>
       </div>
 
@@ -695,7 +700,7 @@ export const DepartmentsPage: React.FC = () => {
                     <th className="px-4 sm:px-6 py-4">Nome</th>
                     <th className="px-4 sm:px-6 py-4">Avaliação</th>
                     <th className="px-4 sm:px-6 py-4">Status</th>
-                    <th className="px-4 sm:px-6 py-4">Default</th>
+                    <th className="px-4 sm:px-6 py-4">Padrão</th>
                     <th className="px-4 sm:px-6 py-4">Ações</th>
                   </tr>
                 </thead>
@@ -826,13 +831,7 @@ export const DepartmentsPage: React.FC = () => {
                   ? "Criar departamento"
                   : "Editar departamento"}
               </h2>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="text-sm text-slate-500 hover:text-slate-700"
-              >
-                Fechar
-              </button>
+              <CloseButton onClick={closeModal} />
             </div>
 
             <div className="mt-5 space-y-4">
@@ -923,7 +922,7 @@ export const DepartmentsPage: React.FC = () => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSubmitting || !isAdmin}
-                className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full bg-[#0A84FF] hover:bg-[#0A84FF]/90 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting
                   ? "Salvando..."
@@ -958,7 +957,7 @@ export const DepartmentsPage: React.FC = () => {
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isDeleting ? "Excluindo..." : "Excluir"}
               </button>

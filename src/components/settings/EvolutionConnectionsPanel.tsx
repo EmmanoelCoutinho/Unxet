@@ -239,7 +239,7 @@ const EvolutionConnectionItem: React.FC<ItemProps> = ({
             }}
             disabled={busy !== null}
             placeholder="Ex.: Recepção"
-            className="mt-1 w-full rounded-lg border border-[#E5E7EB] px-3 py-1.5 text-sm font-semibold text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
           />
           {phone || connection.connected_name ? (
             <p className="mt-1 text-xs text-gray-500">
@@ -261,7 +261,7 @@ const EvolutionConnectionItem: React.FC<ItemProps> = ({
               saveFields({ default_department_id: event.target.value || null })
             }
             disabled={busy !== null}
-            className="mt-1 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
           >
             <option value="">Departamento padrão da empresa</option>
             {departments.map((department) => (
@@ -447,7 +447,7 @@ export const EvolutionConnectionsPanel: React.FC<Props> = ({
               onChange={(event) => setNewName(event.target.value)}
               placeholder="Ex.: Recepção, Financeiro"
               disabled={creating}
-              className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-1.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
             />
             <div className="flex gap-2">
               <Button

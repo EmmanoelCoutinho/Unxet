@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import {
   SendIcon,
   PaperclipIcon,
@@ -189,6 +189,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       el.setSelectionRange(nextCaret, nextCaret);
     });
   };
+
+  // O campo cresce com o texto até o max-h; só depois disso aparece a rolagem
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const borders = el.offsetHeight - el.clientHeight;
+    const maxHeight = parseFloat(getComputedStyle(el).maxHeight) || Infinity;
+    const needed = el.scrollHeight + borders;
+    el.style.height = `${Math.min(needed, maxHeight)}px`;
+    el.style.overflowY = needed > maxHeight ? "auto" : "hidden";
+  }, [message]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1010,7 +1022,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   return (
     <div
-      className={`sticky bottom-0 shrink-0 border-t border-[#E5E7EB] bg-white p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-20 shadow-sm ${sm("sm:p-4")} ${
+      className={`sticky bottom-0 shrink-0 border-t border-gray-200 bg-white p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-20 shadow-sm ${sm("sm:p-4")} ${
         isDraggingFiles ? "ring-2 ring-inset ring-[#0A84FF] bg-blue-50/60" : ""
       }`}
       // Arrastar arquivos para o campo também anexa
@@ -1043,7 +1055,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       />
 
       {disabled && (
-        <div className="mb-2 flex items-center gap-2 text-xs text-[#6B7280]">
+        <div className="mb-2 flex items-center gap-2 text-xs text-gray-500">
           <LockIcon className="w-4 h-4" />
           <span>
             {disabledReason || "Apenas o atendente responsável pode responder."}
@@ -1052,13 +1064,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       )}
 
       {false && isRecording && !disabled && (
-        <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-[#1F2937]">
+        <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-gray-800">
           <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
           <span className="font-medium">Gravando...</span>
-          <span className="text-[#6B7280]">
+          <span className="text-gray-500">
             {formatRecordTime(recordSeconds)}
           </span>
-          <span className="text-[#9CA3AF] text-xs">
+          <span className="text-gray-400 text-xs">
             Toque no botão para concluir e enviar
           </span>
         </div>
@@ -1074,50 +1086,50 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             onClick={handleAttachmentClick}
             disabled={disabled}
             aria-label="Anexar"
-            className={`relative flex h-11 w-10 items-center justify-center rounded-lg hover:bg-[#E5E7EB] transition-colors disabled:opacity-50 disabled:hover:bg-transparent ${sm("sm:h-12 sm:w-12")}`}
+            className={`relative flex h-11 w-10 items-center justify-center rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:hover:bg-transparent ${sm("sm:h-12 sm:w-12")}`}
           >
             <PaperclipIcon className="w-5 h-5 text-gray-500" />
 
             {showAttachments && !disabled && (
               <div
                 ref={attachmentsRef}
-                className="absolute bottom-full left-0 z-30 mb-2 w-56 rounded-lg border border-[#E5E7EB] bg-white shadow-lg overflow-hidden"
+                className="absolute bottom-full left-0 z-30 mb-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden"
               >
                 <button
                   type="button"
                   onMouseDown={openQuickMessagesPicker}
                   onClick={openQuickMessagesPicker}
-                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-[#F3F4F6] transition-colors sm:py-2"
+                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-gray-100 transition-colors sm:py-2"
                 >
-                  <span className="flex items-center gap-2 text-[#1F2937]">
+                  <span className="flex items-center gap-2 text-gray-800">
                     <MessageSquareTextIcon className="w-4 h-4" />
                     Mensagens rápidas
                   </span>
-                  <span className="text-xs text-[#6B7280]">Abrir</span>
+                  <span className="text-xs text-gray-500">Abrir</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleImageOption}
-                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-[#F3F4F6] transition-colors sm:py-2"
+                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-gray-100 transition-colors sm:py-2"
                 >
-                  <span className="flex items-center gap-2 text-[#1F2937]">
+                  <span className="flex items-center gap-2 text-gray-800">
                     <ImageIcon className="w-4 h-4" />
                     Imagens
                   </span>
-                  <span className="text-xs text-[#6B7280]">Selecionar</span>
+                  <span className="text-xs text-gray-500">Selecionar</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleAudioOption}
-                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-[#F3F4F6] transition-colors sm:py-2"
+                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-gray-100 transition-colors sm:py-2"
                 >
-                  <span className="flex items-center gap-2 text-[#1F2937]">
+                  <span className="flex items-center gap-2 text-gray-800">
                     <MicIcon className="w-4 h-4" />
                     Áudio
                   </span>
-                  <span className="text-xs text-[#6B7280]">Selecionar</span>
+                  <span className="text-xs text-gray-500">Selecionar</span>
                 </button>
 
                 <button
@@ -1127,13 +1139,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     setShowAttachments(false);
                     docInputRef.current?.click();
                   }}
-                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-[#F3F4F6] transition-colors sm:py-2"
+                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-gray-100 transition-colors sm:py-2"
                 >
-                  <span className="flex items-center gap-2 text-[#1F2937]">
+                  <span className="flex items-center gap-2 text-gray-800">
                     <FileIcon className="w-4 h-4" />
                     Documentos
                   </span>
-                  <span className="text-xs text-[#6B7280]">Selecionar</span>
+                  <span className="text-xs text-gray-500">Selecionar</span>
                 </button>
 
                 {allowContacts && (
@@ -1145,13 +1157,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                       setShowAttachments(false);
                       setShowContactModal(true);
                     }}
-                    className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-[#F3F4F6] transition-colors sm:py-2"
+                    className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-gray-100 transition-colors sm:py-2"
                   >
-                    <span className="flex items-center gap-2 text-[#1F2937]">
+                    <span className="flex items-center gap-2 text-gray-800">
                       <ContactIcon className="w-4 h-4" />
                       Contato
                     </span>
-                    <span className="text-xs text-[#6B7280]">Selecionar</span>
+                    <span className="text-xs text-gray-500">Selecionar</span>
                   </button>
                 )}
               </div>
@@ -1167,7 +1179,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               setShowAttachments(false);
             }}
             aria-label="Emojis"
-            className={`flex h-11 w-10 items-center justify-center rounded-lg hover:bg-[#E5E7EB] transition-colors disabled:opacity-50 disabled:hover:bg-transparent ${sm("sm:h-12 sm:w-12")}`}
+            className={`flex h-11 w-10 items-center justify-center rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:hover:bg-transparent ${sm("sm:h-12 sm:w-12")}`}
           >
             <SmileIcon className="w-5 h-5 text-gray-500" />
           </button>
@@ -1199,7 +1211,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           placeholder={placeholderText}
           rows={1}
           disabled={disabled}
-          className={`min-h-11 min-w-0 flex-1 rounded-lg border border-[#E5E7EB] px-3 py-2.5 resize-none ${sm("sm:min-h-12 sm:px-4 sm:py-3")} max-h-32 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] disabled:cursor-not-allowed disabled:bg-[#F9FAFB] disabled:text-[#9CA3AF]`}
+          className={`min-h-11 min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2.5 resize-none ${sm("sm:min-h-12 sm:px-4 sm:py-3")} max-h-40 overflow-y-hidden focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400`}
         />
 
         <Button

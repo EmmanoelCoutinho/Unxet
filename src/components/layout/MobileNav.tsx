@@ -26,7 +26,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { items, settings } = useSidebarNavigation();
+  const { items, settings, tutorials } = useSidebarNavigation();
   const internalUnread = useInternalUnreadTotal();
   const { closed, toggle } = useClosedSidebarGroups();
 
@@ -160,11 +160,10 @@ export const MobileNav: React.FC<MobileNavProps> = ({
           })}
         </nav>
 
-        {settings && (
-          <div className="shrink-0 border-t p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-            {renderItem(settings)}
-          </div>
-        )}
+        <div className="shrink-0 space-y-1 border-t p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          {renderItem(tutorials)}
+          {settings && renderItem(settings)}
+        </div>
       </aside>
     </div>,
     document.body,

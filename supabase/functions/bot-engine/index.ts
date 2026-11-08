@@ -4,7 +4,8 @@ import { timingSafeEqual } from "../_shared/security.ts";
 import { clinicHasFeature } from "../_shared/plan.ts";
 import { classifyUnmatchedInput } from "../_shared/botInput.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@1.3.0";
-import { AI_TOOL_END, AI_TOOL_TRANSFER, buildChatTurns, buildSystemPrompt } from "../_shared/aiAssistant.ts";
+import { AI_TOOL_END, AI_TOOL_TRANSFER, aiUsageNotification, buildChatTurns, buildSystemPrompt } from "../_shared/aiAssistant.ts";
+import { sendPushToUsers } from "../_shared/push.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -13,6 +14,9 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const AI_MODEL = Deno.env.get("AI_MODEL") ?? "claude-opus-5-5";
 const AI_MAX_HISTORY_MESSAGES = 40;
 const AI_TRANSFER_TEXT = "Vou passar sua conversa para alguém da nossa equipe. Aguarde um momento, por favor.";
+// Limite de respostas da IA no mesmo atendimento (clinic_ai_settings)
+const AI_DEFAULT_MAX_REPLIES_PER_CONVERSATION = 20;
+const AI_LIMIT_TEXT = "Estamos redirecionando você para um dos nossos atendentes, para poder te dar mais informações. Aguarde só um momento, por favor.";
 const CHANNEL_WHATSAPP = "whatsapp";
 const STATUS_OPEN = "open";
 const STATUS_PENDING = "pending";
@@ -918,8 +922,20 @@ function buildInteractiveMenuPayload(node, options) {
   }
   return claimInboundForSession(supabase, session.id, inboundMessage.created_at);
 }
+/** Respostas que a IA já deu neste atendimento (sessão do bot). */ async function countAiReplies(supabase, conversationId, sessionId) {
+  const { count, error } = await supabase.from("messages").select("id", {
+    count: "exact",
+    head: true
+  }).eq("conversation_id", conversationId).eq("direction", DIRECTION_OUTBOUND).eq("payload->bot->>conversation_bot_session_id", sessionId).eq("payload->bot->>ai_reply", "true");
+  if (error) {
+    // Sem a contagem a IA segue respondendo; a cota do mês ainda protege
+    console.error("countAiReplies error:", error);
+    return 0;
+  }
+  return count ?? 0;
+}
 async function getAiSettings(supabase, clinicId) {
-  const { data, error } = await supabase.from("clinic_ai_settings").select("assistant_name, tone, use_emojis, business_info, faq, rules, custom_instructions").eq("clinic_id", clinicId).maybeSingle();
+  const { data, error } = await supabase.from("clinic_ai_settings").select("assistant_name, tone, use_emojis, business_info, faq, rules, custom_instructions, max_replies_per_conversation").eq("clinic_id", clinicId).maybeSingle();
   if (error) {
     console.error("getAiSettings error:", error);
     return null;
@@ -935,10 +951,15 @@ async function getDepartmentName(supabase, clinicId, departmentId) {
   const { data } = await supabase.from("departments").select("name").eq("id", departmentId).eq("clinic_id", clinicId).maybeSingle();
   return data?.name ?? null;
 }
-async function getAiHistory(supabase, conversationId, sessionStartedAt) {
-  // A mensagem que abriu a sessão chega segundos antes dela
-  const since = new Date(new Date(sessionStartedAt).getTime() - 60_000).toISOString();
-  const { data, error } = await supabase.from("messages").select("direction, type, text, transcript_text, created_at").eq("conversation_id", conversationId).gte("created_at", since).order("created_at", {
+async function getAiHistory(supabase, conversationId, sessionStartedAt, claimedAt = null) {
+  // A mensagem que abriu a sessão chega antes dela; a que está sendo
+  // respondida entra mesmo se a fila de entrada atrasou
+  const sessionStart = new Date(sessionStartedAt).getTime() - 60_000;
+  const claimed = claimedAt ? new Date(claimedAt).getTime() : Infinity;
+  const since = new Date(Math.min(sessionStart, claimed)).toISOString();
+  const { data, error } = await supabase.from("messages").select("direction, type, text, transcript_text, created_at").eq("conversation_id", conversationId)
+  // Mensagem apagada pela equipe não vale mais para a IA
+  .is("deleted_at", null).gte("created_at", since).order("created_at", {
     ascending: false
   }).limit(AI_MAX_HISTORY_MESSAGES);
   if (error) {
@@ -1032,6 +1053,50 @@ async function callClaude(system, turns) {
   }
   return client.messages.create(request);
 }
+/**
+ * Depois de gastar uma resposta: avisa quem cuida da IA quando o mês chegou a
+ * 80% ou acabou (uma vez cada). Falha no aviso não atrapalha a resposta.
+ */ async function notifyAiUsage(supabase, clinicId) {
+  try {
+    const { data: warning, error } = await supabase.rpc("clinic_ai_usage_warning", {
+      p_clinic_id: clinicId
+    });
+    if (error) {
+      console.error("clinic_ai_usage_warning error:", error);
+      return;
+    }
+    if (warning !== "warn_80" && warning !== "exhausted") return;
+    const notification = aiUsageNotification(warning);
+    const url = "/inbox/ai-assistant";
+    // Sino de cada pessoa que cuida da IA; devolve quem recebeu
+    const { data: users, error: usersErr } = await supabase.rpc("notify_clinic_permission", {
+      p_clinic_id: clinicId,
+      p_permission: "ai.manage",
+      p_kind: `ai_usage_${warning}`,
+      p_title: notification.title,
+      p_body: notification.body,
+      p_url: url
+    });
+    if (usersErr) {
+      console.error("notify_clinic_permission error:", usersErr);
+      return;
+    }
+    const userIds = (users ?? []).map((row)=>typeof row === "string" ? row : row?.notify_clinic_permission).filter(Boolean);
+    logStep("ai_usage_warning", {
+      clinicId,
+      warning,
+      recipients: userIds.length
+    });
+    await sendPushToUsers(supabase, userIds, {
+      ...notification,
+      // Agrupa os avisos da IA no aparelho (ver public/sw.js)
+      conversationId: `ai-usage:${clinicId}`,
+      url
+    });
+  } catch (err) {
+    console.error("notifyAiUsage error:", err);
+  }
+}
 async function recordAiTokens(supabase, clinicId, usage) {
   if (!usage) return;
   const input = (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
@@ -1053,7 +1118,8 @@ async function recordAiTokens(supabase, clinicId, usage) {
     nodeKey: node.node_key,
     nodeType: "ai"
   };
-  const send = (text)=>sendBotText({
+  // aiReply: resposta escrita pela IA, conta no limite por atendimento
+  const send = (text, aiReply = false)=>sendBotText({
       supabase,
       clinicId,
       channelConnectionId,
@@ -1062,7 +1128,10 @@ async function recordAiTokens(supabase, clinicId, usage) {
       bot,
       text,
       session,
-      nodeContext
+      nodeContext: aiReply ? {
+        ...nodeContext,
+        aiReply: true
+      } : nodeContext
     });
   const handoff = async (reason, text, summary = null)=>{
     if (text) {
@@ -1074,11 +1143,13 @@ async function recordAiTokens(supabase, clinicId, usage) {
       }
     }
     await handoffConversation(supabase, conversationId, node.ai_handoff_department_id ?? null);
+    // O resumo aparece na conversa só para a equipe (eventos não vão ao cliente)
     await insertConversationEvent(supabase, conversationId, "bot_handoff_to_human", {
       bot_id: bot.id,
       conversation_bot_session_id: session.id,
       reason,
-      ai_summary: summary
+      ai_summary: summary,
+      to_department_name: await getDepartmentName(supabase, clinicId, node.ai_handoff_department_id)
     });
     await insertBotEvent(supabase, {
       clinicId,
@@ -1115,6 +1186,27 @@ async function recordAiTokens(supabase, clinicId, usage) {
     console.error("runAiReply: ANTHROPIC_API_KEY não configurada");
     return handoff("ai_not_configured", UNRECOGNIZED_HANDOFF_TEXT);
   }
+  const [settings, companyName, departmentName, history] = await Promise.all([
+    getAiSettings(supabase, clinicId),
+    getClinicName(supabase, clinicId),
+    getDepartmentName(supabase, clinicId, node.ai_handoff_department_id),
+    getAiHistory(supabase, conversationId, session.started_at, params.claimedAt ?? null)
+  ]);
+  const turns = buildChatTurns(history);
+  // Nada do cliente para responder: não gasta resposta do mês
+  if (turns.length === 0) return;
+  // Limite de respostas com o mesmo cliente neste atendimento: passa para a
+  // equipe com um aviso educado, sem gastar resposta do mês
+  const maxReplies = Number(settings?.max_replies_per_conversation) || AI_DEFAULT_MAX_REPLIES_PER_CONVERSATION;
+  const repliesSoFar = await countAiReplies(supabase, conversationId, session.id);
+  if (repliesSoFar >= maxReplies) {
+    logStep("ai_conversation_limit", {
+      conversationId,
+      repliesSoFar,
+      maxReplies
+    });
+    return handoff("ai_conversation_limit", AI_LIMIT_TEXT);
+  }
   const { data: allowed, error: quotaErr } = await supabase.rpc("clinic_ai_try_consume", {
     p_clinic_id: clinicId
   });
@@ -1126,14 +1218,7 @@ async function recordAiTokens(supabase, clinicId, usage) {
     });
     return handoff("ai_unavailable", UNRECOGNIZED_HANDOFF_TEXT);
   }
-  const [settings, companyName, departmentName, history] = await Promise.all([
-    getAiSettings(supabase, clinicId),
-    getClinicName(supabase, clinicId),
-    getDepartmentName(supabase, clinicId, node.ai_handoff_department_id),
-    getAiHistory(supabase, conversationId, session.started_at)
-  ]);
-  const turns = buildChatTurns(history);
-  if (turns.length === 0) return;
+  await notifyAiUsage(supabase, clinicId);
   const system = buildSystemPrompt({
     companyName,
     settings,
@@ -1172,7 +1257,7 @@ async function recordAiTokens(supabase, clinicId, usage) {
   if (!text) {
     return handoff("ai_empty", AI_TRANSFER_TEXT);
   }
-  await send(text);
+  await send(text, true);
   if (toolUse?.name === AI_TOOL_END) {
     await insertConversationEvent(supabase, conversationId, "bot_flow_ended", {
       bot_id: bot.id,
@@ -1832,7 +1917,10 @@ async function sendBotText(params) {
         conversation_bot_session_id: session.id,
         node_id: nodeContext.nodeId,
         node_key: nodeContext.nodeKey,
-        node_type: nodeContext.nodeType
+        node_type: nodeContext.nodeType,
+        ...nodeContext.aiReply ? {
+          ai_reply: true
+        } : {}
       }
     },
     sent_at: sentAt,
@@ -1907,7 +1995,10 @@ async function sendBotInteractive(params) {
         conversation_bot_session_id: session.id,
         node_id: nodeContext.nodeId,
         node_key: nodeContext.nodeKey,
-        node_type: nodeContext.nodeType
+        node_type: nodeContext.nodeType,
+        ...nodeContext.aiReply ? {
+          ai_reply: true
+        } : {}
       }
     },
     sent_at: sentAt,

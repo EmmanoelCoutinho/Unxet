@@ -227,31 +227,112 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     ];
 
     return (
-      <div className="shrink-0 border-b border-[#E5E7EB] bg-white px-2 pb-2 pt-1.5">
-        <div className="flex items-center gap-1">
+      <div className="flex shrink-0 items-center gap-2.5 border-b border-gray-200 bg-white py-2 pl-3 pr-1.5">
+        {/* Avatar e nome também minimizam, como a barra de título de uma janela */}
+        <span
+          aria-hidden="true"
+          onClick={windowControls?.onMinimize}
+          className="flex h-9 w-9 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[#0A84FF] text-xs font-medium text-white"
+        >
+          {avatar ? (
+            <SecureImage
+              src={avatar}
+              alt={`Foto de ${conversation.contactName}`}
+              className="h-full w-full object-cover"
+              fallback={initials}
+            />
+          ) : (
+            initials
+          )}
+        </span>
+
+        <div className="min-w-0 flex-1">
           <button
             type="button"
             onClick={windowControls?.onMinimize}
             title="Minimizar"
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg py-0.5 pr-1 text-left"
+            className="block w-full truncate text-left text-sm font-semibold leading-5 text-gray-900"
           >
-            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0A84FF] text-xs font-medium text-white">
-              {avatar ? (
-                <SecureImage
-                  src={avatar}
-                  alt={`Foto de ${conversation.contactName}`}
-                  className="h-full w-full object-cover"
-                  fallback={initials}
-                />
-              ) : (
-                initials
-              )}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1E1E1E]">
-              {conversation.contactName}
-            </span>
+            {conversation.contactName}
           </button>
 
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1">
+            <span
+              className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadge.className}`}
+            >
+              {statusBadge.label}
+            </span>
+  
+            {conversation.slaBreached && (
+              <span
+                title="O cliente aguarda a primeira resposta há mais tempo que o prazo definido"
+                className="whitespace-nowrap rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
+              >
+                SLA estourado
+              </span>
+            )}
+  
+            {firstTag && (
+              <span
+                title={firstTag.name}
+                className="max-w-[8rem] truncate rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
+                style={{ backgroundColor: firstTag.color }}
+              >
+                {firstTag.name}
+              </span>
+            )}
+  
+            {otherTags.length > 0 && (
+              <DropdownMenu.Root modal={false}>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    type="button"
+                    title="Ver todas as etiquetas"
+                    aria-label={`Ver todas as ${visibleTags.length} etiquetas`}
+                    className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition-colors hover:bg-slate-200"
+                  >
+                    +{otherTags.length}
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="start"
+                    sideOffset={6}
+                    className="z-[10000] w-60 rounded-lg border border-gray-200 bg-white p-3 shadow-lg"
+                  >
+                    <p className="mb-2 text-xs font-semibold text-gray-500">
+                      Etiquetas
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {visibleTags.map((tag) => (
+                        <span
+                          key={tag.id ?? tag.name}
+                          className="max-w-full truncate rounded-full px-2.5 py-1 text-xs font-medium text-white"
+                          style={{ backgroundColor: tag.color }}
+                          title={tag.name}
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
+                    {onManageTags && (
+                      <DropdownMenu.Item
+                        onSelect={() => onManageTags()}
+                        className="mt-3 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-[#0A84FF] outline-none hover:bg-blue-50 focus:bg-blue-50"
+                      >
+                        <TagIcon className="h-4 w-4" />
+                        Gerenciar etiquetas
+                      </DropdownMenu.Item>
+                    )}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            )}
+          </div>
+        </div>
+
+        {/* Ações da conversa | controles da janela */}
+        <div className="flex flex-shrink-0 items-center">
           <CustomDropdown
             trigger={
               <button
@@ -265,80 +346,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             }
             items={compactItems}
           />
-          {windowControls && <WindowControls {...windowControls} />}
-        </div>
-
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <span
-            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadge.className}`}
-          >
-            {statusBadge.label}
-          </span>
-
-          {conversation.slaBreached && (
-            <span
-              title="O cliente aguarda a primeira resposta há mais tempo que o prazo definido"
-              className="whitespace-nowrap rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
-            >
-              SLA estourado
-            </span>
-          )}
-
-          {firstTag && (
-            <span
-              title={firstTag.name}
-              className="max-w-[8rem] truncate rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
-              style={{ backgroundColor: firstTag.color }}
-            >
-              {firstTag.name}
-            </span>
-          )}
-
-          {otherTags.length > 0 && (
-            <DropdownMenu.Root modal={false}>
-              <DropdownMenu.Trigger asChild>
-                <button
-                  type="button"
-                  title="Ver todas as etiquetas"
-                  aria-label={`Ver todas as ${visibleTags.length} etiquetas`}
-                  className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition-colors hover:bg-slate-200"
-                >
-                  +{otherTags.length}
-                </button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content
-                  align="start"
-                  sideOffset={6}
-                  className="z-[10000] w-60 rounded-lg border border-gray-200 bg-white p-3 shadow-lg"
-                >
-                  <p className="mb-2 text-xs font-semibold text-gray-500">
-                    Etiquetas
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {visibleTags.map((tag) => (
-                      <span
-                        key={tag.id ?? tag.name}
-                        className="max-w-full truncate rounded-full px-2.5 py-1 text-xs font-medium text-white"
-                        style={{ backgroundColor: tag.color }}
-                        title={tag.name}
-                      >
-                        {tag.name}
-                      </span>
-                    ))}
-                  </div>
-                  {onManageTags && (
-                    <DropdownMenu.Item
-                      onSelect={() => onManageTags()}
-                      className="mt-3 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-[#0A84FF] outline-none hover:bg-blue-50 focus:bg-blue-50"
-                    >
-                      <TagIcon className="h-4 w-4" />
-                      Gerenciar etiquetas
-                    </DropdownMenu.Item>
-                  )}
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Root>
+          {windowControls && (
+            <>
+              <span aria-hidden="true" className="mx-1 h-5 w-px bg-gray-200" />
+              <WindowControls {...windowControls} />
+            </>
           )}
         </div>
       </div>
@@ -346,15 +358,15 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   }
 
   return (
-    <div className="sticky top-0 z-10 shrink-0 border-b border-[#E5E7EB] bg-white px-2 py-2 sm:h-20 sm:p-4">
+    <div className="sticky top-0 z-10 shrink-0 border-b border-gray-200 bg-white px-2 py-2 sm:h-20 sm:p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <button
             onClick={onBack}
-            className="flex-shrink-0 rounded-lg p-2 transition-colors hover:bg-[#E5E7EB]"
+            className="flex-shrink-0 rounded-lg p-2 transition-colors hover:bg-gray-200"
             aria-label="Voltar para conversas"
           >
-            <ArrowLeftIcon className="h-5 w-5 text-[#1E1E1E]" />
+            <ArrowLeftIcon className="h-5 w-5 text-gray-900" />
           </button>
 
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0A84FF] font-medium text-white">
@@ -371,7 +383,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </div>
 
           <div className="min-w-0 flex-1">
-            <h2 className="truncate font-semibold text-[#1E1E1E]">
+            <h2 className="truncate font-semibold text-gray-900">
               {conversation.contactName}
             </h2>
 

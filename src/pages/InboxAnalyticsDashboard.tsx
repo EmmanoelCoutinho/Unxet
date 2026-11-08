@@ -14,6 +14,7 @@ import {
   RefreshCwIcon,
 } from "lucide-react";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import { fetchBacklog, type BacklogResult } from "../services/inboxAnalytics";
@@ -408,6 +409,7 @@ export const InboxAnalyticsDashboard: React.FC = () => {
                   Como está o atendimento agora
                   {data ? ` · atualizado às ${formatTime(data.generatedAt)}` : ""}
                 </p>
+                <TutorialButton tutorialId="painel" className="mt-1" />
               </div>
             </div>
             <div className="flex flex-wrap gap-2">

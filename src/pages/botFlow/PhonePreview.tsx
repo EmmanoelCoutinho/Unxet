@@ -126,7 +126,7 @@ export const PhonePreview = ({
         <div aria-hidden className="absolute -left-[3px] top-[172px] h-14 w-1 rounded-l bg-[#3A3A3C]" />
         <div aria-hidden className="absolute -left-[3px] top-[240px] h-14 w-1 rounded-l bg-[#3A3A3C]" />
         <div aria-hidden className="absolute -right-[3px] top-[196px] h-[86px] w-1 rounded-r bg-[#3A3A3C]" />
-        <div className="rounded-[56px] bg-[#1C1C1E] p-[11px] shadow-[inset_0_0_0_2px_#48484A,0_24px_48px_rgba(15,23,42,0.18)]">
+        <div className="theme-light rounded-[56px] bg-[#1C1C1E] p-[11px] shadow-[inset_0_0_0_2px_#48484A,0_24px_48px_rgba(15,23,42,0.18)]">
           <div className="relative flex h-[640px] flex-col overflow-hidden rounded-[45px] bg-[#EFEAE2]">
             <div aria-hidden className="absolute left-1/2 top-[11px] z-10 h-8 w-[108px] -translate-x-1/2 rounded-[20px] bg-black" />
 

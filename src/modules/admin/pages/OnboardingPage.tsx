@@ -277,7 +277,7 @@ export const OnboardingPage: React.FC = () => {
                     "rounded-lg border px-3 py-2 text-sm font-medium transition",
                     planCode === code
                       ? "border-[#003366] bg-[#003366] text-white"
-                      : "border-[#E5E7EB] text-gray-700 hover:border-gray-300",
+                      : "border-gray-200 text-gray-700 hover:border-gray-300",
                   ].join(" ")}
                 >
                   {PLAN_NAMES[code]}
@@ -291,7 +291,7 @@ export const OnboardingPage: React.FC = () => {
             </ul>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-[#1E1E1E]">
+                <label className="mb-1 block text-sm font-medium text-gray-900">
                   Cobrança
                 </label>
                 <select
@@ -299,7 +299,7 @@ export const OnboardingPage: React.FC = () => {
                   onChange={(e) =>
                     setBillingCycle(e.target.value as BillingCycle)
                   }
-                  className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
                 >
                   {(Object.keys(BILLING_CYCLE_LABELS) as BillingCycle[]).map(
                     (value) => (
@@ -324,7 +324,7 @@ export const OnboardingPage: React.FC = () => {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-[#1E1E1E]">
+                <label className="mb-1 block text-sm font-medium text-gray-900">
                   Situação
                 </label>
                 <select
@@ -332,7 +332,7 @@ export const OnboardingPage: React.FC = () => {
                   onChange={(e) =>
                     setStatus(e.target.value as SubscriptionStatus)
                   }
-                  className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
                 >
                   {(Object.keys(SUBSCRIPTION_STATUS_LABELS) as SubscriptionStatus[]).map(
                     (value) => (
@@ -408,7 +408,7 @@ export const OnboardingPage: React.FC = () => {
                   key={account.key}
                   className={[
                     "rounded-lg border p-3",
-                    beyondPlan ? "border-red-300 bg-red-50" : "border-[#E5E7EB]",
+                    beyondPlan ? "border-red-300 bg-red-50" : "border-gray-200",
                   ].join(" ")}
                 >
                   <div className="mb-2 flex items-center justify-between">
@@ -456,7 +456,7 @@ export const OnboardingPage: React.FC = () => {
                       required
                     />
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-[#1E1E1E]">
+                      <label className="mb-1 block text-sm font-medium text-gray-900">
                         Papel
                       </label>
                       <select
@@ -466,7 +466,7 @@ export const OnboardingPage: React.FC = () => {
                             role: e.target.value as ExtraAccountRole,
                           })
                         }
-                        className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
                       >
                         <option value="agent">Atendente</option>
                         <option value="admin">Administrador</option>
@@ -484,7 +484,7 @@ export const OnboardingPage: React.FC = () => {
                 setExtraAccounts((list) => [...list, newExtraAccount()])
               }
               disabled={remainingSlots === 0}
-              className="border border-dashed border-[#E5E7EB]"
+              className="border border-dashed border-gray-200"
             >
               <Plus className="mr-1 inline h-4 w-4" />
               Adicionar conta

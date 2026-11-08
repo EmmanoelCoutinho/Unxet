@@ -117,7 +117,7 @@ export const SetPassword: React.FC = () => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="mt-2 w-full rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+                className="mt-2 w-full rounded-xl bg-[#0A84FF] hover:bg-[#0A84FF]/90 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-400"
               >
                 {loading ? "Salvando…" : "Salvar senha"}
               </button>

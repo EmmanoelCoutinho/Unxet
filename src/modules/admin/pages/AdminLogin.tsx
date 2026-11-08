@@ -40,7 +40,7 @@ export const AdminLogin: React.FC = () => {
             alt="Unxet"
             className="mx-auto w-56 mb-2 object-contain"
           />
-          <p className="text-[#1E1E1E] text-lg">Painel administrativo</p>
+          <p className="text-gray-900 text-lg">Painel administrativo</p>
           <p className="mt-1 text-sm text-gray-500">
             Acesso restrito à equipe da Unxet
           </p>

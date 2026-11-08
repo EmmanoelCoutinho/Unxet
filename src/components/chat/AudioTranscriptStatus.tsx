@@ -68,13 +68,13 @@ export const AudioTranscriptStatus: React.FC<AudioTranscriptStatusProps> =
     if (isPending) {
       return (
         <div className="mt-2 rounded-xl bg-white/70 p-3 ring-1 ring-black/5 min-h-[82px]">
-          <div className="flex items-center gap-2 text-xs text-[#4B5563]">
+          <div className="flex items-center gap-2 text-xs text-gray-600">
             <Loader2Icon className="h-3.5 w-3.5 animate-spin" />
             <span>Transcrevendo...</span>
           </div>
           <div className="mt-2 space-y-2" aria-hidden>
-            <div className="h-3 w-[92%] rounded bg-[#E5E7EB] animate-pulse" />
-            <div className="h-3 w-[72%] rounded bg-[#E5E7EB] animate-pulse" />
+            <div className="h-3 w-[92%] rounded bg-gray-200 animate-pulse" />
+            <div className="h-3 w-[72%] rounded bg-gray-200 animate-pulse" />
           </div>
         </div>
       );
@@ -83,7 +83,7 @@ export const AudioTranscriptStatus: React.FC<AudioTranscriptStatusProps> =
     if (isDone) {
       return (
         <div className="mt-2 rounded-xl bg-white/75 p-2.5 ring-1 ring-black/5">
-          <div className="flex items-center gap-2 text-xs text-[#4B5563]">
+          <div className="flex items-center gap-2 text-xs text-gray-600">
             <CheckCircle2Icon className="h-3.5 w-3.5 text-emerald-500" />
             <button
               type="button"
@@ -113,7 +113,7 @@ export const AudioTranscriptStatus: React.FC<AudioTranscriptStatusProps> =
             className={`grid transition-all duration-200 ${expanded ? "grid-rows-[1fr] mt-2" : "grid-rows-[0fr]"}`}
           >
             <div className="overflow-hidden">
-              <p className="text-xs leading-relaxed text-[#1F2937]" style={transcriptBlockStyle}>
+              <p className="text-xs leading-relaxed text-gray-800" style={transcriptBlockStyle}>
                 {hasTranscript
                   ? transcriptText?.trim()
                   : "Transcrição indisponível para este áudio."}
@@ -137,7 +137,7 @@ export const AudioTranscriptStatus: React.FC<AudioTranscriptStatusProps> =
     if (isFailed) {
       return (
         <div className="mt-2 rounded-xl bg-white/75 px-3 py-2 ring-1 ring-black/5">
-          <div className="flex items-center gap-2 text-xs text-[#6B7280]">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
             <AlertCircleIcon className="h-3.5 w-3.5 text-amber-500" />
             <span>Falha ao transcrever</span>
             <button

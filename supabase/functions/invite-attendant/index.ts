@@ -59,6 +59,8 @@ Deno.serve(async (req)=>{
   const name = (body.name ?? null)?.toString().trim() || null;
   const role = body.role ?? "agent";
   const departmentId = body.department_id ?? null;
+  // Cargo personalizado (clinic_roles): só para atendente
+  const roleId = role === "agent" && body.role_id ? String(body.role_id) : null;
   // INVITE_REDIRECT_TO (secret da function) tem prioridade: garante que o link do
   // convite aponte para o app em produção mesmo que o convite seja feito de localhost.
   const redirectTo = (DEFAULT_REDIRECT_TO ?? body.redirect_to) || undefined;
@@ -119,6 +121,17 @@ Deno.serve(async (req)=>{
     });
   }
   log("membership_ok");
+  if (roleId) {
+    const { data: customRole } = await adminClient.from("clinic_roles").select("id").eq("id", roleId).eq("clinic_id", clinicId).maybeSingle();
+    if (!customRole) {
+      log("role_invalid", {
+        roleId
+      });
+      return json(400, {
+        error: "Cargo não encontrado."
+      });
+    }
+  }
   if (departmentId) {
     const { data: dept, error: deptErr } = await adminClient.from("departments").select("id, is_active, clinic_id").eq("id", departmentId).maybeSingle();
     if (deptErr) {
@@ -196,6 +209,7 @@ Deno.serve(async (req)=>{
     clinic_id: clinicId,
     user_id: invitedUserId,
     role,
+    role_id: roleId,
     name,
     department_id: departmentId,
     email,

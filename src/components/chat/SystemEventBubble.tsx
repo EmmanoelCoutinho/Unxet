@@ -1,4 +1,5 @@
 import React from "react";
+import { SparklesIcon } from "lucide-react";
 import type { ConversationEvent } from "../../types";
 
 interface SystemEventBubbleProps {
@@ -191,14 +192,30 @@ const getEventText = (event: ConversationEvent) => {
 export const SystemEventBubble: React.FC<SystemEventBubbleProps> = ({
   event,
 }) => {
+  // Resumo que a IA escreve ao passar a conversa para a equipe
+  const aiSummary =
+    event.type === "bot_handoff_to_human" &&
+    typeof event.metadata?.ai_summary === "string"
+      ? event.metadata.ai_summary.trim()
+      : "";
+
   return (
-    <div className="flex justify-center">
-      <div className="rounded-full bg-[#F3F4F6] px-3 py-1 text-xs text-[#6B7280]">
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-500">
         <span>{getEventText(event)}</span>
-        <span className="ml-2 text-[#9CA3AF]">
+        <span className="ml-2 text-gray-400">
           {formatTime(event.createdAt)}
         </span>
       </div>
+      {aiSummary ? (
+        <div className="w-full max-w-md rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-blue-900">
+          <div className="mb-0.5 flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+            <SparklesIcon className="h-3.5 w-3.5" />
+            Resumo da IA · só a equipe vê
+          </div>
+          <p className="whitespace-pre-wrap break-words">{aiSummary}</p>
+        </div>
+      ) : null}
     </div>
   );
 };

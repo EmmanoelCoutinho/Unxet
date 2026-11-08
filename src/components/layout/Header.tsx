@@ -6,8 +6,9 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useClinic } from "../../contexts/ClinicContext";
 import { ProfileModal } from "./ProfileModal";
 import { MobileNav } from "./MobileNav";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 import { useInternalUnreadTotal } from "../../modules/internalChat/hooks/useInternalChat";
-import { ChangelogBell } from "../../modules/changelog/ChangelogBell";
+import { NotificationBell } from "../../modules/notifications/NotificationBell";
 import {
   CURRENT_RELEASE,
   formatReleaseDate,
@@ -27,7 +28,7 @@ function getInitials(name: string) {
 export const Header = () => {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const { clinic } = useClinic();
+  const { clinic, roleName } = useClinic();
 
   const initials = useMemo(
     () => getInitials(profile?.name || ""),
@@ -68,7 +69,7 @@ export const Header = () => {
   }, [open]);
 
   return (
-    <header className="w-full border-b border-[#E5E7EB] bg-white fixed top-0 h-16 z-30">
+    <header className="w-full border-b border-gray-200 bg-white fixed top-0 h-16 z-30">
       <div className="mx-auto max-w-7xl px-3 sm:px-4 h-full flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-1 sm:gap-3">
           <button
@@ -103,14 +104,14 @@ export const Header = () => {
         <div className="relative flex min-w-0 items-center justify-end gap-3">
           {clinic?.name && (
             <span
-              className="hidden min-w-0 max-w-[16rem] items-center gap-2 rounded-full border border-[#E5E7EB] bg-[#F9FAFB] py-1.5 pl-2.5 pr-3.5 text-sm font-medium text-gray-700 sm:flex lg:max-w-xs"
+              className="hidden min-w-0 max-w-[16rem] items-center gap-2 rounded-full border border-gray-200 bg-gray-50 py-1.5 pl-2.5 pr-3.5 text-sm font-medium text-gray-700 sm:flex lg:max-w-xs"
               title={clinic.name}
             >
               <Building2Icon className="h-4 w-4 flex-shrink-0 text-[#0A84FF]" />
               <span className="truncate">{clinic.name}</span>
             </span>
           )}
-          <ChangelogBell userId={profile?.user_id} isAdmin={isAdmin} />
+          <NotificationBell userId={profile?.user_id} />
           <button
             ref={buttonRef}
             onClick={() => setOpen((v) => !v)}
@@ -126,14 +127,14 @@ export const Header = () => {
             ref={menuRef}
             role="menu"
             aria-hidden={!open}
-            className={`absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] origin-top-right rounded-lg border border-[#E5E7EB] bg-white shadow-lg z-50 overflow-hidden transition-[opacity,transform,visibility] duration-150 ease-out motion-reduce:transition-none ${
+            className={`absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg z-50 overflow-hidden transition-[opacity,transform,visibility] duration-150 ease-out motion-reduce:transition-none ${
               open
                 ? "visible translate-y-0 scale-100 opacity-100"
                 : "invisible pointer-events-none -translate-y-1 scale-95 opacity-0"
             }`}
           >
-            <div className="px-4 py-3 bg-[#F9FAFB]">
-              <div className="text-[#1E1E1E] font-medium truncate">
+            <div className="px-4 py-3 bg-gray-50">
+              <div className="text-gray-900 font-medium truncate">
                 {profile?.name}
               </div>
               {clinic?.name && (
@@ -143,13 +144,13 @@ export const Header = () => {
               )}
               {profile?.role && (
                 <div className="text-sm text-gray-600">
-                  {profile?.role === "admin" ? "Administrador" : "Usuário"}
+                  {roleName}
                 </div>
               )}
             </div>
             <div className="py-1">
               <button
-                className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#F3F4F6]"
+                className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-100"
                 onClick={() => {
                   setOpen(false);
                   setProfileOpen(true);
@@ -159,7 +160,7 @@ export const Header = () => {
               </button>
               {isAdmin && (
                 <button
-                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#F3F4F6]"
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-100"
                   onClick={() => {
                     setOpen(false);
                     navigate("/inbox/settings");
@@ -168,7 +169,9 @@ export const Header = () => {
                   Configurações
                 </button>
               )}
-              <div className="my-1 h-px bg-[#E5E7EB]" />
+              <div className="my-1 h-px bg-gray-200" />
+              <ThemeSwitcher />
+              <div className="my-1 h-px bg-gray-200" />
               <button
                 className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
                 onClick={handleSingOut}
@@ -176,7 +179,7 @@ export const Header = () => {
                 Sair
               </button>
             </div>
-            <div className="border-t border-[#E5E7EB] px-4 py-2 text-[11px] text-gray-400">
+            <div className="border-t border-gray-200 px-4 py-2 text-[11px] text-gray-400">
               Unxet {CURRENT_RELEASE.version} · atualizada em{" "}
               {formatReleaseDate(CURRENT_RELEASE.date)}
             </div>

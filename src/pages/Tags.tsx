@@ -8,6 +8,7 @@ import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import * as Dialog from "@radix-ui/react-dialog";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 type TagItem = {
   id: string;
@@ -73,8 +74,8 @@ export const Tags: React.FC = () => {
   const { profile } = useAuth();
   const clinicId = profile?.clinic_id ?? null;
   // Atendente consulta e aplica etiquetas nas conversas; só admin cria, edita e exclui
-  const { membership } = useClinic();
-  const isAdmin = membership?.role === "admin";
+  const { can } = useClinic();
+  const canManageTags = can("tags.manage");
 
   const [clinicName, setClinicName] = useState<string>("");
 
@@ -92,7 +93,7 @@ export const Tags: React.FC = () => {
 
   const isEditing = Boolean(editingId);
   const canSubmit =
-    isAdmin && name.trim().length > 0 && Boolean(clinicId) && !isSaving;
+    canManageTags && name.trim().length > 0 && Boolean(clinicId) && !isSaving;
 
   // ✅ sempre vem da tabela clinics, não de tags
   const clinicLabel = useMemo(() => {
@@ -156,7 +157,7 @@ export const Tags: React.FC = () => {
   }, [fetchClinic, fetchTags]);
 
   const handleEdit = (tag: TagItem) => {
-    if (!isAdmin) return;
+    if (!canManageTags) return;
     setActiveTab("form");
     setEditingId(tag.id);
     setName(tag.name);
@@ -283,6 +284,7 @@ export const Tags: React.FC = () => {
             <p className="text-sm text-gray-500">
               Gerencie as etiquetas da sua empresa para organizar atendimentos.
             </p>
+            <TutorialButton tutorialId="usar-etiquetas" className="mt-1" />
           </div>
         </div>
       </div>
@@ -303,7 +305,7 @@ export const Tags: React.FC = () => {
               Aguarde o perfil carregar para listar/criar etiquetas.
             </p>
           </Card>
-        ) : activeTab === "list" || !isAdmin ? (
+        ) : activeTab === "list" || !canManageTags ? (
           <Card className="p-4 sm:p-6">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -311,13 +313,13 @@ export const Tags: React.FC = () => {
                   Etiquetas cadastradas
                 </h2>
                 <p className="text-sm text-gray-500">
-                  {isAdmin
+                  {canManageTags
                     ? "Lista de todas as etiquetas associadas à empresa atual."
                     : "Etiquetas disponíveis para aplicar nas conversas. Apenas administradores podem criar ou alterar."}
                 </p>
               </div>
 
-              <div className={isAdmin ? "flex items-center gap-2" : "hidden"}>
+              <div className={canManageTags ? "flex items-center gap-2" : "hidden"}>
                 <Button
                   variant="primary"
                   size="sm"
@@ -367,7 +369,7 @@ export const Tags: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className={isAdmin ? "" : "hidden"}
+                      className={canManageTags ? "" : "hidden"}
                       onClick={() => handleEdit(tag)}
                     >
                       <span className="flex items-center gap-2 text-gray-700">

@@ -15,6 +15,7 @@ import { Chat } from "./pages/Chat";
 import { Header } from "./components/layout/Header";
 import { MaintenanceBanner } from "./components/layout/MaintenanceBanner";
 import { BillingBanner } from "./components/layout/BillingBanner";
+import { AiUsageBanner } from "./components/layout/AiUsageBanner";
 import { AccessSuspended } from "./pages/AccessSuspended";
 import { PushNotificationsBridge } from "./components/PushNotificationsBridge";
 import { PresenceHeartbeat } from "./components/PresenceHeartbeat";
@@ -31,8 +32,8 @@ import { AuthCallback } from "./pages/Callback";
 import { SetPassword } from "./pages/SetPassword";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { FEATURES, type FeatureKey } from "./constants/features";
 import type { PlanFeature } from "./constants/plans";
+import type { Permission } from "./modules/roles/permissions";
 import { PlanUpgradeNotice } from "./components/PlanUpgradeNotice";
 
 // Telas fora do atendimento do dia a dia são baixadas só quando abertas
@@ -84,9 +85,11 @@ const QuickMessagesPage = lazy(() =>
     default: m.QuickMessagesPage,
   })),
 );
-const MarketingCampaignsPage = lazy(() =>
-  import("./pages/MarketingCampaignsPage").then((m) => ({
-    default: m.MarketingCampaignsPage,
+const TutorialsPage = lazy(() => import("./pages/TutorialsPage"));
+const ReleaseNotesPage = lazy(() => import("./pages/ReleaseNotesPage"));
+const MetaTemplatesPage = lazy(() =>
+  import("./pages/MetaTemplates").then((m) => ({
+    default: m.MetaTemplatesPage,
   })),
 );
 const ContactsPage = lazy(() =>
@@ -164,12 +167,28 @@ const AdminOnly = ({ children }: { children: ReactNode }) => {
   return <>{children}</>;
 };
 
-// Ao lado da lista de conversas: painel para o admin, tela neutra para o atendente
-const InboxHome = () => {
-  const { membership, loading, hasFeature } = useClinic();
+// Telas liberadas por cargo: sem a permissão, volta para os atendimentos
+const RequirePermission = ({
+  permission,
+  children,
+}: {
+  permission: Permission;
+  children: ReactNode;
+}) => {
+  const { can, loading } = useClinic();
 
   if (loading) return <PageLoading />;
-  return membership?.role === "admin" && hasFeature("analytics") ? (
+  if (!can(permission)) return <Navigate to="/inbox" replace />;
+
+  return <>{children}</>;
+};
+
+// Ao lado da lista de conversas: painel para quem tem acesso, tela neutra para os demais
+const InboxHome = () => {
+  const { can, loading, hasFeature } = useClinic();
+
+  if (loading) return <PageLoading />;
+  return can("dashboard.view") && hasFeature("analytics") ? (
     <InboxAnalyticsDashboard />
   ) : (
     <InboxEmpty />
@@ -191,15 +210,6 @@ const PlanGate = ({
 
   return <>{children}</>;
 };
-
-// Módulos desligados em FEATURES redirecionam para o início do inbox
-const FeatureGate = ({
-  feature,
-  children,
-}: {
-  feature: FeatureKey;
-  children: ReactNode;
-}) => (FEATURES[feature] ? <>{children}</> : <Navigate to="/inbox" replace />);
 
 // "Mensagens programadas" virou "Campanhas": links e notificações antigos
 // (/inbox/scheduled-messages/...) continuam abrindo a mesma tela
@@ -246,6 +256,7 @@ function RoutedApp() {
       >
         {showHeader && <MaintenanceBanner />}
         {showHeader && <BillingBanner />}
+        {showHeader && <AiUsageBanner />}
         <div className={showHeader ? "min-h-0 flex-1" : undefined}>
         <AppErrorBoundary resetKey={location.pathname}>
         <Suspense fallback={<PageLoading />}>
@@ -268,14 +279,14 @@ function RoutedApp() {
             <Route
               path="dashboard"
               element={
-                <AdminOnly>
+                <RequirePermission permission="dashboard.view">
                   <PlanGate feature="analytics">
                     <InboxAnalyticsDashboard />
                   </PlanGate>
-                </AdminOnly>
+                </RequirePermission>
               }
             />
-            <Route path="reports" element={<AdminOnly><PlanGate feature="analytics"><ReportsPage /></PlanGate></AdminOnly>} />
+            <Route path="reports" element={<RequirePermission permission="reports.view"><PlanGate feature="analytics"><ReportsPage /></PlanGate></RequirePermission>} />
             <Route path="chat/:id" element={<Chat />} />
             <Route path="team" element={<PlanGate feature="internal_chat"><InternalChatPage /></PlanGate>} />
             <Route path="team/:threadId" element={<PlanGate feature="internal_chat"><InternalChatPage /></PlanGate>} />
@@ -283,23 +294,19 @@ function RoutedApp() {
             <Route path="departments" element={<AdminOnly><PlanGate feature="departments"><DepartmentsPage /></PlanGate></AdminOnly>} />
             <Route path="attendants" element={<AdminOnly><AttendantsPage /></AdminOnly>} />
             <Route path="quick-messages" element={<QuickMessagesPage />} />
+            <Route path="tutorials" element={<TutorialsPage />} />
+            {/* Sem item no menu: abre pelo aviso "sistema atualizado" do sino */}
+            <Route path="novidades" element={<ReleaseNotesPage />} />
             <Route path="leads" element={<PlanGate feature="scheduled_messages"><LeadsKanbanPage /></PlanGate>} />
             <Route path="campaigns" element={<PlanGate feature="scheduled_messages"><ScheduledMessagesPage /></PlanGate>} />
+            <Route path="campaigns/templates" element={<PlanGate feature="scheduled_messages"><MetaTemplatesPage /></PlanGate>} />
             <Route path="campaigns/new" element={<PlanGate feature="scheduled_messages"><ScheduledMessageEditorPage /></PlanGate>} />
             <Route path="campaigns/:id" element={<PlanGate feature="scheduled_messages"><ScheduledMessageEditorPage /></PlanGate>} />
             {/* Endereços antigos (Mensagens programadas e Mensagens em massa) */}
             <Route path="scheduled-messages/*" element={<LegacyCampaignRedirect />} />
             <Route path="mass-messages" element={<Navigate to="/inbox/campaigns" replace />} />
-            <Route
-              path="marketing-campaigns"
-              element={
-                <FeatureGate feature="marketingCampaigns">
-                  <AdminOnly>
-                    <MarketingCampaignsPage />
-                  </AdminOnly>
-                </FeatureGate>
-              }
-            />
+            {/* "Campanhas Meta" (desligada) virou Modelos da Meta, dentro de Campanhas */}
+            <Route path="marketing-campaigns" element={<Navigate to="/inbox/campaigns/templates" replace />} />
 
             <Route
               path="settings/integrations/meta"
@@ -313,14 +320,14 @@ function RoutedApp() {
               path="settings/automations/conversations"
               element={<AdminOnly><ConversationAutomationSettingsPage /></AdminOnly>}
             />
-            <Route path="bots" element={<AdminOnly><PlanGate feature="bots"><BotsSettingsPage /></PlanGate></AdminOnly>} />
+            <Route path="bots" element={<RequirePermission permission="bots.manage"><PlanGate feature="bots"><BotsSettingsPage /></PlanGate></RequirePermission>} />
             {AI_ASSISTANT_ENABLED ? (
-              <Route path="ai-assistant" element={<AdminOnly><PlanGate feature="bots"><AiAssistantPage /></PlanGate></AdminOnly>} />
+              <Route path="ai-assistant" element={<RequirePermission permission="ai.manage"><PlanGate feature="bots"><AiAssistantPage /></PlanGate></RequirePermission>} />
             ) : null}
-            <Route path="bots/new" element={<AdminOnly><PlanGate feature="bots"><BotEditorPage mode="new" /></PlanGate></AdminOnly>} />
+            <Route path="bots/new" element={<RequirePermission permission="bots.manage"><PlanGate feature="bots"><BotEditorPage mode="new" /></PlanGate></RequirePermission>} />
             <Route
               path="bots/edit/:botId?"
-              element={<AdminOnly><PlanGate feature="bots"><BotEditorPage mode="edit" /></PlanGate></AdminOnly>}
+              element={<RequirePermission permission="bots.manage"><PlanGate feature="bots"><BotEditorPage mode="edit" /></PlanGate></RequirePermission>}
             />
             <Route
               path="settings"
@@ -336,9 +343,9 @@ function RoutedApp() {
             path="/contacts"
             element={
               <RequireAuth>
-                <AdminOnly>
+                <RequirePermission permission="contacts.view">
                   <ContactsPage />
-                </AdminOnly>
+                </RequirePermission>
               </RequireAuth>
             }
           />

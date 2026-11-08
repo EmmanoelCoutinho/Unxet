@@ -14,7 +14,7 @@ export const WhatsappAddonField = ({
   onQuantityChange: (quantity: string) => void;
 }) => (
   <fieldset className="rounded-lg border border-slate-200 p-3">
-    <legend className="px-1 text-sm font-medium text-[#1E1E1E]">
+    <legend className="px-1 text-sm font-medium text-gray-900">
       Adicionais
     </legend>
     <label className="flex cursor-pointer items-start gap-3">
@@ -43,7 +43,7 @@ export const WhatsappAddonField = ({
           max={WHATSAPP_ADDON_MAX}
           value={quantity}
           onChange={(e) => onQuantityChange(e.target.value)}
-          className="w-20 rounded-lg border border-[#E5E7EB] bg-white px-2 py-1.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+          className="w-20 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
           aria-label="Quantidade de números de WhatsApp"
         />
         números

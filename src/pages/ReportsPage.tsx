@@ -12,6 +12,7 @@ import {
   ShieldCheckIcon,
 } from "lucide-react";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -259,7 +260,7 @@ const Heatmap = ({ cells }: { cells: OperationalReport["sla"]["heatmap"] }) => {
                   key={hour}
                   className="h-6 flex-1 rounded"
                   style={{
-                    backgroundColor: count > 0 ? `rgba(0, 102, 255, ${0.12 + ratio * 0.88})` : "#F1F5F9",
+                    backgroundColor: count > 0 ? `rgba(0, 102, 255, ${0.12 + ratio * 0.88})` : "rgb(var(--c-bg-slate-100))",
                   }}
                   title={`${label}, ${hour}h às ${hour + 1}h: ${count} mensagens`}
                 />
@@ -804,6 +805,7 @@ export const ReportsPage: React.FC = () => {
                 <p className="text-sm text-slate-500">
                   Números da operação de {companyName} para apoiar decisões, com exportação em PDF e planilha
                 </p>
+                <TutorialButton tutorialId="relatorios" className="mt-1" />
               </div>
             </div>
 

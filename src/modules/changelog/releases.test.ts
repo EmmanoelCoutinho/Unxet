@@ -7,6 +7,7 @@ import {
   computeReleases,
   previewNextRelease,
   formatReleaseDate,
+  releaseNotice,
   type ReleaseEntry,
 } from "./releases";
 
@@ -90,4 +91,27 @@ describe("lista publicada", () => {
 
 it("formatReleaseDate", () => {
   expect(formatReleaseDate("2026-11-02")).toBe("02/11/2026");
+});
+
+describe("releaseNotice", () => {
+  const current = { version: "2.11.0", date: "2026-11-03", changes: [{ kind: "new" as const, text: "a" }] };
+  const upcoming = { version: "2.12.0", changes: [{ kind: "new" as const, text: "b" }, { kind: "fixed" as const, text: "c" }] };
+
+  it("na produção avisa a versão atual", () => {
+    const n = releaseNotice(current, upcoming, true);
+    expect(n.key).toBe("2.11.0");
+    expect(n.title).toMatch(/versão 2.11.0/);
+    expect(n.date).toBe("2026-11-03");
+  });
+
+  it("fora da produção avisa de novo quando entra novidade em teste", () => {
+    const a = releaseNotice(current, upcoming, false);
+    const b = releaseNotice(current, { ...upcoming, changes: [...upcoming.changes, { kind: "fixed" as const, text: "d" }] }, false);
+    expect(a.key).not.toBe(b.key);
+    expect(a.title).toMatch(/em teste/);
+  });
+
+  it("sem nada em teste, avisa a versão atual", () => {
+    expect(releaseNotice(current, null, false).key).toBe("2.11.0");
+  });
 });

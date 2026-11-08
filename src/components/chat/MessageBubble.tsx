@@ -217,7 +217,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       ? bubbleBase
       : `${bubbleBase} ${
           isClient
-            ? `rounded-lg ${bubblePadding} bg-[#E5E7EB] text-[#1E1E1E]`
+            ? `rounded-lg ${bubblePadding} bg-gray-200 text-gray-900`
             : `rounded-lg ${bubblePadding} bg-[#0A84FF] text-white`
         }`;
 
@@ -352,7 +352,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <div className={`flex w-full ${isClient ? "justify-start" : "justify-end"}`}>
       <div
-        className={`flex min-w-0 items-end gap-1 max-w-[88%] sm:gap-2 sm:max-w-[min(28rem,88%)] ${
+        className={`flex min-w-0 items-end gap-1 max-w-[88%] sm:gap-2 sm:max-w-[min(40rem,88%)] ${
           isClient ? "" : "flex-row-reverse"
         }`}
       >
@@ -421,10 +421,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     <div
                       className={`w-72 max-w-full overflow-hidden rounded-2xl ${
                         isClient
-                          ? "border border-[#E5E7EB] bg-white shadow-sm"
+                          ? "border border-gray-200 bg-white shadow-sm"
                           : onlyDocument
                             ? "bg-[#0A84FF] text-white shadow-sm"
-                            : "bg-white/15 text-white"
+                            : "bg-[#fff]/15 text-white"
                       }`}
                     >
                       <a
@@ -433,7 +433,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         rel="noreferrer"
                         title={`Abrir ${documentFilename || "documento"}`}
                         className={`flex items-center gap-3 p-3 transition-colors ${
-                          isClient ? "hover:bg-[#F9FAFB]" : "hover:bg-white/10"
+                          isClient ? "hover:bg-gray-50" : "hover:bg-[#fff]/10"
                         }`}
                       >
                         <div
@@ -449,14 +449,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         <div className="min-w-0 flex-1">
                           <p
                             className={`line-clamp-2 break-words text-sm font-semibold leading-snug ${
-                              isClient ? "text-[#111827]" : "text-white"
+                              isClient ? "text-gray-900" : "text-white"
                             }`}
                           >
                             {documentFilename || "Documento"}
                           </p>
                           <p
                             className={`mt-0.5 text-xs ${
-                              isClient ? "text-[#6B7280]" : "text-blue-100"
+                              isClient ? "text-gray-500" : "text-blue-100"
                             }`}
                           >
                             {documentMeta}
@@ -466,7 +466,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                       <div
                         className={`grid grid-cols-2 divide-x border-t text-sm font-medium ${
                           isClient
-                            ? "divide-[#E5E7EB] border-[#E5E7EB] text-[#0A84FF]"
+                            ? "divide-gray-200 border-gray-200 text-[#0A84FF]"
                             : "divide-white/25 border-white/25 text-white"
                         }`}
                       >
@@ -475,7 +475,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                           target="_blank"
                           rel="noreferrer"
                           className={`flex items-center justify-center gap-1.5 py-2 transition-colors ${
-                            isClient ? "hover:bg-blue-50" : "hover:bg-white/10"
+                            isClient ? "hover:bg-blue-50" : "hover:bg-[#fff]/10"
                           }`}
                         >
                           <ExternalLinkIcon className="h-4 w-4" />
@@ -487,7 +487,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                           target="_blank"
                           rel="noreferrer"
                           className={`flex items-center justify-center gap-1.5 py-2 transition-colors ${
-                            isClient ? "hover:bg-blue-50" : "hover:bg-white/10"
+                            isClient ? "hover:bg-blue-50" : "hover:bg-[#fff]/10"
                           }`}
                         >
                           <DownloadIcon className="h-4 w-4" />

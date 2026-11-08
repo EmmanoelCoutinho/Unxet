@@ -50,10 +50,10 @@ export const Login: React.FC = () => {
             alt="Unxet"
             className="mx-auto w-56 mb-2 object-contain"
           />
-          <p className="text-[#1E1E1E] text-lg">Central de Mensagens</p>
+          <p className="text-gray-900 text-lg">Central de Mensagens</p>
         </div>
         
-        <h2 className="text-2xl font-semibold text-[#1E1E1E] mb-6">Entrar</h2>
+        <h2 className="text-2xl font-semibold text-gray-900 mb-6">Entrar</h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input

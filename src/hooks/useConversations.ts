@@ -39,9 +39,9 @@ const isAssignedToOther = (conversation: Conversation, userId: string) =>
 
 export function useConversations(options: UseConversationsOptions = {}) {
   const { authUser, loading: authLoading } = useAuth();
-  const { clinicId, membership } = useClinic();
+  const { clinicId, membership, can } = useClinic();
   // Admin acompanha todas as conversas da empresa, inclusive as de outros atendentes
-  const isAdmin = membership?.role === "admin";
+  const seesAllConversations = can("conversations.all");
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -217,11 +217,11 @@ export function useConversations(options: UseConversationsOptions = {}) {
       setError(null);
 
       try {
-        const accessibleDepartmentIds = isAdmin
+        const accessibleDepartmentIds = seesAllConversations
           ? []
           : await getAccessibleDepartmentIds();
 
-        if (!isAdmin && accessibleDepartmentIds.length === 0) {
+        if (!seesAllConversations && accessibleDepartmentIds.length === 0) {
           setConversations([]);
           return;
         }
@@ -269,7 +269,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
             .from("conversations")
             .select(baseSelect)
             .eq("clinic_id", clinicId);
-          if (!isAdmin) q = q.in("department_id", accessibleDepartmentIds);
+          if (!seesAllConversations) q = q.in("department_id", accessibleDepartmentIds);
           return q
             .neq("status", "closed")
             .order("last_message_at", { ascending: false })
@@ -280,7 +280,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
         // Atendente vê só as abertas dele; admin vê as de todos
         const applyOpenOwner = (q: any) =>
-          isAdmin ? q : q.eq("assigned_user_id", authUser.id);
+          seesAllConversations ? q : q.eq("assigned_user_id", authUser.id);
 
         const applyChannel = (q: any) =>
           options.channel ? q.eq("channel", options.channel) : q;
@@ -448,7 +448,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
     [
       authUser,
       clinicId,
-      isAdmin,
+      seesAllConversations,
       getAccessibleDepartmentIds,
       options.status,
       options.channel,
@@ -531,12 +531,12 @@ export function useConversations(options: UseConversationsOptions = {}) {
     let rtChannel: any = null;
 
     const initConversationsUpdateChannel = async () => {
-      const accessibleDepartmentIds = isAdmin
+      const accessibleDepartmentIds = seesAllConversations
         ? []
         : await getAccessibleDeptIdsRef.current();
       if (!active) return;
 
-      if (!isAdmin && !accessibleDepartmentIds.length) {
+      if (!seesAllConversations && !accessibleDepartmentIds.length) {
         return;
       }
 
@@ -564,7 +564,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
               : null;
 
             if (
-              !isAdmin &&
+              !seesAllConversations &&
               nextDept &&
               !accessibleDepartmentIds.includes(nextDept)
             ) {
@@ -633,7 +633,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
       active = false;
       if (rtChannel) supabase.removeChannel(rtChannel);
     };
-  }, [authUser, clinicId, isAdmin]);
+  }, [authUser, clinicId, seesAllConversations]);
 
   // inicial
   useEffect(() => {

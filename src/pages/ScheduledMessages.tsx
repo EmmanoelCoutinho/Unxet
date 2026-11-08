@@ -6,6 +6,7 @@ import {
   CalendarClockIcon,
   CheckCircle2Icon,
   CircleAlertIcon,
+  FileTextIcon,
   LoaderIcon,
   MegaphoneIcon,
   MessageCircleReplyIcon,
@@ -26,6 +27,7 @@ import { useClinicUserNames } from "../hooks/useClinicUserNames";
 import { useConfirm } from "../components/ui/ConfirmDialog";
 import { MessageStatusBadge } from "../modules/scheduledMessages/components/StatusBadge";
 import {
+  useOfficialWhatsapp,
   useQrWhatsappConnected,
   useScheduledMessageActions,
   useScheduledMessages,
@@ -50,6 +52,7 @@ import {
   startsIn,
 } from "../modules/scheduledMessages/utils/schedule";
 import { CAMPAIGNS_PATH } from "../modules/scheduledMessages/paths";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 
 type Filter = "all" | "upcoming" | "sent" | "problems" | "cancelled";
 
@@ -89,15 +92,17 @@ const normalize = (value: string | null | undefined) =>
 export const ScheduledMessagesPage: React.FC = () => {
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { clinicId, membership } = useClinic();
+  const { clinicId, membership, can } = useClinic();
   const { authUser } = useAuth();
   const isAdmin = membership?.role === "admin";
+  const seesAllCampaigns = can("campaigns.all");
 
   const { scheduledMessages, loading, error, refetch } = useScheduledMessages(clinicId);
   const { cancel, remove } = useScheduledMessageActions();
   const qrConnected = useQrWhatsappConnected(clinicId);
+  const { official } = useOfficialWhatsapp(clinicId);
   // Só o admin vê campanhas de outras pessoas
-  const userNames = useClinicUserNames(clinicId, isAdmin);
+  const userNames = useClinicUserNames(clinicId, seesAllCampaigns);
 
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
@@ -187,19 +192,32 @@ export const ScheduledMessagesPage: React.FC = () => {
                 <p className="mt-0.5 text-sm text-slate-500">
                   Envie uma mensagem para vários clientes e acompanhe quem leu, respondeu e aderiu.
                 </p>
+                <TutorialButton tutorialId="criar-campanha" className="mt-1" />
               </div>
             </div>
-            <button
-              type="button"
-              onClick={goToNew}
-              className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              <PlusIcon className="h-4 w-4" />
-              Nova campanha
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {official && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`${CAMPAIGNS_PATH}/templates`)}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <FileTextIcon className="h-4 w-4" />
+                  Modelos da Meta
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={goToNew}
+                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                <PlusIcon className="h-4 w-4" />
+                Nova campanha
+              </button>
+            </div>
           </div>
 
-          {!qrConnected && (
+          {!qrConnected && !official && (
             <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               <AlertTriangleIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
               <p>
@@ -261,7 +279,7 @@ export const ScheduledMessagesPage: React.FC = () => {
                     {label}
                     <span
                       className={`rounded-full px-1.5 text-xs ${
-                        filter === key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                        filter === key ? "bg-[#fff]/20 text-white" : "bg-slate-100 text-slate-500"
                       }`}
                     >
                       {counts[key]}
@@ -317,7 +335,7 @@ export const ScheduledMessagesPage: React.FC = () => {
                     item={item}
                     status={status}
                     createdBy={
-                      isAdmin && item.createdBy !== authUser?.id
+                      seesAllCampaigns && item.createdBy !== authUser?.id
                         ? (item.createdBy && userNames[item.createdBy]) || "atendente removido"
                         : null
                     }

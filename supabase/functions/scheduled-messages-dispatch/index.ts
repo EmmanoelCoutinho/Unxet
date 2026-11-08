@@ -7,8 +7,12 @@
  *
  * A cada rodada pega até PER_CLINIC destinatários por empresa
  * (claim_scheduled_message_recipients já os marca como "sending") e envia pelo
- * número de WhatsApp (QR Code / Evolution) escolhido na campanha, um de cada vez e com
- * uma pausa longa e aleatória entre eles. Empresas diferentes são processadas em paralelo.
+ * número de WhatsApp escolhido na campanha, um de cada vez e com uma pausa
+ * longa e aleatória entre eles. Empresas diferentes são processadas em paralelo.
+ *
+ * QR Code (Evolution): texto livre. WhatsApp oficial (Meta): o modelo aprovado
+ * da campanha (scheduled_messages.template_id), com o nome do cliente como
+ * parâmetro; a Meta não deixa puxar conversa com texto livre.
  *
  * Ritmo (foco em não derrubar o número do cliente): 2 por empresa a cada
  * minuto, com 22 a 32 s entre os dois da rodada e um atraso inicial de até 8 s.
@@ -24,6 +28,9 @@ import { timingSafeEqual } from "../_shared/security.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
 import { describeProviderError, renderScheduledText, sendDelayMs } from "../_shared/scheduledMessages.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
+import { buildTemplateMessage, describeTemplateSendError, renderTemplateText } from "../_shared/metaTemplates.ts";
+// META_GRAPH_URL só no ambiente local (simulador da Meta); sem ela, a Graph API real
+const GRAPH = (Deno.env.get("META_GRAPH_URL") || "https://graph.facebook.com/v21.0").replace(/\/$/, "");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -73,11 +80,36 @@ async function resolvePhoneNumber(connection, rawNumber) {
   }
   return rawNumber;
 }
+/** Número oficial (Meta) conectado, com token e o whatsapp_numbers dele, ou null. */ async function loadMetaConnection(supabase, clinicId, connectionId) {
+  const { data: row, error } = await supabase.from("channel_connections").select("id, access_token, meta_phone_number_id").eq("id", connectionId).eq("clinic_id", clinicId).eq("provider", "meta").eq("channel", "whatsapp").eq("status", "connected").is("archived_at", null).maybeSingle();
+  if (error) {
+    console.error("[SCHEDULED_META_CONNECTION_ERROR]", error);
+    return null;
+  }
+  const token = String(row?.access_token ?? "").trim();
+  const phoneNumberId = String(row?.meta_phone_number_id ?? "").trim();
+  if (!row?.id || !token || !phoneNumberId) return null;
+  // Mesmo vínculo que o shared-in-config usa: a resposta do cliente cai na mesma conversa
+  const { data: number } = await supabase.from("whatsapp_numbers").select("id").eq("channel_connection_id", row.id).maybeSingle();
+  return {
+    provider: "meta",
+    id: row.id,
+    token,
+    phoneNumberId,
+    whatsappNumberId: number?.id ?? null,
+    // Remetente gravado na mensagem
+    session: phoneNumberId
+  };
+}
 /**
- * Número QR Code conectado por onde a programação sai, ou null.
+ * Número conectado por onde a programação sai, ou null.
  * Programação sem número escolhido (criada antes de existir a escolha) sai
  * pelo QR Code conectado mais recente da empresa.
  */ async function loadConnection(supabase, clinicId, connectionId) {
+  if (connectionId) {
+    const { data: kind } = await supabase.from("channel_connections").select("provider").eq("id", connectionId).eq("clinic_id", clinicId).maybeSingle();
+    if (kind?.provider === "meta") return await loadMetaConnection(supabase, clinicId, connectionId);
+  }
   let query = supabase.from("channel_connections").select("id, session_name, evolution_api_url, evolution_api_key").eq("clinic_id", clinicId).eq("provider", "evolution").eq("channel", "whatsapp").eq("status", "connected").is("archived_at", null);
   if (connectionId) query = query.eq("id", connectionId);
   const { data, error } = await query.order("last_connection_at", {
@@ -91,6 +123,7 @@ async function resolvePhoneNumber(connection, rawNumber) {
   const row = data?.[0];
   if (!row?.session_name || !row.evolution_api_url || !row.evolution_api_key) return null;
   return {
+    provider: "evolution",
     id: row.id,
     session: row.session_name,
     baseUrl: String(row.evolution_api_url).replace(/\/$/, ""),
@@ -119,8 +152,10 @@ async function findOrCreateContact(supabase, clinicId, recipient, number) {
   if (error) throw error;
   return created;
 }
-async function findOrCreateConversation(supabase, clinicId, contactId, connectionId, sentAt) {
-  const { data: found, error: findErr } = await supabase.from("conversations").select("id, first_outbound_at").eq("clinic_id", clinicId).eq("contact_id", contactId).eq("channel", "whatsapp").eq("channel_connection_id", connectionId).order("last_message_at", {
+async function findOrCreateConversation(supabase, clinicId, contactId, connectionId, sentAt, whatsappNumberId = null) {
+  let findQuery = supabase.from("conversations").select("id, first_outbound_at").eq("clinic_id", clinicId).eq("contact_id", contactId).eq("channel", "whatsapp").eq("channel_connection_id", connectionId);
+  if (whatsappNumberId) findQuery = findQuery.eq("whatsapp_number_id", whatsappNumberId);
+  const { data: found, error: findErr } = await findQuery.order("last_message_at", {
     ascending: false,
     nullsFirst: false
   }).limit(1);
@@ -138,6 +173,9 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
     contact_id: contactId,
     channel: "whatsapp",
     channel_connection_id: connectionId,
+    ...whatsappNumberId ? {
+      whatsapp_number_id: whatsappNumberId
+    } : {},
     department_id: departmentId,
     status: "closed",
     closed_at: sentAt,
@@ -148,7 +186,8 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
   return created;
 }
 /** Grava a mensagem já enviada na conversa do cliente. Retorna os ids da conversa e da mensagem. */ async function recordSentMessage(supabase, params) {
-  const { recipient, connection, number, text, providerResponse } = params;
+  const { recipient, connection, number, text, providerResponse, template } = params;
+  const isMeta = connection.provider === "meta";
   const sentAt = new Date().toISOString();
   const contact = await findOrCreateContact(supabase, recipient.clinic_id, recipient, number);
   if (!contact?.id) throw new Error("Contato não resolvido");
@@ -158,19 +197,27 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
       phone: number
     }).eq("id", contact.id);
   }
-  const conversation = await findOrCreateConversation(supabase, recipient.clinic_id, contact.id, connection.id, sentAt);
+  const conversation = await findOrCreateConversation(supabase, recipient.clinic_id, contact.id, connection.id, sentAt, isMeta ? connection.whatsappNumberId : null);
   if (!conversation?.id) throw new Error("Conversa não resolvida");
   const { data: savedMessage, error: msgErr } = await supabase.from("messages").insert({
     conversation_id: conversation.id,
     direction: "outbound",
     type: "text",
     // ID da mensagem no WhatsApp (necessário para apagar e para os status de entrega)
-    meta_message_id: providerResponse?.key?.id ?? null,
+    meta_message_id: (isMeta ? providerResponse?.messages?.[0]?.id : providerResponse?.key?.id) ?? null,
     sender: connection.session,
     receiver: number,
     text,
     payload: {
       ...providerResponse && typeof providerResponse === "object" ? providerResponse : {},
+      ...template ? {
+        template: {
+          id: template.id,
+          name: template.meta_template_name,
+          footer: template.footer ?? null,
+          buttons: template.buttons ?? []
+        }
+      } : {},
       source: "scheduled-message",
       scheduled_message_id: recipient.scheduled_message_id,
       scheduled_by: recipient.created_by
@@ -193,17 +240,77 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
     messageId: savedMessage?.id ?? null
   };
 }
-/** Envia para um destinatário. Retorna o que gravar na linha dele. */ async function sendToRecipient(supabase, connection, recipient) {
-  const number = await resolvePhoneNumber(connection, onlyDigits(recipient.phone));
+/** Manda o modelo aprovado pela Meta. Retorna { failure } ou { text, providerResponse }. */ async function sendMetaTemplate(connection, recipient, template, number) {
+  const payload = buildTemplateMessage({
+    to: number,
+    metaTemplateName: template.meta_template_name,
+    languageCode: template.language_code,
+    body: template.body,
+    name: recipient.name
+  });
+  try {
+    const resp = await fetch(`${GRAPH}/${encodeURIComponent(connection.phoneNumberId)}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${connection.token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    });
+    const providerResponse = await resp.json().catch(()=>null);
+    if (!resp.ok) {
+      console.error("[SCHEDULED_META_SEND_REJECTED]", {
+        recipientId: recipient.recipient_id,
+        status: resp.status,
+        code: providerResponse?.error?.code ?? null
+      });
+      return {
+        failure: describeTemplateSendError(resp.status, providerResponse)
+      };
+    }
+    return {
+      text: renderTemplateText(template.body, recipient.name),
+      providerResponse
+    };
+  } catch (err) {
+    console.error("[SCHEDULED_META_SEND_ERROR]", {
+      recipientId: recipient.recipient_id,
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return {
+      failure: "O WhatsApp não respondeu a tempo. Confira a conversa antes de enviar de novo."
+    };
+  }
+}
+/** Envia para um destinatário. Retorna o que gravar na linha dele. */ async function sendToRecipient(supabase, connection, recipient, template) {
+  const isMeta = connection.provider === "meta";
+  // A Meta recebe o número como está; o QR Code pode precisar trocar o LID pelo telefone
+  const number = isMeta ? onlyDigits(recipient.phone) : await resolvePhoneNumber(connection, onlyDigits(recipient.phone));
   if (!looksLikePhone(number)) {
     return {
       status: "failed",
       error: "Não foi possível identificar o número deste contato."
     };
   }
-  const text = renderScheduledText(recipient.message, recipient.name);
+  let text = renderScheduledText(recipient.message, recipient.name);
   let providerResponse = null;
-  try {
+  if (isMeta) {
+    if (!template) {
+      return {
+        status: "failed",
+        error: "A campanha está sem modelo aprovado pela Meta."
+      };
+    }
+    const sent = await sendMetaTemplate(connection, recipient, template, number);
+    if (sent.failure) return {
+      status: "failed",
+      error: sent.failure
+    };
+    text = sent.text;
+    providerResponse = sent.providerResponse;
+  } else {
+    try {
     const resp = await fetch(`${connection.baseUrl}/message/sendText/${connection.session}`, {
       method: "POST",
       headers: {
@@ -236,6 +343,7 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
       status: "failed",
       error: "O WhatsApp não respondeu a tempo. Confira a conversa antes de enviar de novo."
     };
+    }
   }
   // A mensagem já saiu: falha ao gravar o histórico não pode virar "falhou"
   // (a pessoa reenviaria e o cliente receberia em dobro)
@@ -247,7 +355,8 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
       connection,
       number,
       text,
-      providerResponse
+      providerResponse,
+      template: isMeta ? template : null
     }));
   } catch (err) {
     console.error("[SCHEDULED_RECORD_ERROR]", {
@@ -281,6 +390,16 @@ async function processClinic(supabase, clinicId, recipients) {
     if (!connections.has(key)) connections.set(key, await loadConnection(supabase, clinicId, connectionId));
     return connections.get(key);
   };
+  // Modelo da Meta de cada campanha (só as que saem pelo número oficial têm)
+  const templates = new Map();
+  const templateFor = async (scheduledMessageId)=>{
+    if (!templates.has(scheduledMessageId)) {
+      const { data } = await supabase.from("scheduled_messages").select("template:message_templates(id, meta_template_name, language_code, body, footer, buttons, status)").eq("id", scheduledMessageId).maybeSingle();
+      const template = data?.template ?? null;
+      templates.set(scheduledMessageId, template?.meta_template_name ? template : null);
+    }
+    return templates.get(scheduledMessageId);
+  };
   const suspended = await clinicIsSuspended(supabase, clinicId);
   // Empresas diferentes não disparam todas no mesmo segundo
   await sleep(sendDelayMs(0, START_JITTER_MAX_MS));
@@ -312,7 +431,8 @@ async function processClinic(supabase, clinicId, recipients) {
       counts.failed++;
       continue;
     }
-    const result = await sendToRecipient(supabase, connection, recipient);
+    const template = connection.provider === "meta" ? await templateFor(recipient.scheduled_message_id) : null;
+    const result = await sendToRecipient(supabase, connection, recipient, template);
     await finishRecipient(supabase, recipient.recipient_id, result);
     counts[result.status === "sent" ? "sent" : "failed"]++;
     if (index < recipients.length - 1) {

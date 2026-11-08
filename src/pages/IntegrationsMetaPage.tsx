@@ -16,6 +16,7 @@ import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import { SettingsTabs } from "../components/settings/SettingsTabs";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import {
   EvolutionConnectionsPanel,
   type DepartmentOption,
@@ -116,6 +117,8 @@ type PlatformCardProps = {
   actionIcon?: React.ReactNode;
   actionAfterChildren?: boolean;
   children?: React.ReactNode;
+  // Tutorial em vídeo deste cartão (link "Ver tutorial" embaixo da descrição)
+  tutorialId?: string;
 };
 
 export const MetaIntegrationsPage: React.FC = () => {
@@ -586,6 +589,7 @@ export const MetaIntegrationsPage: React.FC = () => {
     actionIcon,
     actionAfterChildren = false,
     children,
+    tutorialId,
   }) => {
     const actionContent =
       actionLabel && onAction ? (
@@ -615,6 +619,9 @@ export const MetaIntegrationsPage: React.FC = () => {
             <div>
               <p className="text-sm font-semibold text-gray-900">{title}</p>
               <p className="text-xs text-gray-500">{description}</p>
+              {tutorialId ? (
+                <TutorialButton tutorialId={tutorialId} className="mt-1" />
+              ) : null}
             </div>
           </div>
           {renderStatus(status)}
@@ -646,17 +653,19 @@ export const MetaIntegrationsPage: React.FC = () => {
     <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50">
       <div className="border-b bg-white px-4 sm:px-6 py-5">
         <div className="flex flex-col justify-center">
-          <div className="flex gap-3">
-            <PreTitleIcon icon={Settings2Icon} />
-            <span className="flex flex-col">
-              <h1 className="text-2xl font-semibold text-gray-900">
-                Integrações
-              </h1>
-              <p className="text-sm text-gray-500">
-                Conecte seus canais da Meta para ativar Messenger, Instagram e
-                WhatsApp.
-              </p>
-            </span>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex gap-3">
+              <PreTitleIcon icon={Settings2Icon} />
+              <span className="flex flex-col">
+                <h1 className="text-2xl font-semibold text-gray-900">
+                  Integrações
+                </h1>
+                <p className="text-sm text-gray-500">
+                  Conecte seus canais da Meta para ativar Messenger, Instagram e
+                  WhatsApp.
+                </p>
+              </span>
+            </div>
           </div>
           <SettingsTabs />
         </div>
@@ -706,6 +715,7 @@ export const MetaIntegrationsPage: React.FC = () => {
               <div className="mt-6 grid gap-3 md:grid-cols-2">
                 <PlatformCard
                   title="WhatsApp via Meta"
+                  tutorialId="conectar-whatsapp-oficial"
                   description="Integração oficial da Meta Cloud API."
                   status={whatsappMeta?.status}
                   icon={
@@ -732,6 +742,7 @@ export const MetaIntegrationsPage: React.FC = () => {
                 {multipleWhatsapp ? (
                   <PlatformCard
                     title="WhatsApp via QR Code"
+                    tutorialId="conectar-whatsapp-qr"
                     description="Conecte um ou mais WhatsApps escaneando um QR Code."
                     status={evolutionSummaryStatus}
                     icon={
@@ -757,6 +768,7 @@ export const MetaIntegrationsPage: React.FC = () => {
                 ) : (
                   <PlatformCard
                     title="WhatsApp via QR Code"
+                    tutorialId="conectar-whatsapp-qr"
                     description="Conecte um WhatsApp existente escaneando um QR Code."
                     status={whatsappEvolution?.status}
                     icon={
