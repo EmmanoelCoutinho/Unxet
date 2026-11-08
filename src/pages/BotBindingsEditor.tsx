@@ -50,12 +50,12 @@ export const BotBindingsEditor = ({
   clinicId,
   botId,
   botStatus,
-  isAdmin,
+  canManageBots,
 }: {
   clinicId: string;
   botId: string;
   botStatus: BotRow["status"];
-  isAdmin: boolean;
+  canManageBots: boolean;
 }) => {
   const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
@@ -121,7 +121,7 @@ export const BotBindingsEditor = ({
     conn: ChannelConnectionRow,
     next: boolean,
   ) => {
-    if (!isAdmin) {
+    if (!canManageBots) {
       toast.error("Você não tem permissão para esta ação.");
       return;
     }
@@ -272,12 +272,12 @@ export const BotBindingsEditor = ({
                       role="switch"
                       aria-checked={enabled}
                       aria-label={`Vincular WhatsApp ${conn.display_name?.trim() || providerLabel(conn)} a este bot`}
-                      disabled={!isAdmin || saving}
+                      disabled={!canManageBots || saving}
                       onClick={() => handleToggleEnabled(conn, !enabled)}
                       className={[
                         "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
                         enabled ? "bg-blue-600" : "bg-slate-300",
-                        !isAdmin || saving
+                        !canManageBots || saving
                           ? "cursor-not-allowed opacity-60"
                           : "cursor-pointer",
                       ].join(" ")}

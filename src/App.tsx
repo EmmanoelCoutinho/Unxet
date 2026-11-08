@@ -32,6 +32,7 @@ import { SetPassword } from "./pages/SetPassword";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import type { PlanFeature } from "./constants/plans";
+import type { Permission } from "./modules/roles/permissions";
 import { PlanUpgradeNotice } from "./components/PlanUpgradeNotice";
 
 // Telas fora do atendimento do dia a dia são baixadas só quando abertas
@@ -164,12 +165,28 @@ const AdminOnly = ({ children }: { children: ReactNode }) => {
   return <>{children}</>;
 };
 
-// Ao lado da lista de conversas: painel para o admin, tela neutra para o atendente
-const InboxHome = () => {
-  const { membership, loading, hasFeature } = useClinic();
+// Telas liberadas por cargo: sem a permissão, volta para os atendimentos
+const RequirePermission = ({
+  permission,
+  children,
+}: {
+  permission: Permission;
+  children: ReactNode;
+}) => {
+  const { can, loading } = useClinic();
 
   if (loading) return <PageLoading />;
-  return membership?.role === "admin" && hasFeature("analytics") ? (
+  if (!can(permission)) return <Navigate to="/inbox" replace />;
+
+  return <>{children}</>;
+};
+
+// Ao lado da lista de conversas: painel para quem tem acesso, tela neutra para os demais
+const InboxHome = () => {
+  const { can, loading, hasFeature } = useClinic();
+
+  if (loading) return <PageLoading />;
+  return can("dashboard.view") && hasFeature("analytics") ? (
     <InboxAnalyticsDashboard />
   ) : (
     <InboxEmpty />
@@ -259,14 +276,14 @@ function RoutedApp() {
             <Route
               path="dashboard"
               element={
-                <AdminOnly>
+                <RequirePermission permission="dashboard.view">
                   <PlanGate feature="analytics">
                     <InboxAnalyticsDashboard />
                   </PlanGate>
-                </AdminOnly>
+                </RequirePermission>
               }
             />
-            <Route path="reports" element={<AdminOnly><PlanGate feature="analytics"><ReportsPage /></PlanGate></AdminOnly>} />
+            <Route path="reports" element={<RequirePermission permission="reports.view"><PlanGate feature="analytics"><ReportsPage /></PlanGate></RequirePermission>} />
             <Route path="chat/:id" element={<Chat />} />
             <Route path="team" element={<PlanGate feature="internal_chat"><InternalChatPage /></PlanGate>} />
             <Route path="team/:threadId" element={<PlanGate feature="internal_chat"><InternalChatPage /></PlanGate>} />
@@ -298,14 +315,14 @@ function RoutedApp() {
               path="settings/automations/conversations"
               element={<AdminOnly><ConversationAutomationSettingsPage /></AdminOnly>}
             />
-            <Route path="bots" element={<AdminOnly><PlanGate feature="bots"><BotsSettingsPage /></PlanGate></AdminOnly>} />
+            <Route path="bots" element={<RequirePermission permission="bots.manage"><PlanGate feature="bots"><BotsSettingsPage /></PlanGate></RequirePermission>} />
             {AI_ASSISTANT_ENABLED ? (
-              <Route path="ai-assistant" element={<AdminOnly><PlanGate feature="bots"><AiAssistantPage /></PlanGate></AdminOnly>} />
+              <Route path="ai-assistant" element={<RequirePermission permission="ai.manage"><PlanGate feature="bots"><AiAssistantPage /></PlanGate></RequirePermission>} />
             ) : null}
-            <Route path="bots/new" element={<AdminOnly><PlanGate feature="bots"><BotEditorPage mode="new" /></PlanGate></AdminOnly>} />
+            <Route path="bots/new" element={<RequirePermission permission="bots.manage"><PlanGate feature="bots"><BotEditorPage mode="new" /></PlanGate></RequirePermission>} />
             <Route
               path="bots/edit/:botId?"
-              element={<AdminOnly><PlanGate feature="bots"><BotEditorPage mode="edit" /></PlanGate></AdminOnly>}
+              element={<RequirePermission permission="bots.manage"><PlanGate feature="bots"><BotEditorPage mode="edit" /></PlanGate></RequirePermission>}
             />
             <Route
               path="settings"
@@ -321,9 +338,9 @@ function RoutedApp() {
             path="/contacts"
             element={
               <RequireAuth>
-                <AdminOnly>
+                <RequirePermission permission="contacts.view">
                   <ContactsPage />
-                </AdminOnly>
+                </RequirePermission>
               </RequireAuth>
             }
           />

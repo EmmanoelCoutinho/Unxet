@@ -88,3 +88,27 @@ export const getClinicMembership = async (
   }
   return data ?? null;
 };
+
+/**
+ * A pessoa tem a permissão nesta empresa? Administrador sempre tem; quem tem
+ * cargo personalizado tem as permissões do cargo (migration
+ * 20261109000000_custom_roles). Em caso de erro, nega.
+ */
+export const hasClinicPermission = async (
+  admin,
+  userId: string,
+  clinicId: string,
+  permission: string,
+): Promise<boolean> => {
+  if (!userId || !clinicId) return false;
+  const { data, error } = await admin.rpc("clinic_user_has_permission", {
+    p_user_id: userId,
+    p_clinic_id: clinicId,
+    p_permission: permission,
+  });
+  if (error) {
+    console.error("Erro ao checar permissão:", permission, error);
+    return false;
+  }
+  return data === true;
+};

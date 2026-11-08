@@ -17,8 +17,8 @@ import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 type ModalMode = "create" | "edit" | "delete";
 
 export const QuickMessagesPage: React.FC = () => {
-  const { clinicId, membership } = useClinic();
-  const isAdmin = membership?.role === "admin";
+  const { clinicId, can } = useClinic();
+  const canManage = can("quick_messages.manage");
   const {
     quickMessages,
     loading,
@@ -70,7 +70,7 @@ export const QuickMessagesPage: React.FC = () => {
       return;
     }
 
-    if (!isAdmin) {
+    if (!canManage) {
       toast.error("Você não tem permissão para esta ação.");
       return;
     }
@@ -92,7 +92,7 @@ export const QuickMessagesPage: React.FC = () => {
   const handleDelete = async () => {
     if (!selectedId) return;
 
-    if (!isAdmin) {
+    if (!canManage) {
       toast.error("Você não tem permissão para esta ação.");
       return;
     }
@@ -131,7 +131,7 @@ export const QuickMessagesPage: React.FC = () => {
           <Button
             type="button"
             onClick={openCreateModal}
-            disabled={!isAdmin}
+            disabled={!canManage}
             className="rounded-full"
           >
             <span className="flex items-center gap-2">
@@ -181,7 +181,7 @@ export const QuickMessagesPage: React.FC = () => {
             <Button
               type="button"
               onClick={openCreateModal}
-              disabled={!isAdmin}
+              disabled={!canManage}
               className="mt-6 rounded-full"
             >
               Criar primeira mensagem
@@ -210,7 +210,7 @@ export const QuickMessagesPage: React.FC = () => {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      disabled={!isAdmin}
+                      disabled={!canManage}
                       onClick={() => openEditModal(item.id, item.message)}
                     >
                       <span className="flex items-center gap-2">
@@ -222,7 +222,7 @@ export const QuickMessagesPage: React.FC = () => {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      disabled={!isAdmin}
+                      disabled={!canManage}
                       onClick={() => openDeleteModal(item.id)}
                     >
                       <span className="flex items-center gap-2 text-red-600">
@@ -277,7 +277,7 @@ export const QuickMessagesPage: React.FC = () => {
                   <Button
                     type="button"
                     onClick={handleDelete}
-                    disabled={saving || !isAdmin}
+                    disabled={saving || !canManage}
                     className="bg-red-600 hover:bg-red-700"
                   >
                     {saving ? "Excluindo..." : "Excluir"}
@@ -294,7 +294,7 @@ export const QuickMessagesPage: React.FC = () => {
                     value={draftMessage}
                     onChange={(event) => setDraftMessage(event.target.value)}
                     rows={6}
-                    disabled={!isAdmin}
+                    disabled={!canManage}
                     placeholder="Ex: Olá! Tudo bem? Em que posso te ajudar hoje?"
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
                   />
@@ -307,7 +307,7 @@ export const QuickMessagesPage: React.FC = () => {
                   <Button
                     type="button"
                     onClick={handleSave}
-                    disabled={saving || !isAdmin}
+                    disabled={saving || !canManage}
                     className="rounded-full"
                   >
                     {saving ? "Salvando..." : "Salvar"}

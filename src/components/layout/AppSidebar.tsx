@@ -24,6 +24,7 @@ import type { PlanFeature } from "../../constants/plans";
 import { useClinic } from "../../contexts/ClinicContext";
 import { useIsBelowLg } from "../../hooks/useMediaQuery";
 import { useInternalUnreadTotal } from "../../modules/internalChat/hooks/useInternalChat";
+import type { Permission } from "../../modules/roles/permissions";
 
 export type SidebarGroupId = "atendimento" | "vendas" | "gestao";
 
@@ -48,6 +49,8 @@ export type SidebarItem = {
   mobileOnly?: boolean;
   // Atendente não vê: só administradores da empresa
   adminOnly?: boolean;
+  // Aparece para quem tem a permissão no cargo (administrador tem todas)
+  permission?: Permission;
   // Mostra o total de mensagens internas não lidas ao lado do item
   showsInternalUnread?: boolean;
 };
@@ -69,7 +72,7 @@ const allSidebarItems: SidebarItem[] = [
     icon: ActivityIcon,
     path: "/inbox/dashboard",
     mobileOnly: true,
-    adminOnly: true,
+    permission: "dashboard.view",
     planFeature: "analytics",
     group: "atendimento",
   },
@@ -93,7 +96,7 @@ const allSidebarItems: SidebarItem[] = [
     label: "Bots",
     icon: BotIcon,
     path: "/inbox/bots",
-    adminOnly: true,
+    permission: "bots.manage",
     planFeature: "bots",
     group: "atendimento",
   },
@@ -104,7 +107,7 @@ const allSidebarItems: SidebarItem[] = [
           label: "Assistente com IA",
           icon: SparklesIcon,
           path: "/inbox/ai-assistant",
-          adminOnly: true,
+          permission: "ai.manage" as const,
           planFeature: "bots" as const,
           group: "atendimento" as const,
         },
@@ -131,7 +134,7 @@ const allSidebarItems: SidebarItem[] = [
     label: "Carteira de clientes",
     icon: FiBookOpen,
     path: "/contacts",
-    adminOnly: true,
+    permission: "contacts.view",
     group: "vendas",
   },
   // Gestão
@@ -139,7 +142,7 @@ const allSidebarItems: SidebarItem[] = [
     label: "Relatórios",
     icon: FileBarChartIcon,
     path: "/inbox/reports",
-    adminOnly: true,
+    permission: "reports.view",
     planFeature: "analytics",
     group: "gestao",
   },
@@ -226,13 +229,14 @@ export const tutorialsItem: SidebarItem = {
  * empresa carrega, vale a visão de atendente (não pisca item de admin).
  */
 export const useSidebarNavigation = () => {
-  const { membership, hasFeature } = useClinic();
+  const { membership, hasFeature, can } = useClinic();
   const isAdmin = membership?.role === "admin";
 
   return {
     items: sidebarItems.filter(
       (item) =>
         (isAdmin || !item.adminOnly) &&
+        (!item.permission || can(item.permission)) &&
         (!item.planFeature || hasFeature(item.planFeature)),
     ),
     settings: isAdmin ? settingsItem : null,
@@ -248,7 +252,7 @@ const desktopPanelItem: SidebarItem = {
   icon: ActivityIcon,
   path: "/inbox",
   extraPaths: ["/inbox/dashboard", "/inbox/chat"],
-  adminOnly: true,
+  permission: "dashboard.view",
   planFeature: "analytics",
   group: "atendimento",
 };

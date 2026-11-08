@@ -34,13 +34,13 @@ import { saveFlow } from "./botFlow/saveFlow";
 export const BotNodesEditor = ({
   clinicId,
   botId,
-  isAdmin,
+  canManageBots,
   startMessage,
   onDirtyChange,
 }: {
   clinicId: string;
   botId: string;
-  isAdmin: boolean;
+  canManageBots: boolean;
   startMessage: string;
   onDirtyChange?: (dirty: boolean) => void;
 }) => {
@@ -129,7 +129,7 @@ export const BotNodesEditor = ({
     [flow, current],
   );
 
-  const editable = isAdmin && !saving;
+  const editable = canManageBots && !saving;
 
   const mutate = (fn: (draft: FlowState) => FlowState) =>
     setFlow((prev) => (prev ? fn(prev) : prev));
@@ -265,7 +265,7 @@ export const BotNodesEditor = ({
   };
 
   const handleCreateRoot = async () => {
-    if (!isAdmin) return;
+    if (!canManageBots) return;
     setCreatingRoot(true);
     const res = await botsService.createNode({
       bot_id: botId,
@@ -282,7 +282,7 @@ export const BotNodesEditor = ({
   };
 
   const handleSave = async () => {
-    if (!flow || !saved || !isAdmin) return;
+    if (!flow || !saved || !canManageBots) return;
 
     for (const stage of flow.stages) {
       const opts = optionsOf(flow, stage.id);
@@ -339,7 +339,7 @@ export const BotNodesEditor = ({
           className="mt-4"
           onClick={handleCreateRoot}
           isLoading={creatingRoot}
-          disabled={!isAdmin}
+          disabled={!canManageBots}
         >
           Criar primeira etapa
         </Button>
@@ -363,7 +363,7 @@ export const BotNodesEditor = ({
 
   return (
     <div className="flex flex-col gap-4">
-      {isAdmin ? (
+      {canManageBots ? (
         <div className="sticky top-0 z-10 -mx-1 flex items-center justify-end gap-3 bg-gray-50/95 px-1 py-2 backdrop-blur">
           {changes > 0 ? (
             <span className="text-[13px] font-medium text-orange-700">
@@ -450,7 +450,7 @@ export const BotNodesEditor = ({
                   ) : null}
                 </div>
               </div>
-              {!current.isRoot && isAdmin ? (
+              {!current.isRoot && canManageBots ? (
                 <button
                   type="button"
                   onClick={handleDeleteStage}

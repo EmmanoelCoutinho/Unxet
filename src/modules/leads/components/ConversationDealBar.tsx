@@ -23,9 +23,9 @@ export const ConversationDealBar: React.FC<{
   compact?: boolean;
 }> = ({ conversationId, contactId, contactName, contactPhone, compact = false }) => {
   const navigate = useNavigate();
-  const { clinicId, membership } = useClinic();
+  const { clinicId, can } = useClinic();
   const { authUser } = useAuth();
-  const isAdmin = membership?.role === "admin";
+  const seesAllLeads = can("leads.all");
   const currentUserId = authUser?.id ?? null;
   const { deals } = useContactOpenDeals(contactId);
   const { pipelines } = usePipelines(clinicId);
@@ -37,12 +37,12 @@ export const ConversationDealBar: React.FC<{
 
   const ownerOptions: OwnerOption[] = useMemo(() => {
     const me = { id: currentUserId, label: "Você" };
-    if (!isAdmin) return [me, { id: null, label: "Sem responsável" }];
+    if (!seesAllLeads) return [me, { id: null, label: "Sem responsável" }];
     const others = Object.entries(userNames)
       .filter(([id]) => id !== currentUserId)
       .map(([id, label]) => ({ id, label }));
     return [me, ...others, { id: null, label: "Sem responsável" }];
-  }, [isAdmin, currentUserId, userNames]);
+  }, [seesAllLeads, currentUserId, userNames]);
 
   const deal = deals[0] ?? null;
   const pipeline = deal

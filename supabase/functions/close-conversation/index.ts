@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { hasClinicPermission } from "../_shared/security.ts";
 import { sendSatisfactionSurvey } from "../_shared/satisfactionSurvey.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -106,11 +107,12 @@ serve(async (req)=>{
         }
       });
     }
-    // 3) permissão: admin fecha qualquer, agent só se for assigned.
+    // 3) permissão: admin (ou cargo que atende todos os setores) fecha
+    // qualquer, agent só se for assigned.
     // (Havia antes uma checagem de setor que barrava o admin com setor
     // principal definido de finalizar conversas dos outros setores.)
     const role = String(membership.role ?? "agent").toLowerCase();
-    const isAdmin = role === "admin";
+    const isAdmin = role === "admin" || await hasClinicPermission(admin, user.id, conv.clinic_id, "conversations.all");
     const isAssigned = conv.assigned_user_id === user.id;
     if (!isAdmin && !isAssigned) {
       return new Response(JSON.stringify({

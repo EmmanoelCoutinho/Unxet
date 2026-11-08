@@ -22,9 +22,10 @@ import { CAMPAIGNS_PATH } from "../modules/scheduledMessages/paths";
 export const MetaTemplatesPage: React.FC = () => {
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { clinicId, membership } = useClinic();
+  const { clinicId, membership, can } = useClinic();
   const { authUser } = useAuth();
   const isAdmin = membership?.role === "admin";
+  const canCreate = can("meta_templates.create");
 
   const { official, loading: loadingOfficial } = useOfficialWhatsapp(clinicId);
   const { templates, loading, error } = useMetaTemplates(clinicId, Boolean(official));
@@ -100,14 +101,16 @@ export const MetaTemplatesPage: React.FC = () => {
                   <RefreshCwIcon className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
                   Atualizar status
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setFormOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-                >
-                  <PlusIcon className="h-4 w-4" />
-                  Novo modelo
-                </button>
+                {canCreate ? (
+                  <button
+                    type="button"
+                    onClick={() => setFormOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Novo modelo
+                  </button>
+                ) : null}
               </div>
             )}
           </div>
@@ -139,14 +142,16 @@ export const MetaTemplatesPage: React.FC = () => {
               title="Nenhum modelo ainda"
               description="Crie o primeiro modelo e envie para a Meta. Depois de aprovado, ele pode ser usado em quantas campanhas quiser."
               action={
-                <button
-                  type="button"
-                  onClick={() => setFormOpen(true)}
-                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-                >
-                  <PlusIcon className="h-4 w-4" />
-                  Criar modelo
-                </button>
+                canCreate ? (
+                  <button
+                    type="button"
+                    onClick={() => setFormOpen(true)}
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Criar modelo
+                  </button>
+                ) : null
               }
             />
           ) : (
