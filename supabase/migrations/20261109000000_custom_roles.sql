@@ -88,7 +88,12 @@ grant select, insert, update, delete on public.clinic_roles to authenticated;
 drop policy if exists clinic_roles_select on public.clinic_roles;
 create policy clinic_roles_select on public.clinic_roles
   for select to authenticated
-  using (public.is_clinic_member(clinic_id));
+  using (
+    exists (
+      select 1 from public.clinic_users cu
+      where cu.user_id = auth.uid() and cu.clinic_id = clinic_roles.clinic_id
+    )
+  );
 
 drop policy if exists clinic_roles_insert on public.clinic_roles;
 create policy clinic_roles_insert on public.clinic_roles
@@ -239,72 +244,65 @@ grant execute on function public.clinic_user_has_permission(uuid, uuid, text) to
 -- -----------------------------------------------------------------------------
 -- 4. Regras das tabelas: admin -> permissão
 -- -----------------------------------------------------------------------------
+-- Algumas regras vêm do banco original (não estão nas migrations) e podem ter
+-- outro nome em algum ambiente: só altera a que existe e avisa da que falta.
+create or replace function pg_temp.alter_policy_if_exists(
+  p_table text, p_policy text, p_using text, p_check text
+)
+returns void
+language plpgsql
+as $fn$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = p_table and policyname = p_policy
+  ) then
+    raise notice 'Regra % em % não existe neste banco; mantida como está.', p_policy, p_table;
+    return;
+  end if;
+  execute format(
+    'alter policy %I on public.%I %s %s',
+    p_policy, p_table,
+    case when p_using is null then '' else 'using (' || p_using || ')' end,
+    case when p_check is null then '' else 'with check (' || p_check || ')' end
+  );
+end;
+$fn$;
+
 -- Mensagens rápidas
-alter policy quick_messages_insert_admin_only on public.quick_messages
-  with check (public.has_clinic_permission(clinic_id, 'quick_messages.manage'));
-alter policy quick_messages_update_admin_only on public.quick_messages
-  using (public.has_clinic_permission(clinic_id, 'quick_messages.manage'))
-  with check (public.has_clinic_permission(clinic_id, 'quick_messages.manage'));
-alter policy quick_messages_delete_admin_only on public.quick_messages
-  using (public.has_clinic_permission(clinic_id, 'quick_messages.manage'));
+select pg_temp.alter_policy_if_exists('quick_messages', 'quick_messages_insert_admin_only', null, $q$public.has_clinic_permission(clinic_id, 'quick_messages.manage')$q$);
+select pg_temp.alter_policy_if_exists('quick_messages', 'quick_messages_update_admin_only', $q$public.has_clinic_permission(clinic_id, 'quick_messages.manage')$q$, $q$public.has_clinic_permission(clinic_id, 'quick_messages.manage')$q$);
+select pg_temp.alter_policy_if_exists('quick_messages', 'quick_messages_delete_admin_only', $q$public.has_clinic_permission(clinic_id, 'quick_messages.manage')$q$, null);
 
 -- Etiquetas
-alter policy tags_insert_admin_only on public.tags
-  with check (public.has_clinic_permission(clinic_id, 'tags.manage'));
-alter policy tags_update_admin_only on public.tags
-  using (public.has_clinic_permission(clinic_id, 'tags.manage'))
-  with check (public.has_clinic_permission(clinic_id, 'tags.manage'));
-alter policy tags_delete_admin_only on public.tags
-  using (public.has_clinic_permission(clinic_id, 'tags.manage'));
+select pg_temp.alter_policy_if_exists('tags', 'tags_insert_admin_only', null, $q$public.has_clinic_permission(clinic_id, 'tags.manage')$q$);
+select pg_temp.alter_policy_if_exists('tags', 'tags_update_admin_only', $q$public.has_clinic_permission(clinic_id, 'tags.manage')$q$, $q$public.has_clinic_permission(clinic_id, 'tags.manage')$q$);
+select pg_temp.alter_policy_if_exists('tags', 'tags_delete_admin_only', $q$public.has_clinic_permission(clinic_id, 'tags.manage')$q$, null);
 
 -- Bots
-alter policy bots_insert on public.bots
-  with check (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy bots_update on public.bots
-  using (public.has_clinic_permission(clinic_id, 'bots.manage'))
-  with check (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy bots_delete on public.bots
-  using (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy bot_nodes_insert on public.bot_nodes
-  with check (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy bot_nodes_update on public.bot_nodes
-  using (public.has_clinic_permission(clinic_id, 'bots.manage'))
-  with check (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy bot_nodes_delete on public.bot_nodes
-  using (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy bot_options_insert on public.bot_options
-  with check (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy bot_options_update on public.bot_options
-  using (public.has_clinic_permission(clinic_id, 'bots.manage'))
-  with check (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy bot_options_delete on public.bot_options
-  using (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy bot_channel_bindings_insert on public.bot_channel_bindings
-  with check (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy bot_channel_bindings_update on public.bot_channel_bindings
-  using (public.has_clinic_permission(clinic_id, 'bots.manage'))
-  with check (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy bot_channel_bindings_delete on public.bot_channel_bindings
-  using (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy conversation_bot_events_delete on public.conversation_bot_events
-  using (public.has_clinic_permission(clinic_id, 'bots.manage'));
-alter policy conversation_bot_sessions_delete on public.conversation_bot_sessions
-  using (public.has_clinic_permission(clinic_id, 'bots.manage'));
+select pg_temp.alter_policy_if_exists('bots', 'bots_insert', null, $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$);
+select pg_temp.alter_policy_if_exists('bots', 'bots_update', $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$, $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$);
+select pg_temp.alter_policy_if_exists('bots', 'bots_delete', $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$, null);
+select pg_temp.alter_policy_if_exists('bot_nodes', 'bot_nodes_insert', null, $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$);
+select pg_temp.alter_policy_if_exists('bot_nodes', 'bot_nodes_update', $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$, $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$);
+select pg_temp.alter_policy_if_exists('bot_nodes', 'bot_nodes_delete', $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$, null);
+select pg_temp.alter_policy_if_exists('bot_options', 'bot_options_insert', null, $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$);
+select pg_temp.alter_policy_if_exists('bot_options', 'bot_options_update', $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$, $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$);
+select pg_temp.alter_policy_if_exists('bot_options', 'bot_options_delete', $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$, null);
+select pg_temp.alter_policy_if_exists('bot_channel_bindings', 'bot_channel_bindings_insert', null, $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$);
+select pg_temp.alter_policy_if_exists('bot_channel_bindings', 'bot_channel_bindings_update', $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$, $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$);
+select pg_temp.alter_policy_if_exists('bot_channel_bindings', 'bot_channel_bindings_delete', $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$, null);
+select pg_temp.alter_policy_if_exists('conversation_bot_events', 'conversation_bot_events_delete', $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$, null);
+select pg_temp.alter_policy_if_exists('conversation_bot_sessions', 'conversation_bot_sessions_delete', $q$public.has_clinic_permission(clinic_id, 'bots.manage')$q$, null);
 
 -- Assistente com IA
-alter policy clinic_ai_settings_select on public.clinic_ai_settings
-  using (public.has_clinic_permission(clinic_id, 'ai.manage'));
-alter policy clinic_ai_settings_insert on public.clinic_ai_settings
-  with check (public.has_clinic_permission(clinic_id, 'ai.manage'));
-alter policy clinic_ai_settings_update on public.clinic_ai_settings
-  using (public.has_clinic_permission(clinic_id, 'ai.manage'))
-  with check (public.has_clinic_permission(clinic_id, 'ai.manage'));
-alter policy clinic_ai_usage_select on public.clinic_ai_usage
-  using (public.has_clinic_permission(clinic_id, 'ai.manage'));
+select pg_temp.alter_policy_if_exists('clinic_ai_settings', 'clinic_ai_settings_select', $q$public.has_clinic_permission(clinic_id, 'ai.manage')$q$, null);
+select pg_temp.alter_policy_if_exists('clinic_ai_settings', 'clinic_ai_settings_insert', null, $q$public.has_clinic_permission(clinic_id, 'ai.manage')$q$);
+select pg_temp.alter_policy_if_exists('clinic_ai_settings', 'clinic_ai_settings_update', $q$public.has_clinic_permission(clinic_id, 'ai.manage')$q$, $q$public.has_clinic_permission(clinic_id, 'ai.manage')$q$);
+select pg_temp.alter_policy_if_exists('clinic_ai_usage', 'clinic_ai_usage_select', $q$public.has_clinic_permission(clinic_id, 'ai.manage')$q$, null);
 
 -- Funil: apagar negócio
-alter policy deals_delete on public.deals
-  using (public.has_clinic_permission(clinic_id, 'leads.all'));
+select pg_temp.alter_policy_if_exists('deals', 'deals_delete', $q$public.has_clinic_permission(clinic_id, 'leads.all')$q$, null);
 
 -- -----------------------------------------------------------------------------
 -- 5. Funções: admin -> permissão (corpo igual ao anterior, só muda o teste)
