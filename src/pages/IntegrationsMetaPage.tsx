@@ -15,6 +15,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import { SettingsTabs } from "../components/settings/SettingsTabs";
+import { WhatsAppQrCode } from "../components/settings/WhatsAppQrCode";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import {
@@ -848,10 +849,11 @@ export const MetaIntegrationsPage: React.FC = () => {
                           Abra o WhatsApp no celular e conecte o dispositivo.
                         </p>
                         <div className="mt-4 flex justify-center">
-                          <img
+                          <WhatsAppQrCode
                             src={whatsappQrCode}
                             alt="QR Code WhatsApp"
-                            className="h-72 w-72"
+                            onRetry={startEvolutionConnection}
+                            retrying={qrLoading}
                           />
                         </div>
                         {lastDisconnectionLabel ? (

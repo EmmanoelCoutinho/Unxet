@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { LogOutIcon, PlusIcon, QrCodeIcon, Trash2Icon } from "lucide-react";
 import { Button } from "../ui/Button";
 import { useConfirm } from "../ui/ConfirmDialog";
+import { WhatsAppQrCode } from "./WhatsAppQrCode";
 import { supabase } from "../../lib/supabaseClient";
 import {
   formatConnectionPhone,
@@ -282,10 +283,12 @@ const EvolutionConnectionItem: React.FC<ItemProps> = ({
             Abra o WhatsApp no celular e conecte o dispositivo.
           </p>
           <div className="mt-4 flex justify-center">
-            <img
+            <WhatsAppQrCode
               src={connection.qr_code}
               alt={`QR Code do WhatsApp ${label}`}
-              className="h-64 w-64 max-w-full"
+              onRetry={connect}
+              retrying={busy === "qr"}
+              className="h-64 w-64"
             />
           </div>
         </div>
