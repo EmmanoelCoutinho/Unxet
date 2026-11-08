@@ -102,10 +102,20 @@ export const TUTORIALS: Tutorial[] = [
       "Convide uma pessoa da equipe, escolha o cargo e o setor dela.",
     // #t=1 pula a tela de carregamento do primeiro segundo
     video: "/tutorials/criar-atendente.mp4#t=1",
-    duration: "0:50",
+    duration: "0:48",
+    path: "/inbox/attendants",
+    adminOnly: true,
+  },  {
+    id: "criar-cargos",
+    track: "primeiros-passos",
+    title: "Criar cargos e permissões",
+    description: "Crie cargos como Supervisor e escolha o que cada um pode ver e fazer.",
+    video: "/tutorials/criar-cargos.mp4#t=1",
+    duration: "1:03",
     path: "/inbox/attendants",
     adminOnly: true,
   },
+
   {
     id: "automacoes-conversa",
     track: "primeiros-passos",
@@ -224,6 +234,8 @@ export const TUTORIALS: Tutorial[] = [
           track: "automacao" as const,
           title: "Configurar o assistente com IA",
           description: "Ensine o assistente a responder pela empresa.",
+          video: "/tutorials/assistente-ia.mp4#t=1",
+          duration: "1:21",
           path: "/inbox/ai-assistant",
           adminOnly: true,
         },
@@ -237,7 +249,17 @@ export const TUTORIALS: Tutorial[] = [
     video: "/tutorials/criar-campanha.mp4#t=1",
     duration: "1:22",
     path: "/inbox/campaigns",
+  },  {
+    id: "modelos-meta",
+    track: "automacao",
+    title: "Usar modelos da Meta",
+    description: "No WhatsApp oficial: crie o modelo, aguarde a aprovação e use na campanha.",
+    video: "/tutorials/modelos-meta.mp4#t=1",
+    duration: "1:41",
+    path: "/inbox/campaigns/templates",
+    adminOnly: true,
   },
+
 
   // Gestão
   {

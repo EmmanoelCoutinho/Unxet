@@ -157,6 +157,11 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "fixed",
     text: "Ao transferir uma conversa para outro setor, ela agora sai na hora da sua lista de atendimentos. Antes, continuava lá até recarregar a página.",
   },
+  {
+    kind: "new",
+    text: "Novos tutoriais em vídeo: modelos da Meta nas campanhas, cargos e permissões e assistente com IA. Os vídeos de campanha e de criar atendente foram atualizados para as telas novas.",
+    adminOnly: true,
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

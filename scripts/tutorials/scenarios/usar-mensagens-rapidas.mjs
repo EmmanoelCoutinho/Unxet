@@ -1,4 +1,5 @@
-// Tutorial: cadastrar uma mensagem rápida (só administradores cadastram) e
+// Tutorial: cadastrar uma mensagem rápida (administrador ou cargo com a
+// permissão) e
 // usar na conversa com "/". Gravado como administrador.
 // A mensagem rápida e a conversa de exemplo são apagadas no fim; o envio
 // passa pela Evolution de mentira.
@@ -38,7 +39,7 @@ export async function run(page, d) {
   await d.caption("Respostas que você manda sempre? Cadastre uma vez e use com dois toques", {
     hold: 2400,
   });
-  await d.caption("O administrador cadastra: no menu lateral, abra Mensagens rápidas", { step: 1, hold: 300 });
+  await d.caption("Quem cadastra é o administrador (ou um cargo com essa permissão): abra Mensagens rápidas", { step: 1, hold: 300 });
   await page.mouse.move(32, 300, { steps: 18 });
   await d.wait(450);
   await d.click(menuItem, { before: 1000, after: 1200 });
