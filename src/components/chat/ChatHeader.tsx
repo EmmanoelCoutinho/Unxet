@@ -13,6 +13,7 @@ import {
   MoreVerticalIcon,
   PictureInPicture2Icon,
   UserIcon,
+  UsersIcon,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { CustomDropdown } from "../ui/CustomDropdown";
@@ -30,6 +31,9 @@ interface ChatHeaderProps {
   connectionLabel?: string;
   onBack: () => void;
   onManageTags?: () => void;
+  // Atendentes adicionados à conversa (além do responsável)
+  participantNames?: string[];
+  onManageParticipants?: () => void;
   onAccept?: () => Promise<void> | void;
   onTransfer?: () => void;
   onSearch?: () => void;
@@ -63,6 +67,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   connectionLabel,
   onBack,
   onManageTags,
+  participantNames = [],
+  onManageParticipants,
   onAccept,
   onTransfer,
   onSearch,
@@ -166,8 +172,19 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const visibleTags = conversation.tags ?? [];
   const canAccept = !acceptIsDisabled && !!onAccept;
 
+  const participantsItem = onManageParticipants
+    ? [
+        {
+          label: "Atendentes na conversa",
+          icon: <UsersIcon className="h-4 w-4 text-blue-600" />,
+          onSelect: () => onManageParticipants(),
+        },
+      ]
+    : [];
+
   // No celular as ações secundárias vão para o menu "mais"
   const dropdownItems = [
+    ...(isMobile ? participantsItem : []),
     ...(isMobile && onTransfer
       ? [
           {
@@ -202,6 +219,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   if (compact) {
     const [firstTag, ...otherTags] = visibleTags;
     const compactItems = [
+      ...participantsItem,
       ...(onTransfer
         ? [
             {
@@ -272,6 +290,15 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               </span>
             )}
   
+            {participantNames.length > 0 && (
+              <span
+                title={`Também na conversa: ${participantNames.join(", ")}`}
+                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700"
+              >
+                <UsersIcon className="h-3 w-3" />+{participantNames.length}
+              </span>
+            )}
+
             {firstTag && (
               <span
                 title={firstTag.name}
@@ -438,6 +465,18 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 </span>
               )}
 
+              {participantNames.length > 0 && (
+                <button
+                  type="button"
+                  onClick={onManageParticipants}
+                  disabled={!onManageParticipants}
+                  title={`Também na conversa: ${participantNames.join(", ")}`}
+                  className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700"
+                >
+                  <UsersIcon className="h-3 w-3" />+{participantNames.length}
+                </button>
+              )}
+
               {visibleTags.map((tag, index) => (
                 <span
                   key={tag.id ?? tag.name}
@@ -483,6 +522,19 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             )
           ) : (
             <>
+              {onManageParticipants && (
+                <CustomTooltip text="Atendentes na conversa">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onManageParticipants}
+                    aria-label="Atendentes na conversa"
+                  >
+                    <UsersIcon className="h-5 w-5 text-blue-600" />
+                  </Button>
+                </CustomTooltip>
+              )}
+
               {onTransfer && (
                 <CustomTooltip text="Transferir conversa">
                   <Button

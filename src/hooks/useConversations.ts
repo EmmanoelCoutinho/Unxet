@@ -34,8 +34,11 @@ type DbMessage = {
   deleted_at?: string | null;
 };
 
+// Conversa de outro atendente (a que você foi adicionado conta como sua)
 const isAssignedToOther = (conversation: Conversation, userId: string) =>
-  !!conversation.assignedTo && conversation.assignedTo !== userId;
+  !!conversation.assignedTo &&
+  conversation.assignedTo !== userId &&
+  !conversation.isParticipant;
 
 export function useConversations(options: UseConversationsOptions = {}) {
   const { authUser, loading: authLoading } = useAuth();
@@ -52,6 +55,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
   const refetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didInitialLoadRef = useRef(false);
   const fetchSeqRef = useRef(0);
+  // Conversas a que você foi adicionado (podem ser de outro setor)
+  const participantConversationIdsRef = useRef<Set<string>>(new Set());
 
   const activeConversationIds = options.activeConversationIds ?? NO_IDS;
   const activeConversationIdsRef = useRef(activeConversationIds);
@@ -217,11 +222,29 @@ export function useConversations(options: UseConversationsOptions = {}) {
       setError(null);
 
       try {
-        const accessibleDepartmentIds = seesAllConversations
-          ? []
-          : await getAccessibleDepartmentIds();
+        const [accessibleDepartmentIds, participantConversationIds] =
+          await Promise.all([
+            seesAllConversations ? [] : getAccessibleDepartmentIds(),
+            (async () => {
+              const { data, error } = await supabase
+                .from("conversation_participants")
+                .select("conversation_id")
+                .eq("clinic_id", clinicId)
+                .eq("user_id", authUser.id);
+              if (error) {
+                console.warn("Erro ao buscar conversas compartilhadas:", error);
+                return [] as string[];
+              }
+              return ((data as any[]) ?? []).map((r) => String(r.conversation_id));
+            })(),
+          ]);
+        participantConversationIdsRef.current = new Set(participantConversationIds);
 
-        if (!seesAllConversations && accessibleDepartmentIds.length === 0) {
+        if (
+          !seesAllConversations &&
+          accessibleDepartmentIds.length === 0 &&
+          participantConversationIds.length === 0
+        ) {
           setConversations([]);
           return;
         }
@@ -264,12 +287,14 @@ export function useConversations(options: UseConversationsOptions = {}) {
           )
         `;
 
-        const makeBase = () => {
+        const makeBase = (byDepartment = true) => {
           let q = supabase
             .from("conversations")
             .select(baseSelect)
             .eq("clinic_id", clinicId);
-          if (!seesAllConversations) q = q.in("department_id", accessibleDepartmentIds);
+          if (!seesAllConversations && byDepartment) {
+            q = q.in("department_id", accessibleDepartmentIds);
+          }
           return q
             .neq("status", "closed")
             .order("last_message_at", { ascending: false })
@@ -287,28 +312,50 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
         let data: any[] = [];
 
-        if (options.status) {
+        // Em atendimento com você adicionado: entram na aba "abertas" de
+        // qualquer setor (quem vê todas já recebe essas conversas)
+        const wantsOpen = !options.status || options.status === "open";
+        const sharedOpenPromise =
+          wantsOpen && !seesAllConversations && participantConversationIds.length > 0
+            ? applyChannel(makeBase(false))
+                .eq("status", "open")
+                .in("id", participantConversationIds)
+            : Promise.resolve({ data: [] as any[], error: null });
+
+        if (!seesAllConversations && accessibleDepartmentIds.length === 0) {
+          // Sem setor: só as conversas a que foi adicionado
+          const res = await sharedOpenPromise;
+          if (res.error) throw res.error;
+          data = res.data ?? [];
+        } else if (options.status) {
           let q = applyChannel(makeBase()).eq("status", options.status);
 
           if (options.status === "open") {
             q = applyOpenOwner(q);
           }
 
-          const res = await q;
+          const [res, sharedRes] = await Promise.all([q, sharedOpenPromise]);
           if (res.error) throw res.error;
-          data = res.data ?? [];
+          if (sharedRes.error) throw sharedRes.error;
+          const map = new Map<string, any>();
+          (res.data ?? []).forEach((r: any) => map.set(r.id, r));
+          (sharedRes.data ?? []).forEach((r: any) => map.set(r.id, r));
+          data = Array.from(map.values());
         } else {
-          const [openRes, pendingRes] = await Promise.all([
+          const [openRes, pendingRes, sharedRes] = await Promise.all([
             applyOpenOwner(applyChannel(makeBase()).eq("status", "open")),
             applyChannel(makeBase()).eq("status", "pending"),
+            sharedOpenPromise,
           ]);
 
           if (openRes.error) throw openRes.error;
           if (pendingRes.error) throw pendingRes.error;
+          if (sharedRes.error) throw sharedRes.error;
 
           const map = new Map<string, any>();
           (openRes.data ?? []).forEach((r: any) => map.set(r.id, r));
           (pendingRes.data ?? []).forEach((r: any) => map.set(r.id, r));
+          (sharedRes.data ?? []).forEach((r: any) => map.set(r.id, r));
           data = Array.from(map.values());
 
           data.sort(
@@ -379,6 +426,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
               tags,
               assignedTo: row.assigned_user_id ?? undefined,
+              isParticipant: participantConversationIdsRef.current.has(row.id),
               inBotFlow: row.in_bot_flow === true,
               slaBreached: isSlaBreached(row),
             };
@@ -536,7 +584,11 @@ export function useConversations(options: UseConversationsOptions = {}) {
         : await getAccessibleDeptIdsRef.current();
       if (!active) return;
 
-      if (!seesAllConversations && !accessibleDepartmentIds.length) {
+      if (
+        !seesAllConversations &&
+        !accessibleDepartmentIds.length &&
+        participantConversationIdsRef.current.size === 0
+      ) {
         return;
       }
 
@@ -566,7 +618,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
             if (
               !seesAllConversations &&
               nextDept &&
-              !accessibleDepartmentIds.includes(nextDept)
+              !accessibleDepartmentIds.includes(nextDept) &&
+              !participantConversationIdsRef.current.has(conversationId)
             ) {
               return;
             }
@@ -634,6 +687,29 @@ export function useConversations(options: UseConversationsOptions = {}) {
       if (rtChannel) supabase.removeChannel(rtChannel);
     };
   }, [authUser, clinicId, seesAllConversations]);
+
+  // realtime: você foi adicionado a uma conversa (ou saiu dela)
+  useEffect(() => {
+    if (!authUser || !clinicId) return;
+
+    const channel = supabase
+      .channel(`inbox-conversation-participants:${authUser.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "conversation_participants" },
+        (payload) => {
+          const userId =
+            (payload.new as any)?.user_id ?? (payload.old as any)?.user_id;
+          if (userId && userId !== authUser.id) return;
+          scheduleRefetchRef.current();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [authUser, clinicId]);
 
   // inicial
   useEffect(() => {

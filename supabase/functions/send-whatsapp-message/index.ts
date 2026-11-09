@@ -4,6 +4,8 @@ import { toProviderMediaUrl } from "../_shared/media.ts";
 import { queueTranscription, runInBackground, TRANSCRIPTION_BUCKET } from "../_shared/transcription.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
 import { parseSharedContact, sharedContactText, toMetaContact } from "../_shared/contactCard.ts";
+import { loadAgentSender, signText } from "../_shared/agentSignature.ts";
+import { isConversationParticipant } from "../_shared/conversationParticipants.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -192,7 +194,7 @@ async function consumeNonce(opts) {
   };
 }
 async function authorizeSendForConversation(opts) {
-  const { rid, userId, clinicId, departmentId, assignedUserId } = opts;
+  const { rid, userId, clinicId, departmentId, assignedUserId, conversationId } = opts;
   const { data: cu, error: cuErr } = await supabaseAdmin.from("clinic_users").select("user_id, clinic_id, role, accepted_at").eq("clinic_id", clinicId).eq("user_id", userId).maybeSingle();
   if (cuErr || !cu) {
     console.log(JSON.stringify({
@@ -221,6 +223,17 @@ async function authorizeSendForConversation(opts) {
   }
   if (assignedUserId) {
     const isAssigned = safeStr(assignedUserId) === userId;
+    // Atendente adicionado à conversa responde junto com o responsável
+    if (!isAssigned && await isConversationParticipant(supabaseAdmin, conversationId, userId)) {
+      console.log(JSON.stringify({
+        rid,
+        step: "authz_send.ok.participant",
+        userId
+      }, null, 2));
+      return {
+        ok: true
+      };
+    }
     if (!isAssigned) {
       console.log(JSON.stringify({
         rid,
@@ -382,7 +395,7 @@ serve(async (req)=>{
       });
     }
     console.log("📤 Tipo outbound:", outboundType, "| mediaUrl:", mediaUrl, "| mime:", mediaMimeType, "| text:", bodyText);
-    const { data: conversation, error: convErr } = await supabaseAdmin.from("conversations").select("id, clinic_id, department_id, contact_id, whatsapp_number_id, assigned_user_id, first_outbound_at").eq("id", conversationId).maybeSingle();
+    const { data: conversation, error: convErr } = await supabaseAdmin.from("conversations").select("id, clinic_id, department_id, contact_id, whatsapp_number_id, channel_connection_id, assigned_user_id, first_outbound_at").eq("id", conversationId).maybeSingle();
     if (convErr || !conversation) {
       console.error("❌ Erro ao buscar conversa:", convErr);
       return new Response(JSON.stringify({
@@ -400,7 +413,8 @@ serve(async (req)=>{
       userId,
       clinicId: safeStr(conversation.clinic_id),
       departmentId: safeStr(conversation.department_id),
-      assignedUserId: conversation.assigned_user_id ? safeStr(conversation.assigned_user_id) : null
+      assignedUserId: conversation.assigned_user_id ? safeStr(conversation.assigned_user_id) : null,
+      conversationId: safeStr(conversation.id)
     });
     if (!authz.ok) {
       return new Response(JSON.stringify({
@@ -461,8 +475,13 @@ serve(async (req)=>{
       });
     }
     const waId = contact.phone;
-    const numberQuery = supabaseAdmin.from("whatsapp_numbers").select("id, meta_phone_number_id, clinic_id, channel_connection_id").eq("clinic_id", conversation.clinic_id).limit(1);
-    const { data: waNumber, error: waNumberErr } = conversation.whatsapp_number_id ? await numberQuery.eq("id", conversation.whatsapp_number_id).maybeSingle() : await numberQuery.maybeSingle();
+    // Com mais de um número, a resposta sai pelo número da conversa: pelo
+    // whatsapp_number_id ou, se faltar, pela conexão da conversa. "Qualquer
+    // número da empresa" só para conversa antiga sem nenhum dos dois.
+    let numberQuery = supabaseAdmin.from("whatsapp_numbers").select("id, meta_phone_number_id, clinic_id, channel_connection_id").eq("clinic_id", conversation.clinic_id);
+    if (conversation.whatsapp_number_id) numberQuery = numberQuery.eq("id", conversation.whatsapp_number_id);
+    else if (conversation.channel_connection_id) numberQuery = numberQuery.eq("channel_connection_id", conversation.channel_connection_id);
+    const { data: waNumber, error: waNumberErr } = await numberQuery.limit(1).maybeSingle();
     if (waNumberErr || !waNumber) {
       console.error("❌ Erro ao buscar whatsapp_numbers para clinic_id:", conversation.clinic_id, waNumberErr);
       return new Response(JSON.stringify({
@@ -514,6 +533,11 @@ serve(async (req)=>{
         });
       }
     }
+    // Nome do atendente na 1ª linha do texto/legenda (áudio e contato não têm onde)
+    const sender = await loadAgentSender(supabaseAdmin, userId, safeStr(conversation.clinic_id));
+    const outboundText = sender.sign ? signText(bodyText, sender.name, {
+      bold: true
+    }) : bodyText;
     // Bucket privado: a Meta recebe um link assinado e temporário do arquivo
     const providerMediaUrl = mediaUrl ? await toProviderMediaUrl(supabaseAdmin, mediaUrl) : null;
     const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
@@ -530,8 +554,8 @@ serve(async (req)=>{
       metaPayload.type = "image";
       metaPayload.image = {
         link: providerMediaUrl,
-        ...bodyText ? {
-          caption: bodyText
+        ...outboundText ? {
+          caption: outboundText
         } : {}
       };
     } else if (outboundType === "audio" && mediaUrl) {
@@ -545,14 +569,14 @@ serve(async (req)=>{
       metaPayload.document = {
         link: providerMediaUrl,
         filename: filename || "documento.pdf",
-        ...bodyText ? {
-          caption: bodyText
+        ...outboundText ? {
+          caption: outboundText
         } : {}
       };
     } else {
       metaPayload.type = "text";
       metaPayload.text = {
-        body: bodyText || " "
+        body: outboundText || " "
       };
     }
     console.log("➡️ Enviando OUTBOUND para Meta:", JSON.stringify(metaPayload));
@@ -590,7 +614,9 @@ serve(async (req)=>{
       text: outboundType === "text" ? bodyText : bodyText || null,
       payload: metaBody,
       sent_at: nowIso,
-      is_automated: false
+      is_automated: false,
+      sender_user_id: userId,
+      sender_name: sender.name
     };
     if (outboundType === "image") {
       messageInsert.image_url = mediaUrl ?? null;

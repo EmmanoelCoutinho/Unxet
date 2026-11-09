@@ -109,6 +109,15 @@ const getEventText = (event: ConversationEvent) => {
       return `${actor} atribuiu a conversa para ${toUser}`;
     }
 
+    case "participant_added":
+      return `${actor} adicionou ${meta.participant_name ?? "um atendente"} à conversa`;
+
+    case "participant_removed":
+      return `${actor} removeu ${meta.participant_name ?? "um atendente"} da conversa`;
+
+    case "participant_left":
+      return `${actor} saiu da conversa`;
+
     case "tag_added": {
       const tag = meta.tag_name ?? "uma etiqueta";
       return `${actor} adicionou ${tag}`;

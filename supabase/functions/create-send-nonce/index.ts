@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isConversationParticipant } from "../_shared/conversationParticipants.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -83,8 +84,17 @@ async function canReplyToConversation(opts) {
     reason: "not_in_clinic"
   };
   const role = safeStr(cu.role);
-  // REGRA 1: conversa atribuída -> somente o assigned envia (admin NÃO fura)
+  // REGRA 1: conversa atribuída -> somente o assigned e os atendentes
+  // adicionados à conversa enviam (admin NÃO fura)
   if (assignedUserId) {
+    if (assignedUserId !== userId && await isConversationParticipant(supabaseAdmin, conversationId, userId)) {
+      return {
+        ok: true,
+        reason: "participant",
+        role,
+        conv
+      };
+    }
     const ok = assignedUserId === userId;
     return {
       ok,

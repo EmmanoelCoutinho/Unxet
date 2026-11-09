@@ -41,6 +41,8 @@ import { ArrowDownIcon, ArrowLeftIcon } from "lucide-react";
 import { TbMessageCheck } from "react-icons/tb";
 import { useAuth } from "../../contexts/AuthContext";
 import { TransferModal } from "./TransferModal";
+import { ParticipantsModal } from "./ParticipantsModal";
+import { useConversationParticipants } from "../../hooks/useConversationParticipants";
 import { sharedContactText, type SharedContact } from "../../lib/sharedContact";
 import { whatsappConnectionLabel } from "../../lib/whatsappConnections";
 import { useWhatsappConnections } from "../../hooks/useWhatsappConnections";
@@ -220,11 +222,13 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const isFloating = variant === "floating";
   const { getDraft, setDraft } = useFloatingChats();
   const { authUser } = useAuth();
+  const authUserId = authUser?.id;
   const { clinicId, membership, can, hasFeature } = useClinic();
   const { refetch: refetchConversationList } = useConversationList();
   const { hasMultiple: hasMultipleWhatsapp } = useWhatsappConnections(clinicId);
   const seesAllConversations = can("conversations.all");
-  const userNames = useClinicUserNames(clinicId, seesAllConversations);
+  // Nomes de todos da empresa: responsável (admin) e atendentes adicionados
+  const userNames = useClinicUserNames(clinicId);
 
   const didInitialConversationLoadRef = useRef(false);
   const activeRouteConversationIdRef = useRef<string | undefined>(id);
@@ -270,6 +274,10 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [transferringConversation, setTransferringConversation] =
     useState(false);
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [participantBusyId, setParticipantBusyId] = useState<string | null>(
+    null,
+  );
 
   const {
     messages,
@@ -292,6 +300,14 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     loading: loadingEvents,
     error: eventsError,
   } = useConversationEvents(id ?? null);
+
+  // Atendentes adicionados à conversa. A lista é limpa pelo banco quando a
+  // conversa muda de responsável/setor ou é finalizada: recarrega junto.
+  const { participantIds, reload: reloadParticipants } =
+    useConversationParticipants(
+      id ?? null,
+      `${conversation?.status ?? ""}:${conversation?.assignedTo ?? ""}:${conversation?.departmentId ?? ""}`,
+    );
 
   const getAccessibleDepartmentIds = useCallback(async (): Promise<
     string[]
@@ -551,10 +567,23 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
       if (shouldHardLoad) setLoadingConversation(true);
 
-      const accessibleDepartmentIds = seesAllConversations
-        ? []
-        : await getAccessibleDepartmentIds();
-      if (!seesAllConversations && accessibleDepartmentIds.length === 0) {
+      // Atendente adicionado à conversa abre mesmo sendo de outro setor
+      let addedToConversation = false;
+      if (!seesAllConversations && authUserId) {
+        const { data: participantRow } = await supabase
+          .from("conversation_participants")
+          .select("id")
+          .eq("conversation_id", requestedId)
+          .eq("user_id", authUserId)
+          .maybeSingle();
+        addedToConversation = !!participantRow;
+      }
+      const filterByDepartment = !seesAllConversations && !addedToConversation;
+
+      const accessibleDepartmentIds = filterByDepartment
+        ? await getAccessibleDepartmentIds()
+        : [];
+      if (filterByDepartment && accessibleDepartmentIds.length === 0) {
         if (
           requestId !== conversationLoadRequestRef.current ||
           activeRouteConversationIdRef.current !== requestedId
@@ -612,7 +641,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         .eq("id", requestedId)
         .eq("clinic_id", clinicId);
       // Admin abre conversas de qualquer setor
-      if (!seesAllConversations) {
+      if (filterByDepartment) {
         conversationQuery = conversationQuery.in(
           "department_id",
           accessibleDepartmentIds,
@@ -716,7 +745,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       setLoadingConversation(false);
       didInitialConversationLoadRef.current = true;
     },
-    [id, clinicId, seesAllConversations, getAccessibleDepartmentIds],
+    [id, clinicId, seesAllConversations, getAccessibleDepartmentIds, authUserId],
   );
 
   useEffect(() => {
@@ -1021,11 +1050,67 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     if (!authUser || !conversation) return false;
 
     if (conversation.assignedTo) {
-      return conversation.assignedTo === authUser.id;
+      // O responsável e os atendentes adicionados respondem
+      return (
+        conversation.assignedTo === authUser.id ||
+        participantIds.includes(authUser.id)
+      );
     }
 
     return true;
-  }, [authUser, conversation]);
+  }, [authUser, conversation, participantIds]);
+
+  // Responsável ou quem atende todos os setores adiciona/remove atendentes
+  const canManageParticipants =
+    !!authUser &&
+    !!conversation &&
+    (seesAllConversations || conversation.assignedTo === authUser.id);
+
+  const handleParticipantChange = useCallback(
+    async (action: "add" | "remove", userId: string) => {
+      if (!id) return;
+      setParticipantBusyId(userId);
+
+      const { error } = await supabase.functions.invoke(
+        "conversation-participants",
+        { body: { conversationId: id, action, userId } },
+      );
+
+      setParticipantBusyId(null);
+
+      if (error) {
+        console.error("Erro ao atualizar atendentes da conversa:", error);
+        const response = (error as { context?: Response }).context;
+        const payload =
+          response && response.status < 500
+            ? await response.json().catch(() => null)
+            : null;
+        toast.error(
+          payload?.error ??
+            (action === "add"
+              ? "Não foi possível adicionar o atendente."
+              : "Não foi possível remover o atendente."),
+        );
+        return;
+      }
+
+      await reloadParticipants();
+
+      const leaving = action === "remove" && userId === authUser?.id;
+      if (leaving) {
+        toast.success("Você saiu da conversa.");
+        setIsParticipantsOpen(false);
+        void refetchConversationList();
+        onExit();
+        return;
+      }
+
+      toast.success(
+        action === "add" ? "Atendente adicionado." : "Atendente removido.",
+      );
+    },
+    [id, authUser?.id, onExit, refetchConversationList, reloadParticipants],
+  );
 
   const createSendNonce = useCallback(async (conversationId: string) => {
     const { data, error } = await supabase.functions.invoke(
@@ -1483,6 +1568,16 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           }
           onBack={onExit}
           onManageTags={() => setIsManageTagsOpen(true)}
+          participantNames={participantIds.map((pid) =>
+            pid === authUser?.id ? "Você" : (userNames[pid] ?? "Atendente"),
+          )}
+          onManageParticipants={
+            conversation.status === "open" &&
+            (canManageParticipants ||
+              (!!authUser && participantIds.includes(authUser.id)))
+              ? () => setIsParticipantsOpen(true)
+              : undefined
+          }
           onAccept={handleAcceptConversation}
           onClose={handleCloseConversation}
           onRefresh={loadConversation}
@@ -1691,6 +1786,21 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           </div>
         </div>
       )}
+
+      <ParticipantsModal
+        open={isParticipantsOpen}
+        onClose={() => setIsParticipantsOpen(false)}
+        clinicId={clinicId}
+        currentUserId={authUser?.id ?? null}
+        assignedTo={conversation?.assignedTo}
+        participantIds={participantIds}
+        names={userNames}
+        canManage={canManageParticipants}
+        canAdd={conversation?.status === "open" && !!conversation?.assignedTo}
+        busyUserId={participantBusyId}
+        onAdd={(userId) => void handleParticipantChange("add", userId)}
+        onRemove={(userId) => void handleParticipantChange("remove", userId)}
+      />
 
       <TransferModal
         open={isTransferOpen}

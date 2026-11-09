@@ -13,6 +13,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAuthenticatedUser, getClinicMembership, hasClinicPermission } from "../_shared/security.ts";
+import { isConversationParticipant } from "../_shared/conversationParticipants.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +62,7 @@ serve(async (req) => {
         payload,
         receiver,
         deleted_at,
+        sender_user_id,
         conversations (
           id,
           clinic_id,
@@ -84,6 +86,9 @@ serve(async (req) => {
     const allowed = !!membership && (
       membership.role === "admin" ||
       conversation.assigned_user_id === user.id ||
+      // atendente adicionado à conversa apaga só o que ele mesmo enviou
+      (message.sender_user_id === user.id &&
+        await isConversationParticipant(admin, conversation.id, user.id)) ||
       await hasClinicPermission(admin, user.id, conversation.clinic_id, "conversations.all")
     );
     if (!allowed) return json(403, { error: "Not allowed" });

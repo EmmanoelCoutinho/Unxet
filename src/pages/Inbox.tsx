@@ -54,7 +54,7 @@ export const Inbox: React.FC = () => {
   // uma tela vazia, que dá lugar à lista inteira
   const listFillsScreen =
     isInboxRoot && !(can("dashboard.view") && hasFeature("analytics"));
-  const userNames = useClinicUserNames(clinicId, seesAllConversations);
+  const userNames = useClinicUserNames(clinicId);
   const { hasMultiple: hasMultipleWhatsapp } = useWhatsappConnections(clinicId);
 
   useEffect(() => {
@@ -305,7 +305,9 @@ export const Inbox: React.FC = () => {
                   key={conversation.id}
                   conversation={conversation}
                   assigneeName={
-                    seesAllConversations
+                    // Admin vê o responsável de todas; quem foi adicionado
+                    // vê de quem é a conversa compartilhada
+                    seesAllConversations || conversation.isParticipant
                       ? getAssigneeLabel(
                           conversation.assignedTo,
                           authUser?.id,

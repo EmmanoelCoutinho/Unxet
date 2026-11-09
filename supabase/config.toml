@@ -388,6 +388,9 @@ verify_jwt = false
 [functions.close-conversation]
 verify_jwt = false
 
+[functions.conversation-participants]
+verify_jwt = false
+
 [functions.whatsapp-connect]
 verify_jwt = false
 

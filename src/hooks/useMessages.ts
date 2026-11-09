@@ -25,6 +25,8 @@ type DbMessage = {
   deleted_for_everyone?: boolean | null;
   delivered_at?: string | null;
   read_at?: string | null;
+  sender_user_id?: string | null;
+  sender_name?: string | null;
 };
 
 const safeParsePayload = (raw: any) => {
@@ -173,6 +175,8 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
             : "sent"
         : undefined,
     createdAt: row.sent_at ?? row.created_at ?? new Date().toISOString(),
+    senderUserId: row.sender_user_id ?? undefined,
+    senderName: row.sender_name ?? undefined,
   };
 };
 
@@ -202,7 +206,9 @@ const MESSAGE_COLUMNS = `
   deleted_at,
   deleted_for_everyone,
   delivered_at,
-  read_at
+  read_at,
+  sender_user_id,
+  sender_name
 `;
 
 const oldestPersistedTime = (list: UiMessage[]) => {

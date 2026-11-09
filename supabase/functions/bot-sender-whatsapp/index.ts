@@ -567,8 +567,12 @@ serve(async (req)=>{
       });
     }
     // ── 5. Meta flow (default) ────────────────────────────────────────────────
-    const numberQuery = supabaseAdmin.from("whatsapp_numbers").select("id, meta_phone_number_id, clinic_id, channel_connection_id").eq("clinic_id", conversation.clinic_id).limit(1);
-    const { data: waNumber, error: waNumberErr } = conversation.whatsapp_number_id ? await numberQuery.eq("id", conversation.whatsapp_number_id).maybeSingle() : await numberQuery.maybeSingle();
+    // Com mais de um número, o bot responde pelo número da conversa: pelo
+    // whatsapp_number_id ou, se faltar, pela conexão que recebeu a mensagem
+    // (antes caía no "primeiro número da empresa" e era recusado logo abaixo)
+    let numberQuery = supabaseAdmin.from("whatsapp_numbers").select("id, meta_phone_number_id, clinic_id, channel_connection_id").eq("clinic_id", conversation.clinic_id);
+    numberQuery = conversation.whatsapp_number_id ? numberQuery.eq("id", conversation.whatsapp_number_id) : numberQuery.eq("channel_connection_id", channelConnectionId);
+    const { data: waNumber, error: waNumberErr } = await numberQuery.limit(1).maybeSingle();
     if (waNumberErr || !waNumber) {
       console.error("❌ Erro ao buscar whatsapp_numbers para clinic_id:", conversation.clinic_id, waNumberErr);
       return jsonResponse(500, {
