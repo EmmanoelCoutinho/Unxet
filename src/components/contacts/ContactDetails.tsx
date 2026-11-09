@@ -23,6 +23,7 @@ import {
 } from "./contactLabels";
 import { SecureImage } from "../ui/SecureImage";
 import { ContactScheduledMessages } from "../../modules/scheduledMessages/components/ContactScheduledMessages";
+import { ContactConversations } from "../../modules/contacts/components/ContactConversations";
 
 type ContactDetailsProps = {
   contact: Contact | null;
@@ -166,6 +167,8 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
           />
         </div>
       </div>
+
+      <ContactConversations contactId={contact.id} contactName={contact.name} />
 
       <ContactScheduledMessages
         contactId={contact.id}

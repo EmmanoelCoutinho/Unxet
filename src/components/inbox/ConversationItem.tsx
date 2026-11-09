@@ -148,7 +148,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
             <span
               title={
                 connectionLabel
-                  ? `${channelInfo.name}: ${connectionLabel}`
+                  ? `Conversa pelo número ${connectionLabel}`
                   : undefined
               }
               className={`flex min-w-0 max-w-[45%] items-center gap-1 text-xs font-medium ${channelInfo.textColor} flex-shrink-0`}

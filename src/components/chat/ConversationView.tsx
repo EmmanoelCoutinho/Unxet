@@ -42,6 +42,7 @@ import { TbMessageCheck } from "react-icons/tb";
 import { useAuth } from "../../contexts/AuthContext";
 import { TransferModal } from "./TransferModal";
 import { ParticipantsModal } from "./ParticipantsModal";
+import { OtherNumbersBanner } from "./OtherNumbersBanner";
 import { useConversationParticipants } from "../../hooks/useConversationParticipants";
 import { sharedContactText, type SharedContact } from "../../lib/sharedContact";
 import { whatsappConnectionLabel } from "../../lib/whatsappConnections";
@@ -1608,6 +1609,18 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           }
         />
       ) : null}
+
+      {conversation?.id &&
+        conversation.contactId &&
+        conversation.channel === "whatsapp" && (
+          <OtherNumbersBanner
+            conversationId={conversation.id}
+            contactId={conversation.contactId}
+            contactName={conversation.contactName}
+            refreshKey={conversation.status}
+            compact={isFloating}
+          />
+        )}
 
       {conversation?.id && hasFeature("scheduled_messages") && (
         <ConversationCampaignBanner

@@ -83,6 +83,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     text: "Nome do atendente nas mensagens: o cliente recebe o nome de quem respondeu na primeira linha (ex.: \"Maria:\" e, embaixo, a mensagem). No chat, o nome aparece acima de cada mensagem enviada. Dá para desligar em Automações de conversa.",
   },
   {
+    kind: "improved",
+    text: "Cliente que fala com mais de um número da empresa: o contato é um só e cada número tem a própria conversa. Agora cada conversa mostra por qual número chegou, o chat avisa quando o cliente também está falando pelo outro número (com atalho para abrir) e a ficha do cliente em Contatos lista as conversas de cada número.",
+  },
+  {
     kind: "fixed",
     text: "Empresas com mais de um número do WhatsApp oficial: a resposta e o bot sempre saem pelo número em que o cliente falou.",
     adminOnly: true,

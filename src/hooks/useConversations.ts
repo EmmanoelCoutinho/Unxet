@@ -411,6 +411,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
               connectionLabel: row.channel_connections
                 ? whatsappConnectionLabel(row.channel_connections)
                 : undefined,
+              contactId: contactRow?.id ?? undefined,
               contactName:
                 contactRow?.name ?? contactRow?.phone ?? "Contato sem nome",
               contactNumber: contactRow?.phone ?? "",

@@ -87,6 +87,21 @@ export const Inbox: React.FC = () => {
     return () => window.removeEventListener("inbox:tab", handleTabChange);
   }, []);
 
+  // Clientes com conversa em mais de um número: cada card mostra o número,
+  // para não parecer contato duplicado
+  const contactsInSeveralNumbers = useMemo(() => {
+    const numbersByContact = new Map<string, Set<string>>();
+    for (const c of conversations) {
+      if (!c.contactId || !c.connectionId) continue;
+      const set = numbersByContact.get(c.contactId) ?? new Set<string>();
+      set.add(c.connectionId);
+      numbersByContact.set(c.contactId, set);
+    }
+    return new Set(
+      [...numbersByContact].filter(([, set]) => set.size > 1).map(([id]) => id),
+    );
+  }, [conversations]);
+
   const visibleConversations = useMemo(() => {
     return conversations.filter((conversation) => conversation.status !== "closed");
   }, [conversations]);
@@ -316,7 +331,9 @@ export const Inbox: React.FC = () => {
                       : undefined
                   }
                   connectionLabel={
-                    hasMultipleWhatsapp && conversation.channel === "whatsapp"
+                    conversation.channel === "whatsapp" &&
+                    (hasMultipleWhatsapp ||
+                      contactsInSeveralNumbers.has(conversation.contactId ?? ""))
                       ? conversation.connectionLabel
                       : undefined
                   }
