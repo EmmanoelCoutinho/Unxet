@@ -124,6 +124,13 @@ const isIgnoredJid = (jid: unknown) =>
   typeof jid === "string" &&
   (jid.endsWith("@g.us") || jid.endsWith("@broadcast") || jid.endsWith("@newsletter"));
 
+// Status que o evolution-in não grava (só usa entregue e lido). Códigos da
+// Evolution v1: 0 ERROR, 1 PENDING, 2 SERVER_ACK. Status ausente ou
+// desconhecido segue para a função.
+const IGNORED_STATUSES = new Set<unknown>(["ERROR", "PENDING", "SERVER_ACK", 0, 1, 2]);
+const isIgnoredStatus = (status: unknown) =>
+  IGNORED_STATUSES.has(typeof status === "string" ? status.toUpperCase() : status);
+
 /**
  * Motivo para descartar um webhook da Evolution antes da fila, ou null para
  * seguir. Na dúvida (JSON inválido, formato desconhecido), segue: quem decide
@@ -148,10 +155,17 @@ export const evolutionSkipReason = (body: Uint8Array): string | null => {
 
   if (event === "messages.update") {
     // O evolution-in só grava entregue/lido das mensagens que nós enviamos (fromMe)
-    type Item = { fromMe?: unknown; key?: { fromMe?: unknown } } | null;
+    type Item = {
+      fromMe?: unknown;
+      status?: unknown;
+      key?: { fromMe?: unknown };
+      update?: { status?: unknown };
+    } | null;
     const items: Item[] = Array.isArray(payload.data) ? payload.data : [payload.data as Item];
-    const hasFromMe = items.some((item) => (item?.fromMe ?? item?.key?.fromMe) === true);
-    return hasFromMe ? null : "update_not_from_me";
+    const fromMe = items.filter((item) => (item?.fromMe ?? item?.key?.fromMe) === true);
+    if (fromMe.length === 0) return "update_not_from_me";
+    const useful = fromMe.some((item) => !isIgnoredStatus(item?.status ?? item?.update?.status));
+    return useful ? null : "update_status";
   }
 
   return null;

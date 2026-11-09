@@ -218,6 +218,19 @@ describe("gateway: filtro da Evolution", () => {
     );
   });
 
+  it("descarta status que o app não grava (enviada ao servidor, pendente, erro)", () => {
+    expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: true, status: "SERVER_ACK" } })).toBe(
+      "update_status",
+    );
+    expect(skip({ event: "messages.update", data: [{ key: { id: "A", fromMe: true }, update: { status: 2 } }] })).toBe(
+      "update_status",
+    );
+    expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: true, status: "PLAYED" } })).toBeNull();
+    // Status ausente ou desconhecido: quem decide é o evolution-in
+    expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: true } })).toBeNull();
+    expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: true, status: "NOVO" } })).toBeNull();
+  });
+
   it("aceita os nomes em maiúsculas e deixa passar conexão e QR code", () => {
     expect(skip({ event: "CONNECTION_UPDATE", data: {} })).toBeNull();
     expect(skip({ event: "QRCODE_UPDATED", data: {} })).toBeNull();
