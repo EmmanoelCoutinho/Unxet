@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   MAX_QUEUE_MESSAGE_BYTES,
   deliveryOutcome,
+  evolutionSkipReason,
   fromBase64,
   functionUrl,
   retryDelaySeconds,
@@ -180,5 +181,83 @@ describe("gateway: entrega da fila", () => {
     await handleBatch({ queue: "q", messages: [msg] }, makeEnv(), fetchImpl);
     expect(msg.ack).toHaveBeenCalled();
     expect(msg.retry).not.toHaveBeenCalled();
+  });
+});
+
+describe("gateway: filtro da Evolution", () => {
+  const skip = (payload: unknown) =>
+    evolutionSkipReason(new TextEncoder().encode(typeof payload === "string" ? payload : JSON.stringify(payload)));
+  const upsert = (remoteJid: string, fromMe = false) => ({
+    event: "messages.upsert",
+    data: { key: { remoteJid, fromMe } },
+  });
+
+  it.each(["contacts.update", "presence.update", "chats.update", "send.message", "messages.edited", "labels.edit"])(
+    "descarta %s, que o app não usa",
+    (event) => {
+      expect(skip({ event, data: {} })).toBe(`event:${event}`);
+    },
+  );
+
+  it("deixa passar mensagens de conversas, inclusive as enviadas pelo celular", () => {
+    expect(skip(upsert("5511999998888@s.whatsapp.net"))).toBeNull();
+    expect(skip(upsert("123456789@lid", true))).toBeNull();
+  });
+
+  it("descarta grupos, Status, canais e listas de transmissão", () => {
+    expect(skip(upsert("1203630@g.us"))).toBe("jid");
+    expect(skip(upsert("status@broadcast"))).toBe("jid");
+    expect(skip(upsert("1203630@newsletter"))).toBe("jid");
+  });
+
+  it("deixa passar entregue/lido só das mensagens enviadas (v1 e v2)", () => {
+    expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: true, status: "READ" } })).toBeNull();
+    expect(skip({ event: "messages.update", data: [{ key: { id: "A", fromMe: true }, update: { status: 3 } }] })).toBeNull();
+    expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: false, status: "READ" } })).toBe(
+      "update_not_from_me",
+    );
+  });
+
+  it("descarta status que o app não grava (enviada ao servidor, pendente, erro)", () => {
+    expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: true, status: "SERVER_ACK" } })).toBe(
+      "update_status",
+    );
+    expect(skip({ event: "messages.update", data: [{ key: { id: "A", fromMe: true }, update: { status: 2 } }] })).toBe(
+      "update_status",
+    );
+    expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: true, status: "PLAYED" } })).toBeNull();
+    // Status ausente ou desconhecido: quem decide é o evolution-in
+    expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: true } })).toBeNull();
+    expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: true, status: "NOVO" } })).toBeNull();
+  });
+
+  it("aceita os nomes em maiúsculas e deixa passar conexão e QR code", () => {
+    expect(skip({ event: "CONNECTION_UPDATE", data: {} })).toBeNull();
+    expect(skip({ event: "QRCODE_UPDATED", data: {} })).toBeNull();
+    expect(skip({ event: "PRESENCE_UPDATE", data: {} })).toBe("event:presence.update");
+  });
+
+  it("na dúvida, deixa passar", () => {
+    expect(skip("não é json")).toBeNull();
+    expect(skip({})).toBeNull();
+  });
+
+  it("evento descartado responde 200 sem usar a fila nem o Supabase", async () => {
+    const env = makeEnv();
+    const fetchImpl = vi.fn();
+    const res = await handleRequest(evolutionRequest('{"event":"presence.update","data":{}}'), env, fetchImpl);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ignored: true, reason: "event:presence.update" });
+    expect(env.send).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("não filtra os webhooks da Meta", async () => {
+    const env = makeEnv();
+    await handleRequest(
+      new Request("https://gw.test/meta-webhook", { method: "POST", body: '{"event":"presence.update"}' }),
+      env,
+    );
+    expect(env.send).toHaveBeenCalledTimes(1);
   });
 });
