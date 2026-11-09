@@ -21,6 +21,15 @@ Meta / Evolution ──► Worker no Cloudflare ──► fila ──► edge fu
 - Mensagem maior que 120 KB, ou fila indisponível: o Worker repassa direto,
   como era antes. Se o Supabase também falhar, responde 503 e quem enviou
   tenta de novo (a Meta tenta; a Evolution não).
+- Webhooks da Evolution que o `evolution-in` não usa não entram na fila: o
+  Worker responde 200 com `{"ignored": true}` e descarta. Passam só
+  `messages.upsert` (fora grupos, Status, canais e listas de transmissão),
+  `messages.update` de mensagens enviadas por nós (`fromMe`) com status de
+  entregue ou lido (`SERVER_ACK`, `PENDING` e `ERROR` ficam de fora),
+  `connection.update` e `qrcode.updated`. O resto (contatos, presença, chats,
+  `send.message`, edições...) era cerca de 55% da fila. Na dúvida (JSON
+  inválido ou sem `event`), o webhook segue normalmente. Os webhooks da Meta
+  não são filtrados.
 - Mensagem repetida (pode acontecer numa nova tentativa) é ignorada pelo
   `shared-in-config`, que confere o ID da mensagem.
 
