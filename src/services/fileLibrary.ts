@@ -335,6 +335,7 @@ export const CONVERSATION_FILES_PAGE = 50;
 export const listConversationFiles = async (
   filters: ConversationFilesFilters,
   cursor?: { createdAt: string; id: string } | null,
+  limit: number = CONVERSATION_FILES_PAGE,
 ) => {
   const { data, error } = await supabase.rpc("list_conversation_files", {
     p_kind: filters.kind ?? null,
@@ -344,7 +345,7 @@ export const listConversationFiles = async (
     p_to: filters.to ?? null,
     p_before_created_at: cursor?.createdAt ?? null,
     p_before_id: cursor?.id ?? null,
-    p_limit: CONVERSATION_FILES_PAGE,
+    p_limit: limit,
   });
   if (error) throw friendlyError(error);
   return ((data ?? []) as ConversationFileRow[]).map(

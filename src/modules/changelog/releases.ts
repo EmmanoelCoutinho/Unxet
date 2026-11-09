@@ -76,7 +76,7 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
-    text: "Banco de arquivos (menu Atendimento): guarde tabelas de preço, contratos, catálogos e outros arquivos da empresa, organizados em pastas, e envie numa conversa pelo + > Banco de arquivos, sem procurar no computador. Na aba Das conversas ficam todos os arquivos enviados e recebidos, com busca por cliente e atalho para abrir a conversa ou salvar o arquivo na biblioteca.",
+    text: "Banco de arquivos (menu Atendimento): guarde tabelas de preço, contratos, catálogos e outros arquivos da empresa, organizados em pastas, e envie numa conversa pelo + > Banco de arquivos, sem procurar no computador. Ali também ficam as imagens e documentos que a equipe já enviou, para mandar de novo sem salvar antes. Na aba Das conversas ficam todos os arquivos enviados e recebidos, com busca por cliente e atalho para abrir a conversa ou salvar o arquivo na biblioteca.",
   },
   {
     kind: "new",
