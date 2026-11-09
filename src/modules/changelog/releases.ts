@@ -74,39 +74,44 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
-  {
-    kind: "new",
-    text: "Mais de um atendente na mesma conversa: além de transferir, o responsável pode adicionar colegas (botão Atendentes na conversa). Quem for adicionado vê a conversa na aba Em atendimento, mesmo sendo de outro setor, recebe os avisos e responde junto. O responsável continua sendo quem transfere e finaliza.",
-  },
-  {
-    kind: "new",
-    text: "Nome do atendente nas mensagens: o cliente recebe o nome de quem respondeu na primeira linha (ex.: \"Maria:\" e, embaixo, a mensagem). No chat, o nome aparece acima de cada mensagem enviada. Dá para desligar em Automações de conversa.",
-  },
-  {
-    kind: "improved",
-    text: "Cliente que fala com mais de um número da empresa: o contato é um só e cada número tem a própria conversa. Agora cada conversa mostra por qual número chegou, o chat avisa quando o cliente também está falando pelo outro número (com atalho para abrir) e a ficha do cliente em Contatos lista as conversas de cada número.",
-  },
-  {
-    kind: "improved",
-    text: "Conversa de um número removido da empresa: agora aparece \"(removido)\" ao lado do número, o chat avisa que não é possível responder por ali e o campo de mensagem fica bloqueado. Quando uma mensagem não sai, o aviso diz o motivo (ex.: conversa com outro atendente, muitas mensagens seguidas) em vez de só \"Não foi possível enviar\".",
-  },
-  {
-    kind: "fixed",
-    text: "Empresas com mais de um número do WhatsApp oficial: a resposta e o bot sempre saem pelo número em que o cliente falou.",
-    adminOnly: true,
-  },
-  {
-    kind: "improved",
-    text: "Pesquisa de satisfação com a escala que você quiser: escolha a nota mínima e a máxima (por exemplo, de 1 a 5, de 1 a 10 ou de 0 a 10) em Automações de conversa. Os relatórios passam a usar a nova escala e convertem as avaliações antigas, então a média continua comparável.",
-    adminOnly: true,
-  },
-  {
-    kind: "improved",
-    text: "No chat, o nome de quem enviou cada mensagem agora aparece com uma cor própria para cada atendente e as iniciais ao lado do balão, facilitando ver quem respondeu quando há mais de um atendente na conversa.",
-  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
+  {
+    date: "2026-11-09",
+    changes: [
+      {
+        kind: "new",
+        text: "Mais de um atendente na mesma conversa: além de transferir, o responsável pode adicionar colegas (botão Atendentes na conversa). Quem for adicionado vê a conversa na aba Em atendimento, mesmo sendo de outro setor, recebe os avisos e responde junto. O responsável continua sendo quem transfere e finaliza.",
+      },
+      {
+        kind: "new",
+        text: "Nome do atendente nas mensagens: o cliente recebe o nome de quem respondeu na primeira linha (ex.: \"Maria:\" e, embaixo, a mensagem). No chat, o nome aparece acima de cada mensagem enviada. Dá para desligar em Automações de conversa.",
+      },
+      {
+        kind: "improved",
+        text: "Cliente que fala com mais de um número da empresa: o contato é um só e cada número tem a própria conversa. Agora cada conversa mostra por qual número chegou, o chat avisa quando o cliente também está falando pelo outro número (com atalho para abrir) e a ficha do cliente em Contatos lista as conversas de cada número.",
+      },
+      {
+        kind: "improved",
+        text: "Conversa de um número removido da empresa: agora aparece \"(removido)\" ao lado do número, o chat avisa que não é possível responder por ali e o campo de mensagem fica bloqueado. Quando uma mensagem não sai, o aviso diz o motivo (ex.: conversa com outro atendente, muitas mensagens seguidas) em vez de só \"Não foi possível enviar\".",
+      },
+      {
+        kind: "fixed",
+        text: "Empresas com mais de um número do WhatsApp oficial: a resposta e o bot sempre saem pelo número em que o cliente falou.",
+        adminOnly: true,
+      },
+      {
+        kind: "improved",
+        text: "Pesquisa de satisfação com a escala que você quiser: escolha a nota mínima e a máxima (por exemplo, de 1 a 5, de 1 a 10 ou de 0 a 10) em Automações de conversa. Os relatórios passam a usar a nova escala e convertem as avaliações antigas, então a média continua comparável.",
+        adminOnly: true,
+      },
+      {
+        kind: "improved",
+        text: "No chat, o nome de quem enviou cada mensagem agora aparece com uma cor própria para cada atendente e as iniciais ao lado do balão, facilitando ver quem respondeu quando há mais de um atendente na conversa.",
+      },
+    ],
+  },
   {
     date: "2026-11-08",
     changes: [
