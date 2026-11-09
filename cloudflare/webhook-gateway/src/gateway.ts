@@ -103,3 +103,56 @@ export const deliveryOutcome = (status: number): "delivered" | "retry" | "reject
  */
 export const retryDelaySeconds = (attempts: number) =>
   Math.min(15 * 2 ** Math.max(0, attempts - 1), 900);
+
+// ── Filtro da Evolution ─────────────────────────────────────────────────────
+// O webhook global da Evolution manda todos os eventos (contatos, presença,
+// chats, edições...), mas o evolution-in só usa estes. Descartar o resto aqui
+// evita gastar operações da fila (em 09/11/2026 eram ~55% do volume).
+// Mantenha em sincronia com supabase/functions/evolution-in/index.ts.
+const EVOLUTION_USED_EVENTS = new Set([
+  "messages.upsert",
+  "messages.update",
+  "connection.update",
+  "qrcode.updated",
+]);
+
+/** "MESSAGES_UPSERT" e "messages-upsert" -> "messages.upsert" */
+const normalizeEvent = (event: string) => event.toLowerCase().replace(/[_-]/g, ".");
+
+/** Grupos, Status do WhatsApp, canais e listas de transmissão (o evolution-in ignora). */
+const isIgnoredJid = (jid: unknown) =>
+  typeof jid === "string" &&
+  (jid.endsWith("@g.us") || jid.endsWith("@broadcast") || jid.endsWith("@newsletter"));
+
+/**
+ * Motivo para descartar um webhook da Evolution antes da fila, ou null para
+ * seguir. Na dúvida (JSON inválido, formato desconhecido), segue: quem decide
+ * é o evolution-in.
+ */
+export const evolutionSkipReason = (body: Uint8Array): string | null => {
+  let payload: { event?: unknown; data?: unknown };
+  try {
+    payload = JSON.parse(new TextDecoder().decode(body));
+  } catch {
+    return null;
+  }
+  if (typeof payload?.event !== "string") return null;
+  const event = normalizeEvent(payload.event);
+
+  if (!EVOLUTION_USED_EVENTS.has(event)) return `event:${event}`;
+
+  if (event === "messages.upsert") {
+    const jid = (payload.data as { key?: { remoteJid?: unknown } } | undefined)?.key?.remoteJid;
+    return isIgnoredJid(jid) ? "jid" : null;
+  }
+
+  if (event === "messages.update") {
+    // O evolution-in só grava entregue/lido das mensagens que nós enviamos (fromMe)
+    type Item = { fromMe?: unknown; key?: { fromMe?: unknown } } | null;
+    const items: Item[] = Array.isArray(payload.data) ? payload.data : [payload.data as Item];
+    const hasFromMe = items.some((item) => (item?.fromMe ?? item?.key?.fromMe) === true);
+    return hasFromMe ? null : "update_not_from_me";
+  }
+
+  return null;
+};

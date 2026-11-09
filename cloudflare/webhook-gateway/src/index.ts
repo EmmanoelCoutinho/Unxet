@@ -4,6 +4,7 @@ import {
   MAX_QUEUE_MESSAGE_BYTES,
   buildQueuedWebhook,
   deliveryOutcome,
+  evolutionSkipReason,
   fromBase64,
   functionUrl,
   pickHeaders,
@@ -93,6 +94,13 @@ export const handleRequest = async (
   if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const body = new Uint8Array(await request.arrayBuffer());
+
+  // Eventos que o evolution-in não usa não entram na fila (economiza operações)
+  if (target === "evolution-in") {
+    const reason = evolutionSkipReason(body);
+    if (reason) return json({ ignored: true, reason });
+  }
+
   const message = buildQueuedWebhook(target, url, request.headers, body);
 
   if (queuedSize(message) <= MAX_QUEUE_MESSAGE_BYTES) {
