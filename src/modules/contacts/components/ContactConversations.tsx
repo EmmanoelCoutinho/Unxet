@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { MessageCircleIcon } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
-import { whatsappConnectionLabel } from "../../../lib/whatsappConnections";
+import { conversationConnectionLabel } from "../../../lib/whatsappConnections";
 import { useOpenConversation } from "../../floatingChats/useOpenConversation";
 import { formatDateTime } from "../../../components/contacts/contactLabels";
 
@@ -15,6 +15,7 @@ type ContactConversationRow = {
     display_name: string | null;
     connected_phone: string | null;
     connected_name: string | null;
+    archived_at: string | null;
   } | null;
 };
 
@@ -58,7 +59,7 @@ export const ContactConversations: React.FC<{
       const { data, error } = await supabase
         .from("conversations")
         .select(
-          "id, channel, status, in_bot_flow, last_message_at, channel_connections ( display_name, connected_phone, connected_name )",
+          "id, channel, status, in_bot_flow, last_message_at, channel_connections ( display_name, connected_phone, connected_name, archived_at )",
         )
         .eq("contact_id", contactId)
         .order("last_message_at", { ascending: false, nullsFirst: false })
@@ -94,7 +95,7 @@ export const ContactConversations: React.FC<{
             const badge = statusBadge(row);
             const where =
               row.channel === "whatsapp"
-                ? whatsappConnectionLabel(row.channel_connections)
+                ? conversationConnectionLabel(row.channel_connections)
                 : CHANNEL_NAME[row.channel] ?? "Conversa";
             return (
               <div

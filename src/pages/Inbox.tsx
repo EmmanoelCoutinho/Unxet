@@ -333,6 +333,7 @@ export const Inbox: React.FC = () => {
                   connectionLabel={
                     conversation.channel === "whatsapp" &&
                     (hasMultipleWhatsapp ||
+                      !!conversation.connectionRemoved ||
                       contactsInSeveralNumbers.has(conversation.contactId ?? ""))
                       ? conversation.connectionLabel
                       : undefined

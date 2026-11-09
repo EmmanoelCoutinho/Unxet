@@ -39,7 +39,7 @@ export const OtherNumbersBanner: React.FC<{
       const { data, error } = await supabase
         .from("conversations")
         .select(
-          "id, status, channel_connection_id, channel_connections ( display_name, connected_phone, connected_name )",
+          "id, status, channel_connection_id, channel_connections ( display_name, connected_phone, connected_name, archived_at )",
         )
         .eq("contact_id", contactId)
         .eq("channel", "whatsapp")
@@ -50,7 +50,10 @@ export const OtherNumbersBanner: React.FC<{
 
       if (!active || error) return;
       setOthers(
-        ((data as any[]) ?? []).map((row) => ({
+        ((data as any[]) ?? [])
+          // Número removido não tem por onde responder: não vale o atalho
+          .filter((row) => !row.channel_connections?.archived_at)
+          .map((row) => ({
           id: row.id,
           status: row.status,
           numberLabel: whatsappConnectionLabel(row.channel_connections, "outro número"),

@@ -87,6 +87,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     text: "Cliente que fala com mais de um número da empresa: o contato é um só e cada número tem a própria conversa. Agora cada conversa mostra por qual número chegou, o chat avisa quando o cliente também está falando pelo outro número (com atalho para abrir) e a ficha do cliente em Contatos lista as conversas de cada número.",
   },
   {
+    kind: "improved",
+    text: "Conversa de um número removido da empresa: agora aparece \"(removido)\" ao lado do número, o chat avisa que não é possível responder por ali e o campo de mensagem fica bloqueado. Quando uma mensagem não sai, o aviso diz o motivo (ex.: conversa com outro atendente, muitas mensagens seguidas) em vez de só \"Não foi possível enviar\".",
+  },
+  {
     kind: "fixed",
     text: "Empresas com mais de um número do WhatsApp oficial: a resposta e o bot sempre saem pelo número em que o cliente falou.",
     adminOnly: true,

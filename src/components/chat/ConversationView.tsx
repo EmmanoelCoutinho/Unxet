@@ -43,9 +43,14 @@ import { useAuth } from "../../contexts/AuthContext";
 import { TransferModal } from "./TransferModal";
 import { ParticipantsModal } from "./ParticipantsModal";
 import { OtherNumbersBanner } from "./OtherNumbersBanner";
+import { GENERIC_SEND_ERROR, sendErrorMessage } from "../../lib/sendError";
 import { useConversationParticipants } from "../../hooks/useConversationParticipants";
 import { sharedContactText, type SharedContact } from "../../lib/sharedContact";
-import { whatsappConnectionLabel } from "../../lib/whatsappConnections";
+import {
+  conversationConnectionLabel,
+  isConnectionRemoved,
+  whatsappConnectionLabel,
+} from "../../lib/whatsappConnections";
 import { useWhatsappConnections } from "../../hooks/useWhatsappConnections";
 import { useFloatingChats } from "../../modules/floatingChats/FloatingChatsContext";
 import { useConversationList } from "../../contexts/ConversationsContext";
@@ -609,7 +614,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           provider,
           display_name,
           connected_phone,
-          connected_name
+          connected_name,
+          archived_at
         ),
         last_message_at,
         created_at,
@@ -718,7 +724,11 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         status: ((data as any).status as Conversation["status"]) ?? "pending",
         provider: (data as any).channel_connections?.provider ?? undefined,
         connectionId: (data as any).channel_connections?.id ?? undefined,
-        connectionLabel: (data as any).channel_connections
+        connectionLabel: conversationConnectionLabel(
+          (data as any).channel_connections,
+        ),
+        connectionRemoved: isConnectionRemoved((data as any).channel_connections),
+        connectionName: (data as any).channel_connections
           ? whatsappConnectionLabel((data as any).channel_connections)
           : undefined,
         contactId: contactRow?.id ?? (data as any).contact_id ?? undefined,
@@ -1049,6 +1059,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
   const canReply = useMemo(() => {
     if (!authUser || !conversation) return false;
+    // Número removido da empresa: não há por onde enviar
+    if (conversation.connectionRemoved) return false;
 
     if (conversation.assignedTo) {
       // O responsável e os atendentes adicionados respondem
@@ -1241,11 +1253,23 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
       if (error) {
         console.error(`Erro ao enviar mensagem (${functionName}):`, error);
+        // A função devolve o motivo (número removido, conversa de outro
+        // atendente...): mostra ele em vez do aviso genérico
+        const response = (error as { context?: Response }).context;
+        const payload = response
+          ? await response.json().catch(() => null)
+          : null;
+        const reason = sendErrorMessage(response?.status, payload);
         markLocalMessage(tempId, {
           localStatus: "failed",
-          localError: "Falha ao enviar. Reenviar.",
+          localError:
+            reason === GENERIC_SEND_ERROR ? "Falha ao enviar. Reenviar." : reason,
         });
-        toast.error("Não foi possível enviar a mensagem.");
+        toast.error(reason);
+        // Número removido enquanto a conversa estava aberta: trava o campo
+        if (payload?.code === "number_removed") {
+          void loadConversation({ silent: true });
+        }
         return;
       }
 
@@ -1315,6 +1339,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       setMessages,
       scrollToBottom,
       conversation,
+      loadConversation,
     ],
   );
 
@@ -1563,7 +1588,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           }
           departmentName={conversation.departmentName}
           connectionLabel={
-            hasMultipleWhatsapp && conversation.channel === "whatsapp"
+            conversation.channel === "whatsapp" &&
+            (hasMultipleWhatsapp || conversation.connectionRemoved)
               ? conversation.connectionLabel
               : undefined
           }
@@ -1846,7 +1872,18 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         </div>
       )}
 
-      {conversation?.status === "open" && (
+      {conversation?.connectionRemoved && conversation.status !== "closed" && (
+        <div className="shrink-0 border-t border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-snug text-amber-900 sm:px-4 sm:text-sm">
+          O número desta conversa
+          {conversation.connectionName ? (
+            <span className="font-semibold"> ({conversation.connectionName})</span>
+          ) : null}{" "}
+          foi removido da empresa. Não é possível responder por aqui. Se o
+          cliente falar por outro número, a conversa aparece lá.
+        </div>
+      )}
+
+      {conversation?.status === "open" && !conversation.connectionRemoved && (
         <MessageInput
           // Outra conversa: começa sem anexos na fila
           key={id}

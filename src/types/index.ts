@@ -58,6 +58,10 @@ export type Conversation = {
   // Número de WhatsApp da empresa por onde a conversa acontece
   connectionId?: string;
   connectionLabel?: string;
+  // O número da conversa foi removido da empresa: não dá para responder
+  connectionRemoved?: boolean;
+  // Nome do número sem o "(removido)"
+  connectionName?: string;
   // Última mensagem do cliente (janela de 24h do WhatsApp oficial)
   lastInboundAt?: string;
   // Cliente ainda aguarda a 1ª resposta e o prazo de SLA da clínica já passou

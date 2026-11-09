@@ -213,7 +213,8 @@ serve(async (req)=>{
     }
     if (connection.archived_at) {
       return new Response(JSON.stringify({
-        error: "O número de WhatsApp desta conversa foi removido da empresa."
+        error: "O número de WhatsApp desta conversa foi removido da empresa.",
+        code: "number_removed"
       }), {
         status: 400,
         headers: corsHeaders
