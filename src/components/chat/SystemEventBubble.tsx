@@ -55,9 +55,13 @@ const getEventText = (event: ConversationEvent) => {
 
     case "satisfaction_survey_answered": {
       const score = meta.score;
-      return score
-        ? `Cliente avaliou o atendimento com nota ${score}`
-        : "Cliente respondeu a pesquisa de satisfação";
+      const scaleMax = meta.scale_max;
+      if (score === undefined || score === null) {
+        return "Cliente respondeu a pesquisa de satisfação";
+      }
+      return scaleMax
+        ? `Cliente avaliou o atendimento com nota ${score} de ${scaleMax}`
+        : `Cliente avaliou o atendimento com nota ${score}`;
     }
 
     case "reopened_automatically": {
@@ -108,6 +112,15 @@ const getEventText = (event: ConversationEvent) => {
       const toUser = meta.to_user_name ?? "outro atendente";
       return `${actor} atribuiu a conversa para ${toUser}`;
     }
+
+    case "participant_added":
+      return `${actor} adicionou ${meta.participant_name ?? "um atendente"} à conversa`;
+
+    case "participant_removed":
+      return `${actor} removeu ${meta.participant_name ?? "um atendente"} da conversa`;
+
+    case "participant_left":
+      return `${actor} saiu da conversa`;
 
     case "tag_added": {
       const tag = meta.tag_name ?? "uma etiqueta";

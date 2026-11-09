@@ -1,12 +1,17 @@
 // deno-lint-ignore-file
 // @ts-nocheck
-// Pesquisa de satisfação (CSAT 1 a 5): envio ao encerrar e captura da resposta.
+// Pesquisa de satisfação: envio ao encerrar e captura da resposta.
+// A escala da nota (ex.: 1 a 5, 0 a 10) é escolhida por cada empresa.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
 
+export const DEFAULT_SCALE_MIN = 1;
+export const DEFAULT_SCALE_MAX = 5;
+
 const SCORE_WORDS: Record<string, number> = {
+  zero: 0,
   um: 1,
   uma: 1,
   dois: 2,
@@ -14,19 +19,39 @@ const SCORE_WORDS: Record<string, number> = {
   tres: 3,
   quatro: 4,
   cinco: 5,
+  seis: 6,
+  sete: 7,
+  oito: 8,
+  nove: 9,
+  dez: 10,
 };
 
+// "8", "nota 8", "oito", "8/10", "8 de 10", "4 estrelas"
+const SCORE_PATTERN =
+  /^(?:nota\s*)?(\d{1,2}|[a-z]+)(?:\s*(?:\/|de)\s*(\d{1,2}|[a-z]+))?(?:\s*(?:estrelas?|pontos?))?[\s.!]*$/;
+
+const wordToNumber = (value: string): number | undefined =>
+  /^\d+$/.test(value) ? Number(value) : SCORE_WORDS[value];
+
 /**
- * Interpreta a resposta do cliente como nota de 1 a 5.
- * Aceita "5", "nota 4", "4 estrelas", "cinco", "⭐⭐⭐". Qualquer outro texto
- * retorna null (não é resposta da pesquisa).
+ * Interpreta a resposta do cliente como nota dentro da escala da pesquisa
+ * (padrão 1 a 5). Aceita "5", "nota 4", "4 estrelas", "8/10", "8 de 10",
+ * "cinco", "⭐⭐⭐". Nota fora da escala ou qualquer outro texto retorna null
+ * (não é resposta da pesquisa).
  */
-export const parseSurveyScore = (raw: unknown): number | null => {
+export const parseSurveyScore = (
+  raw: unknown,
+  scaleMin: number = DEFAULT_SCALE_MIN,
+  scaleMax: number = DEFAULT_SCALE_MAX,
+): number | null => {
   if (typeof raw !== "string") return null;
 
+  const inScale = (n: number | undefined) =>
+    n !== undefined && Number.isInteger(n) && n >= scaleMin && n <= scaleMax ? n : null;
+
   const stars = (raw.match(/⭐|★/g) ?? []).length;
-  if (stars >= 1 && stars <= 5 && raw.replace(/⭐|★|\s/g, "") === "") {
-    return stars;
+  if (stars >= 1 && raw.replace(/⭐|★|\s/g, "") === "") {
+    return inScale(stars);
   }
 
   const text = raw
@@ -35,17 +60,19 @@ export const parseSurveyScore = (raw: unknown): number | null => {
     .replace(/\p{Diacritic}/gu, "")
     .trim();
 
-  const numeric = text.match(/^(?:nota\s*)?([1-5])(?:\s*(?:estrelas?|pontos?))?[\s.!]*$/);
-  if (numeric) return Number(numeric[1]);
+  const match = text.match(SCORE_PATTERN);
+  if (!match) return null;
 
-  const word = text.match(/^(?:nota\s*)?([a-z]+)[\s.!]*$/);
-  if (word && SCORE_WORDS[word[1]]) return SCORE_WORDS[word[1]];
+  // "8 de 10" só vale quando o 10 é o máximo da escala
+  if (match[2] !== undefined && wordToNumber(match[2]) !== scaleMax) return null;
 
-  return null;
+  return inScale(wordToNumber(match[1]));
 };
 
 export type SurveySettings = {
   satisfaction_survey_enabled: boolean;
+  satisfaction_survey_scale_min: number | null;
+  satisfaction_survey_scale_max: number | null;
   satisfaction_survey_message: string;
   satisfaction_survey_thanks_message: string | null;
   satisfaction_survey_window_minutes: number;
@@ -55,7 +82,7 @@ export const getSurveySettings = async (admin, clinicId: string): Promise<Survey
   const { data, error } = await admin
     .from("conversation_automation_settings")
     .select(
-      "satisfaction_survey_enabled, satisfaction_survey_message, satisfaction_survey_thanks_message, satisfaction_survey_window_minutes",
+      "satisfaction_survey_enabled, satisfaction_survey_message, satisfaction_survey_thanks_message, satisfaction_survey_window_minutes, satisfaction_survey_scale_min, satisfaction_survey_scale_max",
     )
     .eq("clinic_id", clinicId)
     .maybeSingle();
@@ -157,6 +184,8 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
       channel: conversation.channel,
       agent_user_id: conversation.assigned_user_id,
       department_id: conversation.department_id,
+      scale_min: settings.satisfaction_survey_scale_min ?? DEFAULT_SCALE_MIN,
+      scale_max: settings.satisfaction_survey_scale_max ?? DEFAULT_SCALE_MAX,
       status: sendError ? "failed" : "sent",
       error: sendError,
       sent_at: now.toISOString(),
@@ -190,7 +219,7 @@ export const matchSurveyAnswer = async (admin, params: {
 }) => {
   const { data: survey, error } = await admin
     .from("satisfaction_surveys")
-    .select("id, conversation_id, channel, channel_connection_id")
+    .select("id, conversation_id, channel, channel_connection_id, scale_min, scale_max")
     .eq("clinic_id", params.clinicId)
     .eq("contact_id", params.contactId)
     .eq("channel_connection_id", params.channelConnectionId)
@@ -202,8 +231,12 @@ export const matchSurveyAnswer = async (admin, params: {
 
   if (error || !survey) return null;
 
-  const score = parseSurveyScore(params.text);
-  if (!score) {
+  const score = parseSurveyScore(
+    params.text,
+    survey.scale_min ?? DEFAULT_SCALE_MIN,
+    survey.scale_max ?? DEFAULT_SCALE_MAX,
+  );
+  if (score === null) {
     await admin.from("satisfaction_surveys").update({ status: "skipped" }).eq("id", survey.id);
     return null;
   }
@@ -228,7 +261,7 @@ export const matchSurveyAnswer = async (admin, params: {
     conversation_id: survey.conversation_id,
     event_type: "satisfaction_survey_answered",
     performed_by: null,
-    metadata: { score },
+    metadata: { score, scale_min: survey.scale_min, scale_max: survey.scale_max },
   });
 
   const settings = await getSurveySettings(admin, params.clinicId);

@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 
 const SUPABASE_URL = "https://abc.supabase.co";
 
-let parseSurveyScore: (raw: unknown) => number | null;
+let parseSurveyScore: (raw: unknown, scaleMin?: number, scaleMax?: number) => number | null;
 let mediaPathFromUrl: (url: unknown) => string | null;
 
 beforeAll(async () => {
@@ -29,12 +29,37 @@ describe("parseSurveyScore (pesquisa de satisfação)", () => {
     expect(parseSurveyScore(input)).toBe(expected);
   });
 
-  it.each(["10", "0", "6", "5 consultas", "1 minuto", "obrigado", "nota dez", "", null])(
+  it.each(["10", "0", "6", "5 consultas", "1 minuto", "obrigado", "nota dez", "4/10", "⭐⭐⭐⭐⭐⭐", "", null])(
     "rejeita %j",
     (input) => {
       expect(parseSurveyScore(input)).toBeNull();
     },
   );
+
+  describe("escala escolhida pela empresa", () => {
+    it.each([
+      ["10", 0, 10, 10],
+      ["0", 0, 10, 0],
+      ["zero", 0, 10, 0],
+      ["nota dez", 1, 10, 10],
+      ["8/10", 1, 10, 8],
+      ["8 de 10", 1, 10, 8],
+      ["Sete.", 1, 10, 7],
+      ["4/5", 1, 5, 4],
+    ])("aceita %j em %i a %i como nota %i", (input, min, max, expected) => {
+      expect(parseSurveyScore(input, min, max)).toBe(expected);
+    });
+
+    it.each([
+      ["0", 1, 10],
+      ["11", 0, 10],
+      ["8/5", 1, 10],
+      ["1", 2, 7],
+      ["100", 0, 10],
+    ])("rejeita %j em %i a %i", (input, min, max) => {
+      expect(parseSurveyScore(input, min, max)).toBeNull();
+    });
+  });
 });
 
 describe("mediaPathFromUrl (bucket privado)", () => {

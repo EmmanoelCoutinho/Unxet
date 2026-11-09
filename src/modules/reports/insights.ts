@@ -8,6 +8,7 @@ import {
   formatTrend,
 } from "./format";
 import type { OperationalReport } from "./types";
+import { satisfiedFrom, scoreRangeLabel } from "./surveyScale";
 
 /**
  * Frases curtas com o que mais mudou no período, para a pessoa não precisar
@@ -62,8 +63,9 @@ export const buildHighlights = (report: OperationalReport): string[] => {
   }
 
   if (current.averageScore !== null) {
+    const scale = { min: report.satisfaction.scaleMin, max: report.satisfaction.scaleMax };
     items.push(
-      `Nota média de satisfação ${formatScore(current.averageScore)} de 5, com ${current.surveysAnswered} ${current.surveysAnswered === 1 ? "avaliação" : "avaliações"} (${formatPct(current.csatPct)} de notas 4 e 5).`,
+      `Nota média de satisfação ${formatScore(current.averageScore)} de ${scale.max}, com ${current.surveysAnswered} ${current.surveysAnswered === 1 ? "avaliação" : "avaliações"} (${formatPct(current.csatPct)} de notas ${scoreRangeLabel(satisfiedFrom(scale), scale.max)}).`,
     );
   }
 

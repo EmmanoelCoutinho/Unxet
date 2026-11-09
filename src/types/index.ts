@@ -49,6 +49,8 @@ export type Conversation = {
   unreadCount: number;
   tags?: Tag[];
   assignedTo?: string;
+  // Você foi adicionado a esta conversa por outro atendente (responde junto)
+  isParticipant?: boolean;
   status: "open" | "pending" | "closed";
   // O bot ainda conduz a conversa: fica na aba "No bot", fora da fila
   inBotFlow?: boolean;
@@ -56,6 +58,10 @@ export type Conversation = {
   // Número de WhatsApp da empresa por onde a conversa acontece
   connectionId?: string;
   connectionLabel?: string;
+  // O número da conversa foi removido da empresa: não dá para responder
+  connectionRemoved?: boolean;
+  // Nome do número sem o "(removido)"
+  connectionName?: string;
   // Última mensagem do cliente (janela de 24h do WhatsApp oficial)
   lastInboundAt?: string;
   // Cliente ainda aguarda a 1ª resposta e o prazo de SLA da clínica já passou
@@ -100,6 +106,9 @@ export type Message = {
   deletedForEveryone?: boolean;
   deliveryStatus?: MessageDeliveryStatus;
   createdAt: string;
+  // Atendente que enviou pelo app (o cliente recebe o nome na 1ª linha)
+  senderUserId?: string;
+  senderName?: string;
 
   localStatus?: MessageSendStatus;
   localError?: string | null;

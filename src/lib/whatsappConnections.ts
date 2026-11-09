@@ -49,3 +49,17 @@ export const whatsappConnectionLabel = (
 
   return fallback;
 };
+
+/** Número removido da empresa (as conversas antigas continuam ligadas a ele). */
+export const isConnectionRemoved = (
+  connection?: { archived_at?: string | null } | null,
+) => !!connection?.archived_at;
+
+/** Rótulo do número na conversa: "victoria" ou "victoria (removido)". */
+export const conversationConnectionLabel = (
+  connection?: (WhatsappConnectionLabelSource & { archived_at?: string | null }) | null,
+) => {
+  if (!connection) return undefined;
+  const label = whatsappConnectionLabel(connection);
+  return isConnectionRemoved(connection) ? `${label} (removido)` : label;
+};

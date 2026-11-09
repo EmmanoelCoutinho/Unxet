@@ -37,6 +37,14 @@ import {
   formatTrend,
   previousRange,
 } from "../modules/reports/format";
+import {
+  csatLabel,
+  formatAnsweredScore,
+  lowScoresLabel,
+  scaleLabel,
+  scoreColor,
+  type SurveyScale,
+} from "../modules/reports/surveyScale";
 import { buildHighlights } from "../modules/reports/insights";
 import { groupDailySeries } from "../modules/reports/series";
 import type {
@@ -330,13 +338,10 @@ function DataTable<T>({
 const slaTone = (pct: number | null) =>
   pct === null ? "" : pct >= 80 ? "text-emerald-600 font-medium" : pct < 50 ? "text-red-600 font-medium" : "";
 
-const SCORE_COLORS: Record<number, string> = {
-  1: "#EF4444",
-  2: "#F97316",
-  3: "#F59E0B",
-  4: "#22C55E",
-  5: "#00D374",
-};
+const surveyScaleOf = (report: OperationalReport): SurveyScale => ({
+  min: report.satisfaction.scaleMin,
+  max: report.satisfaction.scaleMax,
+});
 
 // ---------------------------------------------------------------------------
 // Relatórios na tela
@@ -390,8 +395,8 @@ const SummaryView = ({ report, previousLabel }: { report: OperationalReport; pre
         {k("Dentro da meta", "withinSlaPct", formatPct)}
         {k("Até finalizar (mediana)", "p50ResolutionSec", formatDuration, false)}
         {k("Sem resposta humana", "unansweredLeads", formatInt, false)}
-        {k("Nota média", "averageScore", formatScore)}
-        {k("CSAT (notas 4 e 5)", "csatPct", formatPct)}
+        {k(`Nota média (${scaleLabel(surveyScaleOf(report))})`, "averageScore", formatScore)}
+        {k(csatLabel(surveyScaleOf(report)), "csatPct", formatPct)}
       </div>
       <Card title="Conversas por dia" subtitle="Novas conversas e conversas finalizadas">
         <DailyChart daily={report.daily} />
@@ -516,20 +521,17 @@ const SatisfactionView = ({ report }: { report: OperationalReport }) => {
   const agents = report.team
     .filter((row) => row.surveysAnswered > 0)
     .sort((a, b) => (b.averageScore ?? 0) - (a.averageScore ?? 0));
+  const scale = surveyScaleOf(report);
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Kpi label="Nota média" value={formatScore(c.averageScore)} current={c.averageScore} previous={p.averageScore} previousLabel={formatScore(p.averageScore)} />
-        <Kpi label="CSAT (notas 4 e 5)" value={formatPct(c.csatPct)} current={c.csatPct} previous={p.csatPct} previousLabel={formatPct(p.csatPct)} />
+        <Kpi label={`Nota média (${scaleLabel(scale)})`} value={formatScore(c.averageScore)} current={c.averageScore} previous={p.averageScore} previousLabel={formatScore(p.averageScore)} />
+        <Kpi label={csatLabel(scale)} value={formatPct(c.csatPct)} current={c.csatPct} previous={p.csatPct} previousLabel={formatPct(p.csatPct)} />
         <Kpi label="Taxa de resposta" value={formatPct(responseRate)} hint={`${formatInt(c.surveysAnswered)} de ${formatInt(c.surveysSent)} pesquisas`} />
         <Kpi
-          label="Notas 1 e 2"
-          value={formatInt(
-            report.satisfaction.distribution
-              .filter((row) => row.score <= 2)
-              .reduce((sum, row) => sum + row.count, 0),
-          )}
+          label={lowScoresLabel(scale)}
+          value={formatInt(report.satisfaction.lowCount)}
           hint="clientes insatisfeitos"
         />
       </div>
@@ -539,7 +541,7 @@ const SatisfactionView = ({ report }: { report: OperationalReport }) => {
             rows={[...report.satisfaction.distribution].reverse().map((row) => ({
               label: `Nota ${row.score}`,
               value: row.count,
-              color: SCORE_COLORS[row.score],
+              color: scoreColor(row.score, scale),
             }))}
           />
         </Card>
@@ -566,18 +568,18 @@ const SatisfactionView = ({ report }: { report: OperationalReport }) => {
           />
         </Card>
       </div>
-      <Card title="Notas 1 e 2" subtitle="Para entender o que deu errado e retornar ao cliente">
+      <Card title={lowScoresLabel(scale)} subtitle="Para entender o que deu errado e retornar ao cliente">
         <DataTable
           rows={report.satisfaction.lowScores}
-          emptyText="Nenhuma nota 1 ou 2 no período."
+          emptyText="Nenhuma nota baixa no período."
           columns={[
             { title: "Data", render: (r) => formatDateTime(r.answeredAt) },
             {
               title: "Nota",
               align: "center",
               render: (r) => (
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-white" style={{ backgroundColor: SCORE_COLORS[r.score] }}>
-                  {r.score}
+                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-semibold text-white" style={{ backgroundColor: scoreColor(r.score, { min: r.scaleMin, max: r.scaleMax }) }}>
+                  {formatAnsweredScore(r.score, { min: r.scaleMin, max: r.scaleMax }, scale)}
                 </span>
               ),
             },

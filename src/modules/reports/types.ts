@@ -77,7 +77,10 @@ export type SlowConversation = {
 
 export type LowScore = {
   answeredAt: string;
+  // nota como o cliente respondeu, na escala da época
   score: number;
+  scaleMin: number;
+  scaleMax: number;
   comment: string | null;
   contact: string;
   agent: string;
@@ -107,6 +110,11 @@ export type OperationalReport = {
     slowest: SlowConversation[];
   };
   satisfaction: {
+    // escala atual da empresa; médias e distribuição já vêm convertidas
+    scaleMin: number;
+    scaleMax: number;
+    // avaliações com nota baixa no período (lowScores traz só as últimas)
+    lowCount: number;
     distribution: Array<{ score: number; count: number }>;
     byStatus: Record<string, number>;
     byDepartment: Array<{ label: string; answered: number; averageScore: number | null }>;

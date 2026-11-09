@@ -34,6 +34,34 @@ interface MessageBubbleProps {
   deleteMode?: "everyone" | "system";
 }
 
+// Cor fixa por atendente (como nos grupos do WhatsApp), legível no claro e no escuro
+const SENDER_COLORS = [
+  "#0EA5E9",
+  "#8B5CF6",
+  "#EC4899",
+  "#F97316",
+  "#10B981",
+  "#6366F1",
+  "#D97706",
+  "#14B8A6",
+];
+
+const senderColor = (key: string) => {
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash * 31 + key.charCodeAt(i)) | 0;
+  }
+  return SENDER_COLORS[Math.abs(hash) % SENDER_COLORS.length];
+};
+
+const senderInitials = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0][0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
+  return (first + last).toUpperCase();
+};
+
 type LocalSendStatus = "sending" | "failed" | "sent";
 type LocalMeta = {
   localStatus?: LocalSendStatus;
@@ -349,6 +377,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     !message.id.startsWith("local-") &&
     localStatus !== "sending";
 
+  // Quem respondeu (o cliente recebe o nome na 1ª linha da mensagem)
+  const senderName = !isClient ? message.senderName?.trim() : undefined;
+  const senderTint = senderName
+    ? senderColor(message.senderUserId ?? senderName)
+    : undefined;
+
   return (
     <div className={`flex w-full ${isClient ? "justify-start" : "justify-end"}`}>
       <div
@@ -356,7 +390,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           isClient ? "" : "flex-row-reverse"
         }`}
       >
+        {senderName && (
+          <span
+            className="mb-0.5 hidden h-7 w-7 shrink-0 select-none items-center justify-center rounded-full text-[10px] font-semibold text-white sm:flex"
+            style={{ backgroundColor: senderTint }}
+            title={senderName}
+            aria-hidden="true"
+          >
+            {senderInitials(senderName)}
+          </span>
+        )}
         <div className="flex min-w-0 flex-col">
+          {senderName && (
+            <span
+              className="mb-0.5 self-end truncate px-1 text-xs font-semibold"
+              style={{ color: senderTint }}
+            >
+              {senderName}
+            </span>
+          )}
           <div
             className={`group/bubble relative ${canDelete ? "[@media(hover:none)]:select-none" : ""}`}
             onTouchStart={canDelete ? handleTouchStart : undefined}

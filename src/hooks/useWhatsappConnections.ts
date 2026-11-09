@@ -52,11 +52,9 @@ export function useWhatsappConnections(clinicId: string | null | undefined) {
   return {
     connections,
     loading,
-    // O número da conversa só aparece quando a empresa usa mais de um número
-    // QR Code. Conexões antigas não contam: quem trocou o WhatsApp oficial
-    // pelo QR Code (ou removeu um número) e segue com um só não vê mudança.
-    hasMultiple:
-      connections.filter((c) => c.provider === "evolution" && !c.archived_at)
-        .length > 1,
+    // O número da conversa aparece quando a empresa atende por mais de um
+    // número ativo (QR Code ou oficial). Assim o mesmo cliente em dois
+    // números não parece contato duplicado.
+    hasMultiple: connections.filter((c) => !c.archived_at).length > 1,
   };
 }
