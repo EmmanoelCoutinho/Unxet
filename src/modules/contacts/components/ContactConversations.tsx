@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { MessageCircleIcon } from "lucide-react";
+import { FacebookIcon, InstagramIcon, MessageCircleIcon } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { conversationConnectionLabel } from "../../../lib/whatsappConnections";
 import { useOpenConversation } from "../../floatingChats/useOpenConversation";
@@ -23,6 +23,19 @@ const CHANNEL_NAME: Record<ContactConversationRow["channel"], string> = {
   whatsapp: "WhatsApp",
   instagram: "Instagram",
   messenger: "Messenger",
+};
+
+// Ícone do canal: WhatsApp (verde), Instagram (rosa), Messenger (azul)
+const ChannelIcon: React.FC<{ channel: ContactConversationRow["channel"] }> = ({
+  channel,
+}) => {
+  if (channel === "instagram") {
+    return <InstagramIcon className="h-4 w-4 flex-shrink-0 text-pink-600" />;
+  }
+  if (channel === "messenger") {
+    return <FacebookIcon className="h-4 w-4 flex-shrink-0 text-blue-600" />;
+  }
+  return <MessageCircleIcon className="h-4 w-4 flex-shrink-0 text-green-600" />;
 };
 
 const statusBadge = (row: ContactConversationRow) => {
@@ -80,7 +93,8 @@ export const ContactConversations: React.FC<{
     <div className="border-t border-gray-100 p-4 sm:p-5">
       <h3 className="text-base font-semibold text-gray-950">Conversas</h3>
       <p className="mt-1 text-sm text-gray-500">
-        Uma conversa por número da empresa em que o cliente falou.
+        Uma conversa por canal: no WhatsApp, uma para cada número da empresa
+        em que o cliente falou.
       </p>
 
       <div className="mt-4 space-y-2">
@@ -102,7 +116,7 @@ export const ContactConversations: React.FC<{
                 key={row.id}
                 className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2"
               >
-                <MessageCircleIcon className="h-4 w-4 flex-shrink-0 text-green-600" />
+                <ChannelIcon channel={row.channel} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-gray-900">
                     {row.channel === "whatsapp" ? `Número ${where}` : where}
