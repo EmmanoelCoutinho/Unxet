@@ -3,10 +3,12 @@
 // Notificações push (Web Push) para mensagens recebidas de clientes.
 //
 // Quem recebe segue a mesma regra de visibilidade do RLS
-// (can_access_conversation): com responsável, só ele; sem responsável, os
-// membros do departamento da conversa e os admins da clínica.
+// (can_access_conversation): com responsável, ele e os atendentes adicionados
+// à conversa; sem responsável, os membros do departamento da conversa e os
+// admins da clínica.
 
 import webpush from "npm:web-push@3.6.7";
+import { listConversationParticipantIds } from "./conversationParticipants.ts";
 
 const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
@@ -33,7 +35,10 @@ function buildBody(messageType: string | null) {
 }
 
 async function resolveRecipients(supabase, conversation) {
-  if (conversation.assigned_user_id) return [conversation.assigned_user_id];
+  if (conversation.assigned_user_id) {
+    const participants = await listConversationParticipantIds(supabase, conversation.id);
+    return [...new Set([conversation.assigned_user_id, ...participants])];
+  }
 
   const { data: clinicUsers, error } = await supabase
     .from("clinic_users")

@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { findOutboundByMetaId } from "../_shared/metaMessageId.ts";
 import { toProviderMediaUrl } from "../_shared/media.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
+import { loadAgentSender, signText } from "../_shared/agentSignature.ts";
+import { isConversationParticipant } from "../_shared/conversationParticipants.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -365,7 +367,7 @@ async function consumeNonce(opts) {
   };
 }
 async function authorizeUserForConversation(opts) {
-  const { rid, userId, clinicId, departmentId, assignedUserId } = opts;
+  const { rid, userId, clinicId, departmentId, assignedUserId, conversationId } = opts;
   const { data: cu, error: cuErr } = await supabaseAdmin.from("clinic_users").select("user_id, clinic_id, role, accepted_at, department_id").eq("clinic_id", clinicId).eq("user_id", userId).maybeSingle();
   if (cuErr || !cu) {
     console.log(JSON.stringify({
@@ -396,6 +398,19 @@ async function authorizeUserForConversation(opts) {
   const isAdmin = role === "admin";
   const isAssigned = safeStr(assignedUserId) === userId;
   if (safeStr(assignedUserId).trim()) {
+    // Atendente adicionado à conversa responde junto com o responsável
+    if (!isAssigned && await isConversationParticipant(supabaseAdmin, conversationId, userId)) {
+      console.log(JSON.stringify({
+        rid,
+        step: "authz.ok.participant",
+        role
+      }, null, 2));
+      return {
+        ok: true,
+        isAdmin,
+        isAssigned: false
+      };
+    }
     if (!isAssigned) {
       console.log(JSON.stringify({
         rid,
@@ -583,7 +598,8 @@ serve(async (req)=>{
       userId,
       clinicId: safeStr(conversation.clinic_id),
       departmentId: safeStr(conversation.department_id),
-      assignedUserId: conversation.assigned_user_id ? safeStr(conversation.assigned_user_id) : null
+      assignedUserId: conversation.assigned_user_id ? safeStr(conversation.assigned_user_id) : null,
+      conversationId: safeStr(conversation.id)
     });
     if (!authz.ok) {
       return new Response(JSON.stringify({
@@ -747,11 +763,17 @@ serve(async (req)=>{
         }
       });
     }
+    // Nome do atendente na 1ª linha (Instagram/Messenger não têm negrito nem
+    // legenda em anexo: só o texto é assinado)
+    const sender = await loadAgentSender(supabaseAdmin, userId, safeStr(conversation.clinic_id));
+    const outboundText = sender.sign && outboundType === "text" ? signText(bodyText, sender.name, {
+      bold: false
+    }) : bodyText;
     const metaPayload = buildMetaPayload({
       channel,
       recipientId: counterpartyId,
       outboundType,
-      text: bodyText,
+      text: outboundText,
       // Bucket privado: a Meta recebe um link assinado e temporário do arquivo
       mediaUrl: mediaUrl ? await toProviderMediaUrl(supabaseAdmin, mediaUrl) : null,
       filename
@@ -810,7 +832,9 @@ serve(async (req)=>{
       text: outboundType === "text" ? bodyText : bodyText || null,
       payload: sendResult.body,
       sent_at: nowIso,
-      is_automated: false
+      is_automated: false,
+      sender_user_id: userId,
+      sender_name: sender.name
     };
     if (outboundType === "image") {
       messageInsert.image_url = mediaUrl ?? null;

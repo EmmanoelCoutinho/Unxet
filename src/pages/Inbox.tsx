@@ -54,7 +54,7 @@ export const Inbox: React.FC = () => {
   // uma tela vazia, que dá lugar à lista inteira
   const listFillsScreen =
     isInboxRoot && !(can("dashboard.view") && hasFeature("analytics"));
-  const userNames = useClinicUserNames(clinicId, seesAllConversations);
+  const userNames = useClinicUserNames(clinicId);
   const { hasMultiple: hasMultipleWhatsapp } = useWhatsappConnections(clinicId);
 
   useEffect(() => {
@@ -86,6 +86,21 @@ export const Inbox: React.FC = () => {
     window.addEventListener("inbox:tab", handleTabChange);
     return () => window.removeEventListener("inbox:tab", handleTabChange);
   }, []);
+
+  // Clientes com conversa em mais de um número: cada card mostra o número,
+  // para não parecer contato duplicado
+  const contactsInSeveralNumbers = useMemo(() => {
+    const numbersByContact = new Map<string, Set<string>>();
+    for (const c of conversations) {
+      if (!c.contactId || !c.connectionId) continue;
+      const set = numbersByContact.get(c.contactId) ?? new Set<string>();
+      set.add(c.connectionId);
+      numbersByContact.set(c.contactId, set);
+    }
+    return new Set(
+      [...numbersByContact].filter(([, set]) => set.size > 1).map(([id]) => id),
+    );
+  }, [conversations]);
 
   const visibleConversations = useMemo(() => {
     return conversations.filter((conversation) => conversation.status !== "closed");
@@ -305,7 +320,9 @@ export const Inbox: React.FC = () => {
                   key={conversation.id}
                   conversation={conversation}
                   assigneeName={
-                    seesAllConversations
+                    // Admin vê o responsável de todas; quem foi adicionado
+                    // vê de quem é a conversa compartilhada
+                    seesAllConversations || conversation.isParticipant
                       ? getAssigneeLabel(
                           conversation.assignedTo,
                           authUser?.id,
@@ -314,7 +331,10 @@ export const Inbox: React.FC = () => {
                       : undefined
                   }
                   connectionLabel={
-                    hasMultipleWhatsapp && conversation.channel === "whatsapp"
+                    conversation.channel === "whatsapp" &&
+                    (hasMultipleWhatsapp ||
+                      !!conversation.connectionRemoved ||
+                      contactsInSeveralNumbers.has(conversation.contactId ?? ""))
                       ? conversation.connectionLabel
                       : undefined
                   }

@@ -5,6 +5,8 @@ import { queueTranscription, runInBackground, storagePathFromPublicUrl } from ".
 import { getClinicMembership } from "../_shared/security.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
 import { parseSharedContact, sharedContactText, toEvolutionContact } from "../_shared/contactCard.ts";
+import { loadAgentSender, signText } from "../_shared/agentSignature.ts";
+import { isConversationParticipant } from "../_shared/conversationParticipants.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -143,13 +145,13 @@ serve(async (req)=>{
      * =========================================================
      * AUTORIZAÇÃO (mesma regra do send-whatsapp-message)
      * - precisa ser membro da clínica da conversa
-     * - conversa atribuída: só o responsável envia
+     * - conversa atribuída: só o responsável e os atendentes adicionados a ela
      * - sem responsável: só membros do departamento da conversa
      * =========================================================
      */ const membership = await getClinicMembership(adminSupabase, user.id, conversation.clinic_id);
     let allowed = !!membership;
     if (allowed && conversation.assigned_user_id) {
-      allowed = conversation.assigned_user_id === user.id;
+      allowed = conversation.assigned_user_id === user.id || await isConversationParticipant(adminSupabase, conversation.id, user.id);
     } else if (allowed) {
       const { data: deptMember } = await adminSupabase.from("department_members").select("department_id").eq("department_id", conversation.department_id).eq("clinic_user_id", user.id).maybeSingle();
       allowed = !!deptMember;
@@ -211,7 +213,8 @@ serve(async (req)=>{
     }
     if (connection.archived_at) {
       return new Response(JSON.stringify({
-        error: "O número de WhatsApp desta conversa foi removido da empresa."
+        error: "O número de WhatsApp desta conversa foi removido da empresa.",
+        code: "number_removed"
       }), {
         status: 400,
         headers: corsHeaders
@@ -292,6 +295,11 @@ serve(async (req)=>{
     // Não é necessário converter para ogg como na Meta API.
     // Bucket privado: a Evolution recebe um link assinado e temporário do arquivo
     const providerMediaUrl = mediaUrl ? await toProviderMediaUrl(adminSupabase, mediaUrl) : null;
+    // Nome do atendente na 1ª linha do texto/legenda (áudio e contato não têm onde)
+    const sender = await loadAgentSender(adminSupabase, user.id, conversation.clinic_id);
+    const outboundText = sender.sign ? signText(text ?? "", sender.name, {
+      bold: true
+    }) : text ?? "";
     if (sharedContact) {
       console.log("[EVOLUTION_SEND_CONTACT]", JSON.stringify({
         number,
@@ -364,7 +372,7 @@ serve(async (req)=>{
           number,
           mediatype: "image",
           media: providerMediaUrl,
-          caption: text ?? ""
+          caption: outboundText
         })
       });
       evolutionResponse = await resp.json().catch(()=>null);
@@ -394,7 +402,7 @@ serve(async (req)=>{
           number,
           mediatype: "document",
           media: providerMediaUrl,
-          caption: text ?? "",
+          caption: outboundText,
           fileName: fileName ?? `file-${Date.now()}`
         })
       });
@@ -422,7 +430,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
-          text
+          text: outboundText
         })
       });
       evolutionResponse = await resp.json().catch(()=>null);
@@ -457,7 +465,9 @@ serve(async (req)=>{
       filename: fileName ?? null,
       payload: evolutionResponse,
       sent_at: now,
-      created_at: now
+      created_at: now,
+      sender_user_id: user.id,
+      sender_name: sender.name
     };
     // A mensagem já saiu para o cliente: devolver erro aqui faria o atendente
     // reenviar e o cliente receber em dobro. Tenta gravar de novo e, se não

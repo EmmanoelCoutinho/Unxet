@@ -357,6 +357,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         }`}
       >
         <div className="flex min-w-0 flex-col">
+          {/* Quem respondeu (o cliente recebe o nome na 1ª linha da mensagem) */}
+          {!isClient && message.senderName && (
+            <span className="mb-0.5 self-end truncate px-1 text-[11px] font-medium text-gray-500">
+              {message.senderName}
+            </span>
+          )}
           <div
             className={`group/bubble relative ${canDelete ? "[@media(hover:none)]:select-none" : ""}`}
             onTouchStart={canDelete ? handleTouchStart : undefined}

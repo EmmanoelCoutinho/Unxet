@@ -74,6 +74,27 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
+  {
+    kind: "new",
+    text: "Mais de um atendente na mesma conversa: além de transferir, o responsável pode adicionar colegas (botão Atendentes na conversa). Quem for adicionado vê a conversa na aba Em atendimento, mesmo sendo de outro setor, recebe os avisos e responde junto. O responsável continua sendo quem transfere e finaliza.",
+  },
+  {
+    kind: "new",
+    text: "Nome do atendente nas mensagens: o cliente recebe o nome de quem respondeu na primeira linha (ex.: \"Maria:\" e, embaixo, a mensagem). No chat, o nome aparece acima de cada mensagem enviada. Dá para desligar em Automações de conversa.",
+  },
+  {
+    kind: "improved",
+    text: "Cliente que fala com mais de um número da empresa: o contato é um só e cada número tem a própria conversa. Agora cada conversa mostra por qual número chegou, o chat avisa quando o cliente também está falando pelo outro número (com atalho para abrir) e a ficha do cliente em Contatos lista as conversas de cada número.",
+  },
+  {
+    kind: "improved",
+    text: "Conversa de um número removido da empresa: agora aparece \"(removido)\" ao lado do número, o chat avisa que não é possível responder por ali e o campo de mensagem fica bloqueado. Quando uma mensagem não sai, o aviso diz o motivo (ex.: conversa com outro atendente, muitas mensagens seguidas) em vez de só \"Não foi possível enviar\".",
+  },
+  {
+    kind: "fixed",
+    text: "Empresas com mais de um número do WhatsApp oficial: a resposta e o bot sempre saem pelo número em que o cliente falou.",
+    adminOnly: true,
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

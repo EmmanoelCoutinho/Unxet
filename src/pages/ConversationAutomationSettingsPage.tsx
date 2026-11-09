@@ -24,6 +24,7 @@ type ConversationAutomationSettingsRow = {
   satisfaction_survey_message: string;
   satisfaction_survey_thanks_message: string | null;
   satisfaction_survey_window_minutes: number;
+  sign_agent_messages?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -40,6 +41,7 @@ type AutomationFormValues = {
   surveyMessage: string;
   surveyThanksMessage: string;
   surveyWindowHours: string;
+  signAgentMessages: boolean;
 };
 
 type AutomationFormErrors = {
@@ -66,6 +68,7 @@ const DEFAULT_SETTINGS: AutomationFormValues = {
     "Como você avalia o nosso atendimento? Responda com uma nota de 1 a 5, sendo 1 muito insatisfeito e 5 muito satisfeito.",
   surveyThanksMessage: "Obrigado pela sua avaliação!",
   surveyWindowHours: "24",
+  signAgentMessages: true,
 };
 
 const parsePositiveInteger = (value: string) => {
@@ -103,6 +106,7 @@ const mapRowToForm = (
     surveyWindowHours: row.satisfaction_survey_window_minutes
       ? Math.max(1, Math.round(row.satisfaction_survey_window_minutes / 60)).toString()
       : DEFAULT_SETTINGS.surveyWindowHours,
+    signAgentMessages: row.sign_agent_messages !== false,
   };
 };
 
@@ -328,6 +332,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
           values.surveyThanksMessage.trim() || null,
         satisfaction_survey_window_minutes:
           (parsePositiveInteger(values.surveyWindowHours) ?? 24) * 60,
+        sign_agent_messages: values.signAgentMessages,
         updated_at: new Date().toISOString(),
       };
 
@@ -493,6 +498,18 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
               }))
             }
             minutesError={formErrors.autoCloseAfterMinutes}
+          />
+
+          <AutomationCard
+            title="Nome do atendente nas mensagens"
+            description={'Ligado: o cliente recebe o nome de quem respondeu na primeira linha da mensagem (ex.: "Maria:" e, embaixo, o texto). Útil quando mais de um atendente responde a mesma conversa. No WhatsApp o nome vai em negrito.'}
+            enabled={formValues.signAgentMessages}
+            onEnabledChange={(value) =>
+              handleToggleChange({
+                signAgentMessages: value,
+              })
+            }
+            showMinutesInput={false}
           />
 
           <AutomationCard
