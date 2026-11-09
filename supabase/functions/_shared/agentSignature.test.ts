@@ -31,7 +31,7 @@ describe("agentSignature", () => {
 describe("signText", () => {
   it("nome na primeira linha e a mensagem embaixo", () => {
     expect(signText("Olá, tudo bem?", "Atendente 1", { bold: false })).toBe(
-      "Atendente 1:\nOlá, tudo bem?",
+      "Atendente 1:\n\nOlá, tudo bem?",
     );
     expect(signText("Olá", "Maria", { bold: true })).toBe("*Maria:*\nOlá");
   });

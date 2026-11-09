@@ -131,6 +131,9 @@ export const fetchOperationalReport = async (
       })),
     },
     satisfaction: {
+      scaleMin: num(raw.satisfaction?.scaleMin ?? 1),
+      scaleMax: num(raw.satisfaction?.scaleMax ?? 5),
+      lowCount: num(raw.satisfaction?.lowCount),
       distribution: (raw.satisfaction?.distribution ?? []).map((row: any) => ({
         score: num(row.score),
         count: num(row.count),
@@ -144,6 +147,8 @@ export const fetchOperationalReport = async (
       lowScores: (raw.satisfaction?.lowScores ?? []).map((row: any) => ({
         answeredAt: row.answeredAt,
         score: num(row.score),
+        scaleMin: num(row.scaleMin ?? 1),
+        scaleMax: num(row.scaleMax ?? 5),
         comment: row.comment ?? null,
         contact: row.contact,
         agent: row.agent,

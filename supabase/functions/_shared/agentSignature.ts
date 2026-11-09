@@ -6,7 +6,8 @@
  *   Olá, tudo bem?
  *
  * No WhatsApp o nome vai em negrito (*...*). Instagram e Messenger não têm
- * formatação, então lá vai sem os asteriscos. O texto guardado no banco fica
+ * formatação, então lá vai sem os asteriscos e com uma linha em branco entre
+ * o nome e a mensagem (sem o negrito, ficava tudo grudado). O texto guardado no banco fica
  * sem o nome (a tela mostra o nome acima do balão, por messages.sender_name).
  */
 
@@ -38,7 +39,7 @@ export function signText(text: unknown, name: unknown, opts: { bold: boolean }):
   const signature = agentSignature(name, opts);
   if (!signature) return body;
   if (!body.trim()) return signature;
-  return `${signature}\n${body}`;
+  return opts.bold ? `${signature}\n${body}` : `${signature}\n\n${body}`;
 }
 
 export type AgentSender = {

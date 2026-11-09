@@ -31,6 +31,14 @@ import {
   formatTrend,
   previousRange,
 } from "../format";
+import {
+  csatLabel,
+  formatAnsweredScore,
+  lowScoresLabel,
+  scaleLabel,
+  scoreColor,
+  type SurveyScale,
+} from "../surveyScale";
 import { buildHighlights } from "../insights";
 import { groupDailySeries } from "../series";
 import type {
@@ -520,13 +528,10 @@ const Heatmap = ({ cells }: { cells: OperationalReport["sla"]["heatmap"] }) => {
   );
 };
 
-const SCORE_COLORS: Record<number, string> = {
-  1: "#EF4444",
-  2: "#F97316",
-  3: "#F59E0B",
-  4: "#22C55E",
-  5: BRAND.green,
-};
+const surveyScaleOf = (report: OperationalReport): SurveyScale => ({
+  min: report.satisfaction.scaleMin,
+  max: report.satisfaction.scaleMax,
+});
 
 // --------------------------------------------------------------------------
 // Seções
@@ -595,8 +600,8 @@ const SummarySection = ({ report, previousLabel }: SectionProps) => {
           kpi("Dentro da meta de 1ª resposta", "withinSlaPct", formatPct),
           kpi("Tempo até finalizar (mediana)", "p50ResolutionSec", formatDuration, false),
           kpi("Sem resposta humana", "unansweredLeads", formatInt, false),
-          kpi("Nota média (1 a 5)", "averageScore", formatScore),
-          kpi("CSAT (notas 4 e 5)", "csatPct", formatPct),
+          kpi(`Nota média (${scaleLabel(surveyScaleOf(report))})`, "averageScore", formatScore),
+          kpi(csatLabel(surveyScaleOf(report)), "csatPct", formatPct),
         ]}
       />
 
@@ -793,17 +798,18 @@ const SatisfactionSection = ({ report }: { report: OperationalReport }) => {
   const p = report.summary.previous;
   const responseRate = c.surveysSent ? (c.surveysAnswered / c.surveysSent) * 100 : null;
   const agents = report.team.filter((row) => row.surveysAnswered > 0);
+  const scale = surveyScaleOf(report);
 
   return (
     <View>
       <SectionHeader
         title="Satisfação (CSAT)"
-        lead="Notas de 1 a 5 dadas pelos clientes na pesquisa enviada ao finalizar a conversa."
+        lead={`Notas de ${scaleLabel(scale)} dadas pelos clientes na pesquisa enviada ao finalizar a conversa.`}
       />
       <KpiGrid
         items={[
           { label: "Nota média", value: formatScore(c.averageScore), current: c.averageScore, previous: p.averageScore, previousLabel: formatScore(p.averageScore) },
-          { label: "CSAT (notas 4 e 5)", value: formatPct(c.csatPct), current: c.csatPct, previous: p.csatPct, previousLabel: formatPct(p.csatPct) },
+          { label: csatLabel(scale), value: formatPct(c.csatPct), current: c.csatPct, previous: p.csatPct, previousLabel: formatPct(p.csatPct) },
           { label: "Taxa de resposta", value: formatPct(responseRate), hint: `${formatInt(c.surveysAnswered)} de ${formatInt(c.surveysSent)} pesquisas` },
         ]}
       />
@@ -814,7 +820,7 @@ const SatisfactionSection = ({ report }: { report: OperationalReport }) => {
             rows={[...report.satisfaction.distribution].reverse().map((row) => ({
               label: `Nota ${row.score}`,
               value: row.count,
-              color: SCORE_COLORS[row.score],
+              color: scoreColor(row.score, scale),
             }))}
           />
         </View>
@@ -845,13 +851,13 @@ const SatisfactionSection = ({ report }: { report: OperationalReport }) => {
         />
       </View>
 
-      <Text style={s.subTitle}>Notas 1 e 2 (para investigar)</Text>
+      <Text style={s.subTitle}>{lowScoresLabel(scale)} (para investigar)</Text>
       <Table
         rows={report.satisfaction.lowScores}
-        emptyText="Nenhuma nota 1 ou 2 no período."
+        emptyText="Nenhuma nota baixa no período."
         columns={[
           { title: "Data", width: 1.4, render: (r) => formatDateTime(r.answeredAt) },
-          { title: "Nota", width: 0.6, align: "center", render: (r) => String(r.score), color: (r) => SCORE_COLORS[r.score] },
+          { title: "Nota", width: 0.6, align: "center", render: (r) => formatAnsweredScore(r.score, { min: r.scaleMin, max: r.scaleMax }, scale), color: (r) => scoreColor(r.score, { min: r.scaleMin, max: r.scaleMax }) },
           { title: "Contato", width: 1.6, render: (r) => r.contact },
           { title: "Atendente", width: 1.4, render: (r) => r.agent },
           { title: "Departamento", width: 1.4, render: (r) => r.department },

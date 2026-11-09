@@ -55,9 +55,13 @@ const getEventText = (event: ConversationEvent) => {
 
     case "satisfaction_survey_answered": {
       const score = meta.score;
-      return score
-        ? `Cliente avaliou o atendimento com nota ${score}`
-        : "Cliente respondeu a pesquisa de satisfação";
+      const scaleMax = meta.scale_max;
+      if (score === undefined || score === null) {
+        return "Cliente respondeu a pesquisa de satisfação";
+      }
+      return scaleMax
+        ? `Cliente avaliou o atendimento com nota ${score} de ${scaleMax}`
+        : `Cliente avaliou o atendimento com nota ${score}`;
     }
 
     case "reopened_automatically": {
