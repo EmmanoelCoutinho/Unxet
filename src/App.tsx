@@ -85,6 +85,7 @@ const QuickMessagesPage = lazy(() =>
     default: m.QuickMessagesPage,
   })),
 );
+const FileLibraryPage = lazy(() => import("./pages/FileLibraryPage"));
 const TutorialsPage = lazy(() => import("./pages/TutorialsPage"));
 const ReleaseNotesPage = lazy(() => import("./pages/ReleaseNotesPage"));
 const MetaTemplatesPage = lazy(() =>
@@ -294,6 +295,7 @@ function RoutedApp() {
             <Route path="departments" element={<AdminOnly><PlanGate feature="departments"><DepartmentsPage /></PlanGate></AdminOnly>} />
             <Route path="attendants" element={<AdminOnly><AttendantsPage /></AdminOnly>} />
             <Route path="quick-messages" element={<QuickMessagesPage />} />
+            <Route path="files" element={<FileLibraryPage />} />
             <Route path="tutorials" element={<TutorialsPage />} />
             {/* Sem item no menu: abre pelo aviso "sistema atualizado" do sino */}
             <Route path="novidades" element={<ReleaseNotesPage />} />

@@ -7,6 +7,7 @@ export type Permission =
   | "dashboard.view"
   | "quick_messages.manage"
   | "tags.manage"
+  | "file_library.manage"
   | "contacts.view"
   | "leads.all"
   | "campaigns.all"
@@ -48,6 +49,12 @@ export const PERMISSIONS: PermissionInfo[] = [
     group: "Atendimento",
     label: "Gerenciar etiquetas",
     description: "Cria, edita e apaga etiquetas. Sem isso, só aplica nas conversas.",
+  },
+  {
+    key: "file_library.manage",
+    group: "Atendimento",
+    label: "Gerenciar banco de arquivos",
+    description: "Adiciona, edita e apaga arquivos da biblioteca. Sem isso, só envia nas conversas.",
   },
   {
     key: "contacts.view",
