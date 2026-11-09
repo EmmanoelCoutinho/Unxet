@@ -45,6 +45,18 @@ export const mediaPathFromUrl = (url: unknown): string | null => {
 };
 
 /**
+ * O arquivo do nosso Storage está na pasta da empresa (<empresa>/...)? URLs de
+ * fora do nosso Storage não passam por aqui (retorna true).
+ * Usado antes de enviar: sem isso, um link de outra empresa seria assinado.
+ */
+export const isClinicMediaUrl = (url: string | null | undefined, clinicId: string): boolean => {
+  if (!url) return true;
+  const path = mediaPathFromUrl(url);
+  if (!path) return true;
+  return !!clinicId && path.startsWith(`${clinicId}/`);
+};
+
+/**
  * Link que o provedor (Meta/Evolution) consegue baixar. URLs de fora do nosso
  * Storage são devolvidas sem alteração.
  */

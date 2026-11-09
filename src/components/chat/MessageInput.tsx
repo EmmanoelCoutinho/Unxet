@@ -9,6 +9,7 @@ import {
   MicIcon,
   MessageSquareTextIcon,
   ContactIcon,
+  FolderOpenIcon,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button } from "../ui/Button";
@@ -26,6 +27,8 @@ import { compressImageFile } from "../../lib/imageUtils";
 import type { SharedContact } from "../../lib/sharedContact";
 import { ShareContactModal } from "./ShareContactModal";
 import { AttachmentTray, type PendingAttachment } from "./AttachmentTray";
+import { FileLibraryPicker } from "./FileLibraryPicker";
+import type { LibraryFile } from "../../services/fileLibrary";
 
 const MAX_AUDIO_FILE_BYTES = 16 * 1024 * 1024;
 // Limite de documento do WhatsApp
@@ -103,6 +106,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [showAttachments, setShowAttachments] = useState(false);
   const [showQuickMessages, setShowQuickMessages] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showFileLibrary, setShowFileLibrary] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -998,6 +1002,27 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
 
+  // Arquivo do Banco de arquivos: já está no Storage, vai direto (sem upload).
+  // Vídeo vai como documento, igual aos outros arquivos sem tipo próprio.
+  const sendLibraryFile = (file: LibraryFile) => {
+    if (disabled) return;
+    const extension = file.storagePath.split(".").pop()?.toLowerCase() ?? "";
+    const filename = extension ? `${file.name}.${extension}` : file.name;
+    if (file.kind === "image") {
+      onSend({ type: "image", mediaUrl: file.url, mediaMimeType: file.mimeType ?? undefined });
+    } else if (file.kind === "audio") {
+      onSend({ type: "audio", mediaUrl: file.url, mediaMimeType: file.mimeType ?? undefined });
+    } else {
+      onSend({
+        type: "document",
+        mediaUrl: file.url,
+        mediaMimeType: file.mimeType ?? undefined,
+        filename,
+        fileSize: file.fileSize ?? undefined,
+      });
+    }
+  };
+
   const handleDocumentChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -1148,6 +1173,23 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                   <span className="text-xs text-gray-500">Selecionar</span>
                 </button>
 
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (disabled) return;
+                    setShowAttachments(false);
+                    setShowFileLibrary(true);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-gray-100 transition-colors sm:py-2"
+                >
+                  <span className="flex items-center gap-2 text-gray-800">
+                    <FolderOpenIcon className="w-4 h-4" />
+                    Banco de arquivos
+                  </span>
+                  <span className="text-xs text-gray-500">Abrir</span>
+                </button>
+
                 {allowContacts && (
                   <button
                     type="button"
@@ -1294,6 +1336,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         onSelect={(selectedMessage) => {
           setMessage(selectedMessage);
         }}
+      />
+
+      <FileLibraryPicker
+        open={showFileLibrary && !disabled}
+        clinicId={clinicId}
+        onClose={() => setShowFileLibrary(false)}
+        onSelect={sendLibraryFile}
       />
 
       {allowContacts && (

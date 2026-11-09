@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { toProviderMediaUrl } from "../_shared/media.ts";
+import { isClinicMediaUrl, toProviderMediaUrl } from "../_shared/media.ts";
 import { queueTranscription, runInBackground, storagePathFromPublicUrl } from "../_shared/transcription.ts";
 import { getClinicMembership } from "../_shared/security.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
@@ -158,6 +158,10 @@ serve(async (req)=>{
     }
     // Empresa suspensa não envia (o app já fica travado; isto barra chamadas diretas)
     if (allowed && await clinicIsSuspended(adminSupabase, conversation.clinic_id)) {
+      allowed = false;
+    }
+    // Arquivo do nosso Storage: só da pasta da própria empresa
+    if (allowed && !isClinicMediaUrl(mediaUrl, conversation.clinic_id)) {
       allowed = false;
     }
     if (!allowed) {

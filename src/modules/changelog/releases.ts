@@ -74,6 +74,15 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
+  {
+    kind: "new",
+    text: "Banco de arquivos (menu Atendimento): guarde tabelas de preço, contratos, catálogos e outros arquivos da empresa, organizados em pastas, e envie numa conversa pelo + > Banco de arquivos, sem procurar no computador. Na aba Das conversas ficam todos os arquivos enviados e recebidos, com busca por cliente e atalho para abrir a conversa ou salvar o arquivo na biblioteca.",
+  },
+  {
+    kind: "new",
+    text: "Nova permissão nos cargos: Gerenciar banco de arquivos (adicionar, editar e apagar arquivos da biblioteca). Sem ela, a pessoa só envia os arquivos nas conversas.",
+    adminOnly: true,
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

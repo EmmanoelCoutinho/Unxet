@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { toProviderMediaUrl } from "../_shared/media.ts";
+import { isClinicMediaUrl, toProviderMediaUrl } from "../_shared/media.ts";
 import { queueTranscription, runInBackground, TRANSCRIPTION_BUCKET } from "../_shared/transcription.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
 import { parseSharedContact, sharedContactText, toMetaContact } from "../_shared/contactCard.ts";
@@ -402,6 +402,18 @@ serve(async (req)=>{
         error: "Conversa não encontrada"
       }), {
         status: 404,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+    }
+    // Arquivo do nosso Storage: só da pasta da própria empresa
+    if (!isClinicMediaUrl(mediaUrl, safeStr(conversation.clinic_id))) {
+      return new Response(JSON.stringify({
+        error: "Arquivo não encontrado"
+      }), {
+        status: 403,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json"
