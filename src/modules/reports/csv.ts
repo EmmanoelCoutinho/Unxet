@@ -7,6 +7,13 @@ import {
   formatPeriod,
 } from "./format";
 import type { ExportContext, OperationalReport, ReportType } from "./types";
+import {
+  csatLabel,
+  formatAnsweredScore,
+  lowScoresLabel,
+  scaleLabel,
+  type SurveyScale,
+} from "./surveyScale";
 
 type Cell = string | number | null | undefined;
 
@@ -53,6 +60,7 @@ export const buildReportCsv = (
   context: ExportContext,
 ) => {
   const { current, previous } = report.summary;
+  const scale: SurveyScale = { min: report.satisfaction.scaleMin, max: report.satisfaction.scaleMax };
   const lines: string[] = [
     line([`Unxet - ${REPORT_TYPE_LABEL[context.type]}`]),
     line(["Empresa", context.companyName]),
@@ -91,8 +99,8 @@ export const buildReportCsv = (
         kpi("Tempo mediano até finalizar (min)", current.p50ResolutionSec, previous.p50ResolutionSec, minutes),
         kpi("Pesquisas enviadas", current.surveysSent, previous.surveysSent),
         kpi("Pesquisas respondidas", current.surveysAnswered, previous.surveysAnswered),
-        kpi("Nota média (1 a 5)", current.averageScore, previous.averageScore, (v) => decimal(v, 2)),
-        kpi("CSAT - notas 4 e 5 (%)", current.csatPct, previous.csatPct, (v) => decimal(v)),
+        kpi(`Nota média (${scaleLabel(scale)})`, current.averageScore, previous.averageScore, (v) => decimal(v, 2)),
+        kpi(`${csatLabel(scale)} (%)`, current.csatPct, previous.csatPct, (v) => decimal(v)),
       ]),
       ...section(
         "Conversas por dia",
@@ -212,11 +220,11 @@ export const buildReportCsv = (
         report.satisfaction.byDepartment.map((row) => [row.label, row.answered, decimal(row.averageScore, 2)]),
       ),
       ...section(
-        "Notas 1 e 2",
+        lowScoresLabel(scale),
         ["Data", "Nota", "Contato", "Atendente", "Departamento", "Resposta do cliente"],
         report.satisfaction.lowScores.map((row) => [
           formatDateTime(row.answeredAt),
-          row.score,
+          formatAnsweredScore(row.score, { min: row.scaleMin, max: row.scaleMax }, scale),
           row.contact,
           row.agent,
           row.department,

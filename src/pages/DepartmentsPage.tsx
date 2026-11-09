@@ -26,10 +26,13 @@ type Department = {
   updated_at: string;
 };
 
-// Pesquisa de satisfação (notas de 1 a 5) respondida pelos clientes do setor
+// Pesquisa de satisfação respondida pelos clientes do setor. A média fica
+// na escala atual da empresa (avaliações antigas podem ter outra escala).
 type DepartmentRating = {
   average: number;
   answered: number;
+  scaleMin: number;
+  scaleMax: number;
 };
 
 const RATINGS_PAGE_SIZE = 1000;
@@ -37,11 +40,19 @@ const RATINGS_PAGE_SIZE = 1000;
 const fetchDepartmentRatings = async (clinicId: string) => {
   const totals = new Map<string, { sum: number; answered: number }>();
 
+  const { data: settings } = await supabase
+    .from("conversation_automation_settings")
+    .select("satisfaction_survey_scale_min, satisfaction_survey_scale_max")
+    .eq("clinic_id", clinicId)
+    .maybeSingle();
+  const scaleMin = Number(settings?.satisfaction_survey_scale_min ?? 1);
+  const scaleMax = Number(settings?.satisfaction_survey_scale_max ?? 5);
+
   // A API devolve no máximo 1000 linhas por chamada
   for (let from = 0; ; from += RATINGS_PAGE_SIZE) {
     const { data, error } = await supabase
       .from("satisfaction_surveys")
-      .select("department_id, score")
+      .select("department_id, score, scale_min, scale_max")
       .eq("clinic_id", clinicId)
       .eq("status", "answered")
       .not("department_id", "is", null)
@@ -53,7 +64,10 @@ const fetchDepartmentRatings = async (clinicId: string) => {
     for (const row of data ?? []) {
       if (!row.department_id || typeof row.score !== "number") continue;
       const total = totals.get(row.department_id) ?? { sum: 0, answered: 0 };
-      total.sum += row.score;
+      const rowMin = row.scale_min ?? 1;
+      const rowMax = row.scale_max ?? 5;
+      total.sum +=
+        scaleMin + ((row.score - rowMin) / (rowMax - rowMin)) * (scaleMax - scaleMin);
       total.answered += 1;
       totals.set(row.department_id, total);
     }
@@ -66,6 +80,8 @@ const fetchDepartmentRatings = async (clinicId: string) => {
     ratings[departmentId] = {
       average: total.sum / total.answered,
       answered: total.answered,
+      scaleMin,
+      scaleMax,
     };
   });
   return ratings;
@@ -726,7 +742,7 @@ export const DepartmentsPage: React.FC = () => {
                       <td className="block basis-full md:basis-auto md:table-cell md:px-6 md:py-4">
                         {rating ? (
                           <span
-                            title={`Média de ${rating.answered} ${rating.answered === 1 ? "avaliação" : "avaliações"} (notas de 1 a 5)`}
+                            title={`Média de ${rating.answered} ${rating.answered === 1 ? "avaliação" : "avaliações"} (notas de ${rating.scaleMin} a ${rating.scaleMax})`}
                             className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-slate-700"
                           >
                             <StarIcon className="h-4 w-4 fill-amber-400 text-amber-400" />

@@ -95,6 +95,15 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     text: "Empresas com mais de um número do WhatsApp oficial: a resposta e o bot sempre saem pelo número em que o cliente falou.",
     adminOnly: true,
   },
+  {
+    kind: "improved",
+    text: "Pesquisa de satisfação com a escala que você quiser: escolha a nota mínima e a máxima (por exemplo, de 1 a 5, de 1 a 10 ou de 0 a 10) em Automações de conversa. Os relatórios passam a usar a nova escala e convertem as avaliações antigas, então a média continua comparável.",
+    adminOnly: true,
+  },
+  {
+    kind: "improved",
+    text: "No chat, o nome de quem enviou cada mensagem agora aparece com uma cor própria para cada atendente e as iniciais ao lado do balão, facilitando ver quem respondeu quando há mais de um atendente na conversa.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
