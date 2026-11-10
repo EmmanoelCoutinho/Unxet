@@ -27,8 +27,7 @@ import { compressImageFile } from "../../lib/imageUtils";
 import type { SharedContact } from "../../lib/sharedContact";
 import { ShareContactModal } from "./ShareContactModal";
 import { AttachmentTray, type PendingAttachment } from "./AttachmentTray";
-import { FileLibraryPicker } from "./FileLibraryPicker";
-import type { LibraryFile } from "../../services/fileLibrary";
+import { FileLibraryPicker, type PickedFile } from "./FileLibraryPicker";
 
 const MAX_AUDIO_FILE_BYTES = 16 * 1024 * 1024;
 // Limite de documento do WhatsApp
@@ -1002,12 +1001,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
 
-  // Arquivo do Banco de arquivos: já está no Storage, vai direto (sem upload).
-  // Vídeo vai como documento, igual aos outros arquivos sem tipo próprio.
-  const sendLibraryFile = (file: LibraryFile) => {
+  // Arquivo do Banco de arquivos (biblioteca ou enviado antes): já está no
+  // Storage, vai direto (sem upload). Vídeo vai como documento, igual aos
+  // outros arquivos sem tipo próprio.
+  const sendLibraryFile = (file: PickedFile) => {
     if (disabled) return;
-    const extension = file.storagePath.split(".").pop()?.toLowerCase() ?? "";
-    const filename = extension ? `${file.name}.${extension}` : file.name;
     if (file.kind === "image") {
       onSend({ type: "image", mediaUrl: file.url, mediaMimeType: file.mimeType ?? undefined });
     } else if (file.kind === "audio") {
@@ -1017,7 +1015,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         type: "document",
         mediaUrl: file.url,
         mediaMimeType: file.mimeType ?? undefined,
-        filename,
+        filename: file.filename,
         fileSize: file.fileSize ?? undefined,
       });
     }
