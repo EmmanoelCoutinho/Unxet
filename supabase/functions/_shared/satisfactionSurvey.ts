@@ -49,12 +49,23 @@ export const parseSurveyScore = (
   const inScale = (n: number | undefined) =>
     n !== undefined && Number.isInteger(n) && n >= scaleMin && n <= scaleMax ? n : null;
 
-  const stars = (raw.match(/⭐|★/g) ?? []).length;
-  if (stars >= 1 && raw.replace(/⭐|★|\s/g, "") === "") {
+  // O celular costuma mandar emojis com caracteres invisíveis: "⭐️" é ⭐ + U+FE0F
+  // e "5️⃣" é 5 + U+FE0F + U+20E3. Sem limpar, a nota não era reconhecida e a
+  // mensagem reabria a conversa.
+  const cleaned = raw
+    .replace(/🔟/gu, "10")
+    .replace(/[︎️​-‍⁠⃣]/g, "");
+
+  const stars = (cleaned.match(/⭐|★|🌟/gu) ?? []).length;
+  if (stars >= 1 && cleaned.replace(/⭐|★|🌟|\s/gu, "") === "") {
     return inScale(stars);
   }
 
-  const text = raw
+  const text = cleaned
+    // negrito/itálico do WhatsApp: "*5*", "_5_"
+    .replace(/[*_~]/g, "")
+    // "Nota: 5", "nota - 5", "nota é 5"
+    .replace(/^(\s*nota)\s*(?::|-|=|[eé](?=\s))\s*/i, "$1 ")
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
@@ -255,7 +266,18 @@ export const matchSurveyAnswer = async (admin, params: {
     .select("id")
     .maybeSingle();
 
-  if (!updated) return null;
+  if (!updated) {
+    // Mesma resposta entregue duas vezes ao mesmo tempo (webhook repetido): a
+    // outra entrega já registrou a nota. Continua tratando como resposta da
+    // pesquisa para não reabrir a conversa, sem novo agradecimento.
+    const { data: current } = await admin
+      .from("satisfaction_surveys")
+      .select("status")
+      .eq("id", survey.id)
+      .maybeSingle();
+    if (current?.status !== "answered") return null;
+    return { surveyId: survey.id, conversationId: survey.conversation_id, score, duplicate: true };
+  }
 
   await admin.from("conversation_events").insert({
     conversation_id: survey.conversation_id,

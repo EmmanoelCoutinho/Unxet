@@ -1060,6 +1060,7 @@ serve(async (req)=>{
             channelConnectionId,
             text
           });
+          if (surveyAnswer?.duplicate) continue;
           if (surveyAnswer) {
             const { error: surveyMsgErr } = await supabase.from("messages").insert({
               conversation_id: surveyAnswer.conversationId,

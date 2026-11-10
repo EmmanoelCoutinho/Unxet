@@ -25,11 +25,18 @@ describe("parseSurveyScore (pesquisa de satisfação)", () => {
     ["⭐⭐⭐", 3],
     ["3.", 3],
     ["  2 ! ", 2],
+    // emojis e formatação que o celular manda
+    ["5️⃣", 5],
+    ["⭐️⭐️⭐️⭐️", 4],
+    ["🌟🌟🌟", 3],
+    ["*5*", 5],
+    ["Nota: 4", 4],
+    ["nota é 5", 5],
   ])("aceita %j como nota %i", (input, expected) => {
     expect(parseSurveyScore(input)).toBe(expected);
   });
 
-  it.each(["10", "0", "6", "5 consultas", "1 minuto", "obrigado", "nota dez", "4/10", "⭐⭐⭐⭐⭐⭐", "", null])(
+  it.each(["10", "0", "6", "5 consultas", "1 minuto", "obrigado", "nota dez", "4/10", "⭐⭐⭐⭐⭐⭐", "6️⃣", "5 obrigado", "", null])(
     "rejeita %j",
     (input) => {
       expect(parseSurveyScore(input)).toBeNull();
@@ -46,6 +53,8 @@ describe("parseSurveyScore (pesquisa de satisfação)", () => {
       ["8 de 10", 1, 10, 8],
       ["Sete.", 1, 10, 7],
       ["4/5", 1, 5, 4],
+      ["🔟", 0, 10, 10],
+      ["0️⃣", 0, 10, 0],
     ])("aceita %j em %i a %i como nota %i", (input, min, max, expected) => {
       expect(parseSurveyScore(input, min, max)).toBe(expected);
     });
