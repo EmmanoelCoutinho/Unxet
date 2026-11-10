@@ -5,13 +5,14 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 const SUPABASE_URL = "https://abc.supabase.co";
 
 let parseSurveyScore: (raw: unknown, scaleMin?: number, scaleMax?: number) => number | null;
+let isCourtesyReply: (raw: unknown) => boolean;
 let mediaPathFromUrl: (url: unknown) => string | null;
 
 beforeAll(async () => {
   vi.stubGlobal("Deno", {
     env: { get: (name: string) => (name === "SUPABASE_URL" ? SUPABASE_URL : "") },
   });
-  ({ parseSurveyScore } = await import("./satisfactionSurvey"));
+  ({ parseSurveyScore, isCourtesyReply } = await import("./satisfactionSurvey"));
   ({ mediaPathFromUrl } = await import("./media"));
 });
 
@@ -25,11 +26,23 @@ describe("parseSurveyScore (pesquisa de satisfação)", () => {
     ["⭐⭐⭐", 3],
     ["3.", 3],
     ["  2 ! ", 2],
+    ["5, obrigado!", 5],
+    ["Nota: 4", 4],
+    ["nota 5 😊", 5],
+    ["5️⃣", 5],
+    ["4 excelente atendimento", 4],
+    ["Obrigada pelo atendimento, nota 5", 5],
+    ["Minha nota é 5", 5],
+    ["⭐⭐⭐⭐⭐ obrigado", 5],
+    ["Dou 5 estrelas", 5],
   ])("aceita %j como nota %i", (input, expected) => {
     expect(parseSurveyScore(input)).toBe(expected);
   });
 
-  it.each(["10", "0", "6", "5 consultas", "1 minuto", "obrigado", "nota dez", "4/10", "⭐⭐⭐⭐⭐⭐", "", null])(
+  it.each([
+    "10", "0", "6", "5 consultas", "1 minuto", "obrigado", "nota dez", "4/10", "⭐⭐⭐⭐⭐⭐", "", null,
+    "obrigado, um ótimo dia", "5 ou 4?", "quero marcar 2 consultas", "3 e 4",
+  ])(
     "rejeita %j",
     (input) => {
       expect(parseSurveyScore(input)).toBeNull();
@@ -59,6 +72,23 @@ describe("parseSurveyScore (pesquisa de satisfação)", () => {
     ])("rejeita %j em %i a %i", (input, min, max) => {
       expect(parseSurveyScore(input, min, max)).toBeNull();
     });
+
+    it("aceita 🔟 em 0 a 10", () => {
+      expect(parseSurveyScore("🔟", 0, 10)).toBe(10);
+    });
+  });
+});
+
+describe("isCourtesyReply (agradecimento depois do encerramento)", () => {
+  it.each(["Obrigado!", "ok 👍", "🙏", "Muito obrigada pelo atendimento", "Valeu, tchau", "Bom dia"])(
+    "não reabre com %j",
+    (input) => {
+      expect(isCourtesyReply(input)).toBe(true);
+    },
+  );
+
+  it.each(["Quero remarcar", "obrigado, pode me ajudar?", "5", "", null])("trata %j como mensagem normal", (input) => {
+    expect(isCourtesyReply(input)).toBe(false);
   });
 });
 

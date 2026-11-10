@@ -33,6 +33,51 @@ const SCORE_PATTERN =
 const wordToNumber = (value: string): number | undefined =>
   /^\d+$/.test(value) ? Number(value) : SCORE_WORDS[value];
 
+// Palavras de agradecimento/elogio que o cliente costuma mandar junto com a
+// nota ("5, obrigado!") ou sozinhas depois do encerramento ("Obrigada 🙏").
+const COURTESY_WORDS = new Set([
+  "ok", "okay", "blz", "beleza", "certo", "certinho", "combinado", "entendi", "joia",
+  "obrigado", "obrigada", "obrigados", "obrigadas", "obg", "brigado", "brigada",
+  "grato", "grata", "gratidao", "valeu", "vlw", "tmj", "agradeco",
+  "tchau", "ate", "mais", "logo", "amem", "deus", "abencoe", "abraco", "abracos", "igualmente",
+  "top", "show", "legal", "perfeito", "perfeita", "otimo", "otima", "excelente",
+  "maravilha", "maravilhoso", "maravilhosa", "bom", "boa", "amei", "adorei", "gostei",
+  "parabens", "muito", "mto", "mt", "super", "tudo", "bem", "dia", "tarde", "noite",
+  "de", "nada", "pelo", "pela", "atendimento", "por", "voce", "vc", "voces", "vcs",
+  "a", "o", "e", "foi", "ta", "esta",
+]);
+
+// Palavras que só fazem sentido junto da nota ("minha nota é 5", "dou 5 estrelas")
+const SCORE_CONTEXT_WORDS = new Set([
+  "nota", "minha", "dou", "estrela", "estrelas", "ponto", "pontos",
+]);
+
+const normalizeAnswer = (raw: string) =>
+  raw
+    .replace(/🔟/g, " 10 ")
+    // emojis de número do teclado (5️⃣) viram o próprio dígito
+    .replace(/([0-9])️?⃣/g, " $1 ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim();
+
+const wordsOf = (text: string) => text.split(/[^a-z0-9]+/).filter(Boolean);
+
+const isCourtesyWord = (word: string) => COURTESY_WORDS.has(word) || /^(ok+|k{3,}|rs+)$/.test(word);
+
+/**
+ * Mensagem só de agradecimento, cumprimento ou emoji ("Obrigado!", "ok 👍",
+ * "🙏"). Enquanto a pesquisa espera a nota, ela fica na conversa encerrada,
+ * sem reabrir o atendimento.
+ */
+export const isCourtesyReply = (raw: unknown): boolean => {
+  if (typeof raw !== "string" || !raw.trim() || raw.includes("?")) return false;
+  const words = wordsOf(normalizeAnswer(raw));
+  if (words.length > 10) return false;
+  return words.every(isCourtesyWord);
+};
+
 /**
  * Interpreta a resposta do cliente como nota dentro da escala da pesquisa
  * (padrão 1 a 5). Aceita "5", "nota 4", "4 estrelas", "8/10", "8 de 10",
@@ -50,23 +95,35 @@ export const parseSurveyScore = (
     n !== undefined && Number.isInteger(n) && n >= scaleMin && n <= scaleMax ? n : null;
 
   const stars = (raw.match(/⭐|★/g) ?? []).length;
-  if (stars >= 1 && raw.replace(/⭐|★|\s/g, "") === "") {
+  const withoutStars = raw.replace(/⭐|★/g, " ");
+  if (stars >= 1 && (withoutStars.trim() === "" || isCourtesyReply(withoutStars))) {
     return inScale(stars);
   }
 
-  const text = raw
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .trim();
+  const text = normalizeAnswer(raw);
 
   const match = text.match(SCORE_PATTERN);
-  if (!match) return null;
+  if (match) {
+    // "8 de 10" só vale quando o 10 é o máximo da escala
+    if (match[2] !== undefined && wordToNumber(match[2]) !== scaleMax) return null;
+    return inScale(wordToNumber(match[1]));
+  }
 
-  // "8 de 10" só vale quando o 10 é o máximo da escala
-  if (match[2] !== undefined && wordToNumber(match[2]) !== scaleMax) return null;
+  // Nota acompanhada de agradecimento ou elogio: "5, obrigado!", "Nota: 10 👏",
+  // "5️⃣ excelente atendimento". Vale quando há um único número e todo o resto
+  // é cortesia; "5 consultas" ou "1 minuto" continuam fora. "um"/"uma" não
+  // contam como número aqui ("obrigado, um ótimo dia").
+  if (raw.includes("?")) return null;
+  const words = wordsOf(text);
+  if (words.length > 12) return null;
+  const numbers = words.filter(
+    (w) => /^\d{1,2}$/.test(w) || (w !== "um" && w !== "uma" && SCORE_WORDS[w] !== undefined),
+  );
+  if (numbers.length !== 1) return null;
+  const others = words.filter((w) => w !== numbers[0]);
+  if (!others.every((w) => isCourtesyWord(w) || SCORE_CONTEXT_WORDS.has(w))) return null;
 
-  return inScale(wordToNumber(match[1]));
+  return inScale(wordToNumber(numbers[0]));
 };
 
 export type SurveySettings = {
@@ -209,6 +266,9 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
  * Verifica se a mensagem recebida responde a uma pesquisa pendente.
  * - Nota válida: registra, envia agradecimento e retorna a pesquisa
  *   (o chamador grava a mensagem na conversa encerrada e NÃO a reabre).
+ * - Só agradecimento/emoji ("Obrigado!", "👍"): mantém a pesquisa pendente e
+ *   retorna a pesquisa com score null (o chamador grava na conversa encerrada
+ *   sem reabrir).
  * - Outro texto: marca a pesquisa como "skipped" e retorna null.
  */
 export const matchSurveyAnswer = async (admin, params: {
@@ -237,6 +297,10 @@ export const matchSurveyAnswer = async (admin, params: {
     survey.scale_max ?? DEFAULT_SCALE_MAX,
   );
   if (score === null) {
+    // "Obrigado!", "ok 👍": a pesquisa continua valendo e a conversa não reabre
+    if (isCourtesyReply(params.text)) {
+      return { surveyId: survey.id, conversationId: survey.conversation_id, score: null };
+    }
     await admin.from("satisfaction_surveys").update({ status: "skipped" }).eq("id", survey.id);
     return null;
   }
