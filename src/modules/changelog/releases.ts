@@ -78,6 +78,20 @@ export const NEXT_RELEASE: ReleaseChange[] = [
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    date: "2026-11-10",
+    changes: [
+      {
+        kind: "improved",
+        text: "Administradores podem alterar o nome de cada atendente em Atendentes > Editar. É esse nome que aparece no chat e nas mensagens enviadas ao cliente.",
+        adminOnly: true,
+      },
+      {
+        kind: "fixed",
+        text: "Pesquisa de satisfação: respostas como \"5, obrigado!\", \"Nota: 4\" ou \"5️⃣\" contam como nota, e um \"Obrigado!\" antes da nota não reabre mais a conversa encerrada.",
+      },
+    ],
+  },
+  {
     date: "2026-11-09",
     changes: [
       {
