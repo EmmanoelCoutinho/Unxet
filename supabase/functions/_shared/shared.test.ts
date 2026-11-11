@@ -6,13 +6,15 @@ const SUPABASE_URL = "https://abc.supabase.co";
 
 let parseSurveyScore: (raw: unknown, scaleMin?: number, scaleMax?: number) => number | null;
 let isCourtesyReply: (raw: unknown) => boolean;
+let isScoreAttempt: (raw: unknown) => boolean;
+let scaleFromMessage: (message: unknown) => { min: number; max: number } | null;
 let mediaPathFromUrl: (url: unknown) => string | null;
 
 beforeAll(async () => {
   vi.stubGlobal("Deno", {
     env: { get: (name: string) => (name === "SUPABASE_URL" ? SUPABASE_URL : "") },
   });
-  ({ parseSurveyScore, isCourtesyReply } = await import("./satisfactionSurvey"));
+  ({ parseSurveyScore, isCourtesyReply, isScoreAttempt, scaleFromMessage } = await import("./satisfactionSurvey"));
   ({ mediaPathFromUrl } = await import("./media"));
 });
 
@@ -76,6 +78,41 @@ describe("parseSurveyScore (pesquisa de satisfação)", () => {
     it("aceita 🔟 em 0 a 10", () => {
       expect(parseSurveyScore("🔟", 0, 10)).toBe(10);
     });
+  });
+});
+
+describe("scaleFromMessage (escala que a mensagem pede)", () => {
+  it.each([
+    ["Como você avalia o nosso atendimento? Responda com uma nota de 1 a 10, sendo 1 pouco satisfeito e 10 muito satisfeito.", 1, 10],
+    ["Dê uma nota de 0 a 10", 0, 10],
+    ["Avalie de 1 até 5 ⭐", 1, 5],
+    ["Nota 1-5, por favor", 1, 5],
+    ["Atendemos das 8 a 18h. De 1 a 5, como foi?", 1, 5],
+  ])("lê %j como %i a %i", (message, min, max) => {
+    expect(scaleFromMessage(message)).toEqual({ min, max });
+  });
+
+  it.each(["Como foi o atendimento?", "Atendemos das 8:00 a 10:00", "Nota de 5 a 1", "", null])(
+    "não acha escala em %j",
+    (message) => {
+      expect(scaleFromMessage(message)).toBeNull();
+    },
+  );
+
+  it("a nota 8 vale na escala da mensagem mesmo com a configurada em 1 a 5", () => {
+    const scale = scaleFromMessage("Responda com uma nota de 1 a 10");
+    expect(parseSurveyScore("8")).toBeNull();
+    expect(parseSurveyScore("8", scale!.min, scale!.max)).toBe(8);
+  });
+});
+
+describe("isScoreAttempt (nota fora da escala não reabre)", () => {
+  it.each(["8", "nota 9", "10", "8/10", "dez", "0"])("%j é tentativa de nota", (input) => {
+    expect(isScoreAttempt(input)).toBe(true);
+  });
+
+  it.each(["obrigado", "5 consultas", "15", "quero remarcar", "", null])("%j não é", (input) => {
+    expect(isScoreAttempt(input)).toBe(false);
   });
 });
 

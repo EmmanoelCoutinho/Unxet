@@ -78,6 +78,15 @@ export const NEXT_RELEASE: ReleaseChange[] = [
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    date: "2026-11-11",
+    changes: [
+      {
+        kind: "fixed",
+        text: "Pesquisa de satisfação: quando a mensagem pede uma nota (por exemplo, de 1 a 10) diferente da escala escolhida em Automações, vale a escala da mensagem. Antes a nota do cliente era recusada e a conversa encerrada reabria. Uma nota fora da escala também não reabre mais a conversa.",
+      },
+    ],
+  },
+  {
     date: "2026-11-10",
     changes: [
       {

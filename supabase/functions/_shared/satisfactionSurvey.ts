@@ -79,6 +79,35 @@ export const isCourtesyReply = (raw: unknown): boolean => {
 };
 
 /**
+ * Escala que o texto da pesquisa pede ao cliente ("nota de 1 a 10" -> 1 a 10).
+ * É o que o cliente lê, então vale mais que a escala configurada quando as
+ * duas divergem (mensagem escrita à mão com "1 a 10" e escala ainda em 1 a 5).
+ * Retorna null se o texto não cita uma escala válida (0 a 10, mínima < máxima).
+ */
+export const scaleFromMessage = (message: unknown): { min: number; max: number } | null => {
+  if (typeof message !== "string") return null;
+  const ranges = normalizeAnswer(message).matchAll(/(?<![\d:,.h])(\d{1,2})\s*(?:a|ate|ao|-|–)\s*(\d{1,2})(?![\d:h])/g);
+  for (const range of ranges) {
+    const min = Number(range[1]);
+    const max = Number(range[2]);
+    if (min >= 0 && max <= 10 && min < max) return { min, max };
+  }
+  return null;
+};
+
+/**
+ * Resposta que é só uma nota ("8", "nota 8", "8/10"), ainda que fora da
+ * escala. Não é pedido de atendimento: não reabre a conversa.
+ */
+export const isScoreAttempt = (raw: unknown): boolean => {
+  if (typeof raw !== "string") return false;
+  const match = normalizeAnswer(raw).match(SCORE_PATTERN);
+  if (!match) return false;
+  const value = wordToNumber(match[1]);
+  return value !== undefined && value >= 0 && value <= 10;
+};
+
+/**
  * Interpreta a resposta do cliente como nota dentro da escala da pesquisa
  * (padrão 1 a 5). Aceita "5", "nota 4", "4 estrelas", "8/10", "8 de 10",
  * "cinco", "⭐⭐⭐". Nota fora da escala ou qualquer outro texto retorna null
@@ -230,6 +259,11 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
       text: settings.satisfaction_survey_message,
     });
 
+    // A escala que vale é a que o cliente lê na mensagem
+    const messageScale = scaleFromMessage(settings.satisfaction_survey_message);
+    const scaleMin = messageScale?.min ?? settings.satisfaction_survey_scale_min ?? DEFAULT_SCALE_MIN;
+    const scaleMax = messageScale?.max ?? settings.satisfaction_survey_scale_max ?? DEFAULT_SCALE_MAX;
+
     const now = new Date();
     const expiresAt = new Date(now.getTime() + settings.satisfaction_survey_window_minutes * 60_000);
 
@@ -241,8 +275,8 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
       channel: conversation.channel,
       agent_user_id: conversation.assigned_user_id,
       department_id: conversation.department_id,
-      scale_min: settings.satisfaction_survey_scale_min ?? DEFAULT_SCALE_MIN,
-      scale_max: settings.satisfaction_survey_scale_max ?? DEFAULT_SCALE_MAX,
+      scale_min: scaleMin,
+      scale_max: scaleMax,
       status: sendError ? "failed" : "sent",
       error: sendError,
       sent_at: now.toISOString(),
@@ -266,9 +300,11 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
  * Verifica se a mensagem recebida responde a uma pesquisa pendente.
  * - Nota válida: registra, envia agradecimento e retorna a pesquisa
  *   (o chamador grava a mensagem na conversa encerrada e NÃO a reabre).
- * - Só agradecimento/emoji ("Obrigado!", "👍"): mantém a pesquisa pendente e
- *   retorna a pesquisa com score null (o chamador grava na conversa encerrada
- *   sem reabrir).
+ * - Nota dentro da escala que a mensagem da pesquisa pede, mesmo que a
+ *   escala gravada seja outra: registra e corrige a escala da pesquisa.
+ * - Só agradecimento/emoji ("Obrigado!", "👍") ou nota fora da escala ("8" em
+ *   1 a 5): mantém a pesquisa pendente e retorna a pesquisa com score null (o
+ *   chamador grava na conversa encerrada sem reabrir).
  * - Outro texto: marca a pesquisa como "skipped" e retorna null.
  */
 export const matchSurveyAnswer = async (admin, params: {
@@ -291,14 +327,29 @@ export const matchSurveyAnswer = async (admin, params: {
 
   if (error || !survey) return null;
 
-  const score = parseSurveyScore(
-    params.text,
-    survey.scale_min ?? DEFAULT_SCALE_MIN,
-    survey.scale_max ?? DEFAULT_SCALE_MAX,
-  );
+  let scaleMin = survey.scale_min ?? DEFAULT_SCALE_MIN;
+  let scaleMax = survey.scale_max ?? DEFAULT_SCALE_MAX;
+  let score = parseSurveyScore(params.text, scaleMin, scaleMax);
+  let settings: SurveySettings | null | undefined;
+
   if (score === null) {
-    // "Obrigado!", "ok 👍": a pesquisa continua valendo e a conversa não reabre
-    if (isCourtesyReply(params.text)) {
+    // A mensagem enviada pede outra escala ("nota de 1 a 10" com a escala
+    // gravada em 1 a 5): vale a escala que o cliente leu.
+    settings = await getSurveySettings(admin, params.clinicId);
+    const messageScale = scaleFromMessage(settings?.satisfaction_survey_message);
+    if (messageScale && (messageScale.min !== scaleMin || messageScale.max !== scaleMax)) {
+      score = parseSurveyScore(params.text, messageScale.min, messageScale.max);
+      if (score !== null) {
+        scaleMin = messageScale.min;
+        scaleMax = messageScale.max;
+      }
+    }
+  }
+
+  if (score === null) {
+    // "Obrigado!", "ok 👍" ou nota fora da escala: a pesquisa continua valendo
+    // e a conversa não reabre
+    if (isCourtesyReply(params.text) || isScoreAttempt(params.text)) {
       return { surveyId: survey.id, conversationId: survey.conversation_id, score: null };
     }
     await admin.from("satisfaction_surveys").update({ status: "skipped" }).eq("id", survey.id);
@@ -311,6 +362,8 @@ export const matchSurveyAnswer = async (admin, params: {
     .update({
       status: "answered",
       score,
+      scale_min: scaleMin,
+      scale_max: scaleMax,
       raw_answer: String(params.text).slice(0, 500),
       answered_at: new Date().toISOString(),
     })
@@ -325,10 +378,10 @@ export const matchSurveyAnswer = async (admin, params: {
     conversation_id: survey.conversation_id,
     event_type: "satisfaction_survey_answered",
     performed_by: null,
-    metadata: { score, scale_min: survey.scale_min, scale_max: survey.scale_max },
+    metadata: { score, scale_min: scaleMin, scale_max: scaleMax },
   });
 
-  const settings = await getSurveySettings(admin, params.clinicId);
+  if (settings === undefined) settings = await getSurveySettings(admin, params.clinicId);
   const thanks = settings?.satisfaction_survey_thanks_message?.trim();
   if (thanks) {
     await sendAutomatedText({
