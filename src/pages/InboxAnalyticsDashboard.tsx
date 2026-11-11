@@ -17,7 +17,13 @@ import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
-import { fetchBacklog, type BacklogResult } from "../services/inboxAnalytics";
+import {
+  fetchBacklog,
+  fetchTodayConversations,
+  type BacklogResult,
+  type TodayConversationsResult,
+} from "../services/inboxAnalytics";
+import { TodayConversations } from "../components/dashboard/TodayConversations";
 import { fetchOperationalNow } from "../modules/reports/api";
 import {
   channelLabel,
@@ -366,6 +372,18 @@ export const InboxAnalyticsDashboard: React.FC = () => {
       }),
   });
 
+  const todayConversations = useQuery<TodayConversationsResult>({
+    queryKey: ["dashboard-today-conversations", filterKey],
+    enabled: !!clinicId,
+    refetchInterval: REFRESH_MS,
+    queryFn: () =>
+      fetchTodayConversations({
+        clinicId: clinicId!,
+        channels,
+        departmentId: departmentId || undefined,
+      }),
+  });
+
   useEffect(() => setPage(1), [channels, departmentId]);
 
   const backlogData = backlog.data ?? EMPTY_BACKLOG;
@@ -389,12 +407,13 @@ export const InboxAnalyticsDashboard: React.FC = () => {
   const refresh = () => {
     live.refetch();
     backlog.refetch();
+    todayConversations.refetch();
   };
 
   const data = live.data;
   const oldestWaiting = data ? secondsSince(data.now.oldestWaitingAt, nowMs) : null;
   const currentHour = new Date(nowMs).getHours();
-  const refreshing = live.isFetching || backlog.isFetching;
+  const refreshing = live.isFetching || backlog.isFetching || todayConversations.isFetching;
 
   return (
     <div className="h-full overflow-y-auto bg-slate-50 p-3 sm:p-6">
@@ -666,6 +685,14 @@ export const InboxAnalyticsDashboard: React.FC = () => {
             />
           ) : null}
         </section>
+
+        <TodayConversations
+          data={todayConversations.data}
+          loading={todayConversations.isLoading}
+          error={todayConversations.isError}
+          channelLabel={channelLabel}
+          onOpen={(item) => openConversation(item.conversationId, { title: item.contact })}
+        />
       </div>
     </div>
   );

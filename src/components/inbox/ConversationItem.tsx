@@ -10,10 +10,13 @@ import {
 import { Conversation } from "../../types";
 import { CustomTooltip } from "../ui/CustomTooltip";
 import { SecureImage } from "../ui/SecureImage";
+import { departmentLabel } from "../../hooks/useDepartmentNames";
 interface ConversationItemProps {
   conversation: Conversation;
   // Responsável pela conversa (exibido só para admin)
   assigneeName?: string;
+  // Departamento da conversa (só quando a empresa tem mais de um)
+  departmentName?: string;
   // Número da empresa por onde a conversa acontece (só com mais de um)
   connectionLabel?: string;
   onClick: () => void;
@@ -23,6 +26,7 @@ type Channel = "whatsapp" | "instagram" | "messenger";
 export const ConversationItem: React.FC<ConversationItemProps> = ({
   conversation,
   assigneeName,
+  departmentName,
   connectionLabel,
   onClick,
 }) => {
@@ -135,13 +139,20 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
           <p className="text-sm text-gray-600 truncate mb-2">
             {renderLastMessage()}
           </p>
-          {assigneeName && (
+          {(assigneeName || departmentName) && (
             <p
-              title={`Responsável: ${assigneeName}`}
+              title={[
+                assigneeName ? `Responsável: ${assigneeName}` : "",
+                departmentName ? `Departamento: ${departmentName}` : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
               className="mb-2 flex min-w-0 items-center gap-1 text-xs text-gray-500"
             >
               <UserIcon className="h-3.5 w-3.5 flex-shrink-0" />
-              <span className="truncate">{assigneeName}</span>
+              <span className="truncate">
+                {[assigneeName, departmentLabel(departmentName)].filter(Boolean).join(" - ")}
+              </span>
             </p>
           )}
           <div className="flex items-center gap-2 min-w-0 relative pr-10">

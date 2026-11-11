@@ -74,6 +74,14 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
+  {
+    kind: "new",
+    text: "Painel: nova lista Atendimentos de hoje, com todas as conversas que tiveram movimento no dia. Cada card mostra o departamento, a situação (em atendimento, na fila, no bot ou finalizada) e o responsável, e clicar abre a conversa. Dá para filtrar por situação.",
+  },
+  {
+    kind: "improved",
+    text: "Lista de conversas: o card agora mostra também o departamento, ao lado do responsável (ex.: Você - Dep. Fiscal), quando a empresa tem mais de um departamento.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

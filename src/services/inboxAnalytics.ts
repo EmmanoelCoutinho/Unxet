@@ -86,3 +86,61 @@ export const fetchBacklog = async (
     })),
   };
 };
+
+export type TodayConversation = {
+  conversationId: string;
+  contact: string;
+  channel: string;
+  department: string;
+  assignedTo: string;
+  status: "open" | "pending" | "closed";
+  inBotFlow: boolean;
+  lastActivityAt: string;
+};
+
+export type TodayConversationsResult = {
+  items: TodayConversation[];
+  // Total de conversas com movimento hoje (a lista traz no máximo 500)
+  total: number;
+};
+
+const browserTimeZone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Conversas com movimento desde a meia-noite (mensagem, criação ou
+ * finalização), da mais recente para a mais antiga.
+ */
+export const fetchTodayConversations = async (
+  filters: Pick<BacklogFilters, "clinicId" | "channels" | "departmentId">,
+): Promise<TodayConversationsResult> => {
+  const timeZone = browserTimeZone();
+  const { data, error } = await supabase.rpc("inbox_today_conversations", {
+    p_clinic_id: filters.clinicId,
+    p_channels: filters.channels?.length ? filters.channels : null,
+    p_department_id: filters.departmentId ?? null,
+    ...(timeZone ? { p_timezone: timeZone } : {}),
+  });
+
+  if (error) throw toError(error, "Falha ao buscar os atendimentos de hoje.");
+
+  const rows = (data ?? []) as any[];
+  return {
+    total: Number(rows[0]?.total_count ?? 0),
+    items: rows.map((row) => ({
+      conversationId: row.conversation_id,
+      contact: row.contact,
+      channel: row.channel ?? "unknown",
+      department: row.department,
+      assignedTo: row.assigned_to,
+      status: row.status === "open" || row.status === "closed" ? row.status : "pending",
+      inBotFlow: row.in_bot_flow === true,
+      lastActivityAt: row.last_activity_at,
+    })),
+  };
+};
