@@ -11,6 +11,7 @@ import {
   MessageCircleIcon,
   TagIcon,
   MoreVerticalIcon,
+  PaperclipIcon,
   PictureInPicture2Icon,
   UserIcon,
   UsersIcon,
@@ -34,6 +35,8 @@ interface ChatHeaderProps {
   // Atendentes adicionados à conversa (além do responsável)
   participantNames?: string[];
   onManageParticipants?: () => void;
+  // Arquivos enviados e recebidos com o cliente
+  onOpenFiles?: () => void;
   onAccept?: () => Promise<void> | void;
   onTransfer?: () => void;
   onSearch?: () => void;
@@ -69,6 +72,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onManageTags,
   participantNames = [],
   onManageParticipants,
+  onOpenFiles,
   onAccept,
   onTransfer,
   onSearch,
@@ -182,9 +186,20 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       ]
     : [];
 
+  const filesItem = onOpenFiles
+    ? [
+        {
+          label: "Arquivos da conversa",
+          icon: <PaperclipIcon className="h-4 w-4" />,
+          onSelect: () => onOpenFiles(),
+        },
+      ]
+    : [];
+
   // No celular as ações secundárias vão para o menu "mais"
   const dropdownItems = [
     ...(isMobile ? participantsItem : []),
+    ...(isMobile ? filesItem : []),
     ...(isMobile && onTransfer
       ? [
           {
@@ -220,6 +235,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     const [firstTag, ...otherTags] = visibleTags;
     const compactItems = [
       ...participantsItem,
+      ...filesItem,
       ...(onTransfer
         ? [
             {
@@ -531,6 +547,19 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                     aria-label="Atendentes na conversa"
                   >
                     <UsersIcon className="h-5 w-5 text-blue-600" />
+                  </Button>
+                </CustomTooltip>
+              )}
+
+              {onOpenFiles && (
+                <CustomTooltip text="Arquivos da conversa">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onOpenFiles}
+                    aria-label="Arquivos da conversa"
+                  >
+                    <PaperclipIcon className="h-5 w-5 text-blue-600" />
                   </Button>
                 </CustomTooltip>
               )}

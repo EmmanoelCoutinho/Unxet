@@ -16,10 +16,14 @@ type DbContactRow = {
   name: string;
   phone: string;
   image_url: string | null;
+  email?: string | null;
   last_seen_at: string | null;
   first_seen_at: string | null;
   created_at: string;
 };
+
+const CONTACT_COLUMNS =
+  "id, clinic_id, name, phone, image_url, last_seen_at, first_seen_at, created_at";
 
 type ConversationContactSummaryRow = {
   contact_id: string;
@@ -131,7 +135,7 @@ const mapDbContact = (
     tenant_id: row.clinic_id,
     name: row.name,
     phone: row.phone,
-    email: null,
+    email: row.email ?? null,
     avatar_url: row.image_url,
     channel: mapConversationChannel(conversation?.channel),
     status: mapConversationStatus(conversation?.status),
@@ -164,24 +168,29 @@ export const listContacts = async (
 ): Promise<ContactListResult> => {
   if (!tenantId) return { contacts: [], total: 0 };
 
-  let query = supabase
-    .from("contacts")
-    .select(
-      "id, clinic_id, name, phone, image_url, last_seen_at, first_seen_at, created_at",
-    )
-    .eq("clinic_id", tenantId)
-    .order("last_seen_at", { ascending: false, nullsFirst: false });
-
   const search = sanitizeSearch(filters.search);
-  if (search) {
-    query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
-  }
+  const run = (withEmail: boolean) => {
+    let query = supabase
+      .from("contacts")
+      .select(withEmail ? `${CONTACT_COLUMNS}, email` : CONTACT_COLUMNS)
+      .eq("clinic_id", tenantId)
+      .order("last_seen_at", { ascending: false, nullsFirst: false });
+    if (search) {
+      const fields = withEmail ? ["name", "phone", "email"] : ["name", "phone"];
+      query = query.or(fields.map((field) => `${field}.ilike.%${search}%`).join(","));
+    }
+    return query;
+  };
 
-  const { data, error } = await query;
+  let { data, error } = await run(true);
+  // Banco ainda sem a coluna email (migration 20261114200000): segue sem ela
+  if (error?.code === "42703") {
+    ({ data, error } = await run(false));
+  }
 
   if (error) throw error;
 
-  const rows = (data ?? []) as DbContactRow[];
+  const rows = (data ?? []) as unknown as DbContactRow[];
   const summaries = await loadConversationSummaries(
     tenantId,
     rows.map((row) => row.id),
@@ -279,6 +288,29 @@ export const createContactNote = async (
   const userNames = await loadUserNames([input.userId]);
 
   return mapNote(data as ContactNoteRow, userNames);
+};
+
+export type UpdateContactInput = {
+  contactId: string;
+  name: string;
+  phone: string;
+  email: string;
+};
+
+// contact_update (migration 20261114200000): o app não escreve direto em contacts
+export const updateContact = async (input: UpdateContactInput) => {
+  const { error } = await supabase.rpc("contact_update", {
+    p_contact_id: input.contactId,
+    p_name: input.name.trim(),
+    p_phone: input.phone,
+    p_email: input.email.trim(),
+  });
+  if (error) {
+    if (error.code === "PGRST202") {
+      throw new Error("A edição de clientes ainda não está disponível. Tente de novo em alguns minutos.");
+    }
+    throw new Error(error.message || "Não foi possível salvar o cliente.");
+  }
 };
 
 export const deleteContactNote = async (

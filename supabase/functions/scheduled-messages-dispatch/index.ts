@@ -10,7 +10,8 @@
  * número de WhatsApp escolhido na campanha, um de cada vez e com uma pausa
  * longa e aleatória entre eles. Empresas diferentes são processadas em paralelo.
  *
- * QR Code (Evolution): texto livre. WhatsApp oficial (Meta): o modelo aprovado
+ * QR Code (Evolution): texto livre, com um anexo opcional (foto, vídeo, áudio
+ * ou documento; o texto vira legenda). WhatsApp oficial (Meta): o modelo aprovado
  * da campanha (scheduled_messages.template_id), com o nome do cliente como
  * parâmetro; a Meta não deixa puxar conversa com texto livre.
  *
@@ -29,6 +30,7 @@ import { clinicIsSuspended } from "../_shared/plan.ts";
 import { describeProviderError, renderScheduledText, sendDelayMs } from "../_shared/scheduledMessages.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
 import { buildTemplateMessage, describeTemplateSendError, renderTemplateText } from "../_shared/metaTemplates.ts";
+import { isClinicMediaUrl, toProviderMediaUrl } from "../_shared/media.ts";
 // META_GRAPH_URL só no ambiente local (simulador da Meta); sem ela, a Graph API real
 const GRAPH = (Deno.env.get("META_GRAPH_URL") || "https://graph.facebook.com/v21.0").replace(/\/$/, "");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -42,6 +44,14 @@ const START_JITTER_MAX_MS = 8000;
 const SEND_DELAY_MIN_MS = 22000;
 const SEND_DELAY_MAX_MS = 32000;
 const REQUEST_TIMEOUT_MS = 20000;
+// Com anexo a Evolution baixa o arquivo antes de responder
+const MEDIA_REQUEST_TIMEOUT_MS = 60000;
+const MEDIA_KINDS = new Set([
+  "image",
+  "audio",
+  "video",
+  "document"
+]);
 const sleep = (ms)=>new Promise((resolve)=>setTimeout(resolve, ms));
 const onlyDigits = (value)=>String(value ?? "").replace(/\D/g, "");
 // Números reais têm 10-13 dígitos; acima disso é LID do WhatsApp (mesma regra
@@ -186,7 +196,7 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
   return created;
 }
 /** Grava a mensagem já enviada na conversa do cliente. Retorna os ids da conversa e da mensagem. */ async function recordSentMessage(supabase, params) {
-  const { recipient, connection, number, text, providerResponse, template } = params;
+  const { recipient, connection, number, text, providerResponse, template, media } = params;
   const isMeta = connection.provider === "meta";
   const sentAt = new Date().toISOString();
   const contact = await findOrCreateContact(supabase, recipient.clinic_id, recipient, number);
@@ -202,7 +212,12 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
   const { data: savedMessage, error: msgErr } = await supabase.from("messages").insert({
     conversation_id: conversation.id,
     direction: "outbound",
-    type: "text",
+    type: media?.kind ?? "text",
+    ...media ? {
+      media_url: media.url,
+      media_mime_type: media.mimeType,
+      filename: media.filename
+    } : {},
     // ID da mensagem no WhatsApp (necessário para apagar e para os status de entrega)
     meta_message_id: (isMeta ? providerResponse?.messages?.[0]?.id : providerResponse?.key?.id) ?? null,
     sender: connection.session,
@@ -283,7 +298,114 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
     };
   }
 }
-/** Envia para um destinatário. Retorna o que gravar na linha dele. */ async function sendToRecipient(supabase, connection, recipient, template) {
+/**
+ * Manda pela Evolution: só texto, ou o anexo com o texto de legenda. Áudio vai
+ * sem legenda e o texto (se houver) sai logo depois, numa mensagem separada.
+ * Retorna { failure } ou { providerResponse, textAfterAudio?, partialError? }.
+ */ async function sendEvolution(supabase, connection, recipient, number, text, media) {
+  const post = async (route, body)=>{
+    const resp = await fetch(`${connection.baseUrl}/message/${route}/${connection.session}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: connection.apiKey
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(route === "sendText" ? REQUEST_TIMEOUT_MS : MEDIA_REQUEST_TIMEOUT_MS)
+    });
+    const json = await resp.json().catch(()=>null);
+    return {
+      ok: resp.ok,
+      status: resp.status,
+      json
+    };
+  };
+  try {
+    if (!media) {
+      const resp = await post("sendText", {
+        number,
+        text
+      });
+      if (!resp.ok) {
+        console.error("[SCHEDULED_SEND_REJECTED]", {
+          recipientId: recipient.recipient_id,
+          status: resp.status
+        });
+        return {
+          failure: describeProviderError(resp.status, resp.json)
+        };
+      }
+      return {
+        providerResponse: resp.json
+      };
+    }
+    let mediaLink;
+    try {
+      mediaLink = await toProviderMediaUrl(supabase, media.url);
+    } catch  {
+      return {
+        failure: "Não foi possível preparar o arquivo para envio. Tente de novo."
+      };
+    }
+    const resp = media.kind === "audio" ? await post("sendWhatsAppAudio", {
+      number,
+      audio: mediaLink,
+      encoding: true
+    }) : await post("sendMedia", {
+      number,
+      mediatype: media.kind,
+      media: mediaLink,
+      ...media.mimeType ? {
+        mimetype: media.mimeType
+      } : {},
+      caption: text,
+      ...media.kind === "document" ? {
+        fileName: media.filename || "arquivo"
+      } : {}
+    });
+    if (!resp.ok) {
+      console.error("[SCHEDULED_MEDIA_REJECTED]", {
+        recipientId: recipient.recipient_id,
+        kind: media.kind,
+        status: resp.status
+      });
+      return {
+        failure: describeProviderError(resp.status, resp.json)
+      };
+    }
+    if (media.kind !== "audio" || !text) return {
+      providerResponse: resp.json
+    };
+    // O áudio já saiu: se o texto falhar, não marca como "falhou" (reenviar
+    // mandaria o áudio de novo)
+    await sleep(1500);
+    try {
+      const textResp = await post("sendText", {
+        number,
+        text
+      });
+      if (textResp.ok) return {
+        providerResponse: resp.json,
+        textAfterAudio: textResp.json
+      };
+    } catch  {
+    // segue para o aviso abaixo
+    }
+    return {
+      providerResponse: resp.json,
+      partialError: "O áudio foi enviado, mas o texto não. Confira a conversa."
+    };
+  } catch (err) {
+    console.error("[SCHEDULED_SEND_ERROR]", {
+      recipientId: recipient.recipient_id,
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return {
+      failure: "O WhatsApp não respondeu a tempo. Confira a conversa antes de enviar de novo."
+    };
+  }
+}
+/** Envia para um destinatário. Retorna o que gravar na linha dele. */ async function sendToRecipient(supabase, connection, recipient, template, media) {
   const isMeta = connection.provider === "meta";
   // A Meta recebe o número como está; o QR Code pode precisar trocar o LID pelo telefone
   const number = isMeta ? onlyDigits(recipient.phone) : await resolvePhoneNumber(connection, onlyDigits(recipient.phone));
@@ -295,6 +417,9 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
   }
   let text = renderScheduledText(recipient.message, recipient.name);
   let providerResponse = null;
+  // Áudio não tem legenda: o texto sai numa segunda mensagem
+  let textAfterAudio = null;
+  let partialError = null;
   if (isMeta) {
     if (!template) {
       return {
@@ -310,54 +435,42 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
     text = sent.text;
     providerResponse = sent.providerResponse;
   } else {
-    try {
-    const resp = await fetch(`${connection.baseUrl}/message/sendText/${connection.session}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: connection.apiKey
-      },
-      body: JSON.stringify({
-        number,
-        text
-      }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-    });
-    providerResponse = await resp.json().catch(()=>null);
-    if (!resp.ok) {
-      console.error("[SCHEDULED_SEND_REJECTED]", {
-        recipientId: recipient.recipient_id,
-        status: resp.status
-      });
-      return {
-        status: "failed",
-        error: describeProviderError(resp.status, providerResponse)
-      };
-    }
-  } catch (err) {
-    console.error("[SCHEDULED_SEND_ERROR]", {
-      recipientId: recipient.recipient_id,
-      error: err instanceof Error ? err.message : String(err)
-    });
-    return {
+    const sent = await sendEvolution(supabase, connection, recipient, number, text, media);
+    if (sent.failure) return {
       status: "failed",
-      error: "O WhatsApp não respondeu a tempo. Confira a conversa antes de enviar de novo."
+      error: sent.failure
     };
-    }
+    providerResponse = sent.providerResponse;
+    textAfterAudio = sent.textAfterAudio ?? null;
+    partialError = sent.partialError ?? null;
   }
   // A mensagem já saiu: falha ao gravar o histórico não pode virar "falhou"
   // (a pessoa reenviaria e o cliente receberia em dobro)
   let conversationId = null;
   let messageId = null;
   try {
+    const sentMedia = isMeta ? null : media;
     ({ conversationId, messageId } = await recordSentMessage(supabase, {
       recipient,
       connection,
       number,
-      text,
+      // Áudio: o texto fica na mensagem seguinte
+      text: sentMedia?.kind === "audio" ? "" : text,
       providerResponse,
-      template: isMeta ? template : null
+      template: isMeta ? template : null,
+      media: sentMedia
     }));
+    if (textAfterAudio) {
+      await recordSentMessage(supabase, {
+        recipient,
+        connection,
+        number,
+        text,
+        providerResponse: textAfterAudio,
+        template: null,
+        media: null
+      });
+    }
   } catch (err) {
     console.error("[SCHEDULED_RECORD_ERROR]", {
       recipientId: recipient.recipient_id,
@@ -370,7 +483,7 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
     conversation_id: conversationId,
     // Liga ao "entregue" e "lida" que o webhook grava na mensagem
     message_id: messageId,
-    error: conversationId ? null : "Enviada, mas não foi possível registrar na conversa."
+    error: partialError ?? (conversationId ? null : "Enviada, mas não foi possível registrar na conversa.")
   };
 }
 const finishRecipient = async (supabase, recipientId, patch)=>{
@@ -390,15 +503,24 @@ async function processClinic(supabase, clinicId, recipients) {
     if (!connections.has(key)) connections.set(key, await loadConnection(supabase, clinicId, connectionId));
     return connections.get(key);
   };
-  // Modelo da Meta de cada campanha (só as que saem pelo número oficial têm)
-  const templates = new Map();
-  const templateFor = async (scheduledMessageId)=>{
-    if (!templates.has(scheduledMessageId)) {
-      const { data } = await supabase.from("scheduled_messages").select("template:message_templates(id, meta_template_name, language_code, body, footer, buttons, status)").eq("id", scheduledMessageId).maybeSingle();
+  // Modelo da Meta (só campanhas pelo número oficial) e anexo de cada envio
+  const extras = new Map();
+  const extrasFor = async (scheduledMessageId)=>{
+    if (!extras.has(scheduledMessageId)) {
+      const { data } = await supabase.from("scheduled_messages").select("media_url, media_mime_type, media_filename, media_kind, template:message_templates(id, meta_template_name, language_code, body, footer, buttons, status)").eq("id", scheduledMessageId).maybeSingle();
       const template = data?.template ?? null;
-      templates.set(scheduledMessageId, template?.meta_template_name ? template : null);
+      const media = data?.media_url && MEDIA_KINDS.has(data.media_kind) && isClinicMediaUrl(data.media_url, clinicId) ? {
+        url: data.media_url,
+        kind: data.media_kind,
+        mimeType: data.media_mime_type ?? null,
+        filename: data.media_filename ?? null
+      } : null;
+      extras.set(scheduledMessageId, {
+        template: template?.meta_template_name ? template : null,
+        media
+      });
     }
-    return templates.get(scheduledMessageId);
+    return extras.get(scheduledMessageId);
   };
   const suspended = await clinicIsSuspended(supabase, clinicId);
   // Empresas diferentes não disparam todas no mesmo segundo
@@ -431,8 +553,8 @@ async function processClinic(supabase, clinicId, recipients) {
       counts.failed++;
       continue;
     }
-    const template = connection.provider === "meta" ? await templateFor(recipient.scheduled_message_id) : null;
-    const result = await sendToRecipient(supabase, connection, recipient, template);
+    const { template, media } = await extrasFor(recipient.scheduled_message_id);
+    const result = await sendToRecipient(supabase, connection, recipient, connection.provider === "meta" ? template : null, media);
     await finishRecipient(supabase, recipient.recipient_id, result);
     counts[result.status === "sent" ? "sent" : "failed"]++;
     if (index < recipients.length - 1) {

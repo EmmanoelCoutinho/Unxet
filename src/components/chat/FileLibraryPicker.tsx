@@ -27,6 +27,8 @@ type Props = {
   clinicId: string | null | undefined;
   onClose: () => void;
   onSelect: (file: PickedFile) => void;
+  /** Texto abaixo do título (padrão: envio na conversa) */
+  subtitle?: string;
 };
 
 type Tab = "library" | "sent";
@@ -111,7 +113,13 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
 );
 
 /** Escolhe um arquivo da biblioteca ou um enviado recentemente para mandar na conversa. */
-export const FileLibraryPicker: React.FC<Props> = ({ open, clinicId, onClose, onSelect }) => {
+export const FileLibraryPicker: React.FC<Props> = ({
+  open,
+  clinicId,
+  onClose,
+  onSelect,
+  subtitle = "Escolha um arquivo para enviar nesta conversa.",
+}) => {
   const [tab, setTab] = useState<Tab>("library");
   // Só carrega quando abre; reabrir busca de novo para trazer arquivos novos
   const library = useFileLibrary(clinicId, open);
@@ -191,7 +199,7 @@ export const FileLibraryPicker: React.FC<Props> = ({ open, clinicId, onClose, on
         <div className="flex items-start justify-between gap-3 px-5 pt-4">
           <div>
             <h3 className="text-base font-semibold text-slate-900">Banco de arquivos</h3>
-            <p className="mt-1 text-sm text-slate-500">Escolha um arquivo para enviar nesta conversa.</p>
+            <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
           </div>
           <CloseButton onClick={onClose} />
         </div>

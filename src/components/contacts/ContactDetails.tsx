@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   CalendarDaysIcon,
   MailIcon,
+  PencilIcon,
   PhoneIcon,
   TagIcon,
   Trash2Icon,
@@ -24,6 +25,7 @@ import {
 import { SecureImage } from "../ui/SecureImage";
 import { ContactScheduledMessages } from "../../modules/scheduledMessages/components/ContactScheduledMessages";
 import { ContactConversations } from "../../modules/contacts/components/ContactConversations";
+import { EditContactModal } from "../../modules/contacts/components/EditContactModal";
 
 type ContactDetailsProps = {
   contact: Contact | null;
@@ -59,6 +61,7 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
   onDeleteNote,
 }) => {
   const [draftNote, setDraftNote] = useState("");
+  const [editing, setEditing] = useState(false);
 
   if (!contact) {
     return (
@@ -108,13 +111,24 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
               </div>
             </div>
           </div>
-          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm">
-            <p className="text-xs font-medium text-blue-600">
-              Status comercial
-            </p>
-            <p className="mt-1 font-semibold text-blue-950">
-              {commercialStatusLabels[contact.commercial_status]}
-            </p>
+          <div className="flex items-start gap-2 self-start">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm">
+              <p className="text-xs font-medium text-blue-600">
+                Status comercial
+              </p>
+              <p className="mt-1 font-semibold text-blue-950">
+                {commercialStatusLabels[contact.commercial_status]}
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setEditing(true)}
+              className="inline-flex items-center gap-1.5"
+            >
+              <PencilIcon className="h-4 w-4" />
+              Editar
+            </Button>
           </div>
         </div>
       </div>
@@ -252,6 +266,14 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
           )}
         </div>
       </div>
+
+      {editing && (
+        <EditContactModal
+          key={contact.id}
+          contact={contact}
+          onClose={() => setEditing(false)}
+        />
+      )}
     </section>
   );
 };
