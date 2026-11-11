@@ -328,6 +328,8 @@ export type ConversationFilesFilters = {
   search?: string;
   from?: string | null;
   to?: string | null;
+  /** Só os arquivos deste cliente */
+  contactId?: string | null;
 };
 
 export const CONVERSATION_FILES_PAGE = 50;
@@ -346,6 +348,8 @@ export const listConversationFiles = async (
     p_before_created_at: cursor?.createdAt ?? null,
     p_before_id: cursor?.id ?? null,
     p_limit: limit,
+    // Só manda quando filtra por cliente (migration 20261114100000)
+    ...(filters.contactId ? { p_contact_id: filters.contactId } : {}),
   });
   if (error) throw friendlyError(error);
   return ((data ?? []) as ConversationFileRow[]).map(

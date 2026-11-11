@@ -66,7 +66,12 @@ export const ContactsPage: React.FC = () => {
   } = useContactNotes(tenantId, selectedContact?.id ?? null);
 
   useEffect(() => {
-    if (selectedContact && contacts.some((contact) => contact.id === selectedContact.id)) {
+    const fresh = selectedContact
+      ? contacts.find((contact) => contact.id === selectedContact.id)
+      : undefined;
+    if (fresh) {
+      // Depois de editar, a lista volta com os dados novos do cliente
+      if (fresh !== selectedContact) setSelectedContact(fresh);
       return;
     }
     setSelectedContact(contacts[0] ?? null);

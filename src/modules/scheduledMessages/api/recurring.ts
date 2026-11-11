@@ -1,6 +1,7 @@
 import { supabase } from "../../../lib/supabaseClient";
 import type { ScheduledMessageStatus, ScheduledRecipientStatus } from "../types/scheduledMessages";
 import type { Frequency, RecurrenceDraft } from "../utils/recurrence";
+import { attachmentFromRow, attachmentParams, type ScheduledAttachment } from "../utils/attachment";
 
 export type RecurringStatus = "active" | "paused" | "finished";
 
@@ -9,6 +10,7 @@ export type ContactScheduledMessage = RecurrenceDraft & {
   id: string;
   contactId: string;
   message: string;
+  attachment: ScheduledAttachment | null;
   channelConnectionId: string | null;
   createdBy: string | null;
   runCount: number;
@@ -30,6 +32,7 @@ export type SaveRecurringInput = RecurrenceDraft & {
   id: string | null;
   contactId: string;
   message: string;
+  attachment: ScheduledAttachment | null;
   sendNow: boolean;
   channelConnectionId: string | null;
 };
@@ -40,7 +43,7 @@ export const listContactScheduledMessages = async (
   const { data, error } = await supabase
     .from("recurring_messages")
     .select(
-      "id, contact_id, message, channel_connection_id, created_by, frequency, weekdays, month_day, send_time, starts_on, ends_on, max_runs, run_count, next_run_at, last_run_at, last_error, status, created_at",
+      "id, contact_id, message, media_url, media_mime_type, media_filename, media_kind, channel_connection_id, created_by, frequency, weekdays, month_day, send_time, starts_on, ends_on, max_runs, run_count, next_run_at, last_run_at, last_error, status, created_at",
     )
     .eq("contact_id", contactId)
     .order("created_at", { ascending: false })
@@ -75,6 +78,7 @@ export const listContactScheduledMessages = async (
     id: r.id,
     contactId: r.contact_id,
     message: r.message,
+    attachment: attachmentFromRow(r),
     channelConnectionId: r.channel_connection_id,
     createdBy: r.created_by,
     frequency: r.frequency as Frequency,
@@ -118,6 +122,7 @@ export const saveContactScheduledMessage = async (input: SaveRecurringInput): Pr
     p_send_now: input.frequency === "once" && input.sendNow,
     p_channel_connection_id: input.channelConnectionId,
     p_timezone: browserTimezone(),
+    ...attachmentParams(input.attachment),
   });
   if (error) throw error;
   return data as string;

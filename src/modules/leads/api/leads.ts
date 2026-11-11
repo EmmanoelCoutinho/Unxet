@@ -13,6 +13,11 @@ import type {
   TaskType,
 } from "../types/leads";
 import { CLOSED_VISIBLE_DAYS } from "../utils/board";
+import {
+  attachmentFromRow,
+  attachmentParams,
+  type ScheduledAttachment,
+} from "../../scheduledMessages/utils/attachment";
 
 // numeric chega como texto pelo PostgREST
 const toNumber = (value: unknown) => {
@@ -304,6 +309,7 @@ export const scheduleDealMessage = async (input: {
   scheduledAt: string | null;
   sendNow: boolean;
   channelConnectionId: string | null;
+  attachment: ScheduledAttachment | null;
 }) => {
   const { data, error } = await supabase.rpc("deal_schedule_message", {
     p_deal_id: input.dealId,
@@ -311,6 +317,7 @@ export const scheduleDealMessage = async (input: {
     p_scheduled_at: input.sendNow ? null : input.scheduledAt,
     p_send_now: input.sendNow,
     p_channel_connection_id: input.channelConnectionId,
+    ...attachmentParams(input.attachment),
   });
   if (error) throw error;
   return data as string;
@@ -322,7 +329,9 @@ export const listDealScheduledMessages = async (
 ): Promise<DealScheduledMessage[]> => {
   const { data, error } = await supabase
     .from("scheduled_messages")
-    .select("id, message, scheduled_at, status, created_by, recipients:scheduled_message_recipients(status, error)")
+    .select(
+      "id, message, media_url, media_mime_type, media_filename, media_kind, scheduled_at, status, created_by, recipients:scheduled_message_recipients(status, error)",
+    )
     .eq("deal_id", dealId)
     .order("scheduled_at", { ascending: false })
     .limit(50);
@@ -330,6 +339,7 @@ export const listDealScheduledMessages = async (
   return (data ?? []).map((row: any) => ({
     id: row.id,
     message: row.message,
+    attachment: attachmentFromRow(row),
     scheduledAt: row.scheduled_at,
     status: row.status,
     recipientStatus: row.recipients?.[0]?.status ?? null,

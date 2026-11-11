@@ -83,6 +83,18 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     text: "Nova permissão nos cargos: Gerenciar banco de arquivos (adicionar, editar e apagar arquivos da biblioteca). Sem ela, a pessoa só envia os arquivos nas conversas.",
     adminOnly: true,
   },
+  {
+    kind: "new",
+    text: "Agendar mensagem (na Carteira de clientes e no Funil de vendas) agora aceita um arquivo: foto, vídeo, áudio ou documento, do computador ou do Banco de arquivos. O texto vai como legenda e pode ficar vazio.",
+  },
+  {
+    kind: "new",
+    text: "Arquivos da conversa: o botão de clipe no topo da conversa mostra todas as fotos, documentos, áudios e vídeos trocados com o cliente, com filtro por tipo e atalho para salvar no Banco de arquivos.",
+  },
+  {
+    kind: "new",
+    text: "Carteira de clientes: botão Editar para corrigir o nome, o telefone e o e-mail do cliente.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
@@ -104,6 +116,10 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
       {
         kind: "fixed",
         text: "Pesquisa de satisfação: a nota do cliente não reabre mais a conversa encerrada quando o WhatsApp entrega a mesma mensagem duas vezes. Uma nota fora da escala também não reabre a conversa e, se a mensagem pedir uma escala diferente da escolhida em Automações (por exemplo, de 1 a 10), vale a da mensagem.",
+      },
+      {
+        kind: "fixed",
+        text: "Conversa transferida para uma pessoa de outro setor (ou sem setor) agora aparece na lista dela e abre normalmente. Antes, ela não via a conversa e, ao abrir pela Carteira de clientes ou pelo aviso, aparecia \"Conversa não encontrada\".",
       },
     ],
   },
