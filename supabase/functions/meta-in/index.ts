@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 import { queueInboundPush } from "../_shared/push.ts";
 import { findOutboundByMetaId } from "../_shared/metaMessageId.ts";
+import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 const VERIFY_TOKEN = Deno.env.get("META_VERIFY_TOKEN") ?? "";
 const META_APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
 const ALLOW_UNSIGNED_TESTS = (Deno.env.get("META_ALLOW_UNSIGNED_TESTS") ?? "false") === "true";
@@ -875,6 +876,17 @@ serve(async (req)=>{
             clinicId,
             channel,
             metaInboxId
+          });
+          continue;
+        }
+        // Contato bloqueado: descarta antes de baixar mídia, criar conversa,
+        // acionar bot ou IA (só conta a mensagem barrada). Mensagem enviada
+        // pela própria página/perfil segue o caminho normal.
+        if (!isFromBusiness && await registerBlockedInbound(supabase, clinicId, blockIdentifiers(`${channel}:${counterpartyId}`))) {
+          logStep(rid, "contact.blocked", {
+            clinicId,
+            channel,
+            providerMessageId
           });
           continue;
         }

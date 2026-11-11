@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isClinicMediaUrl, toProviderMediaUrl } from "../_shared/media.ts";
 import { queueTranscription, runInBackground, storagePathFromPublicUrl } from "../_shared/transcription.ts";
 import { getClinicMembership } from "../_shared/security.ts";
+import { BLOCKED_CONTACT_CODE, BLOCKED_CONTACT_ERROR } from "../_shared/contactBlock.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
 import { parseSharedContact, sharedContactText, toEvolutionContact } from "../_shared/contactCard.ts";
 import { loadAgentSender, signText } from "../_shared/agentSignature.ts";
@@ -138,6 +139,16 @@ serve(async (req)=>{
         error: "Conversation not found"
       }), {
         status: 404,
+        headers: corsHeaders
+      });
+    }
+    // Contato bloqueado: a empresa também não envia para ele
+    if (conversation.contacts?.blocked_at) {
+      return new Response(JSON.stringify({
+        error: BLOCKED_CONTACT_ERROR,
+        code: BLOCKED_CONTACT_CODE
+      }), {
+        status: 409,
         headers: corsHeaders
       });
     }

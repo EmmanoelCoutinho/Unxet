@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyMetaSignature } from "../_shared/security.ts";
 import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { metaContactsText } from "../_shared/contactCard.ts";
+import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 import { describeRejection, mapMetaTemplateStatus } from "../_shared/metaTemplates.ts";
 // ---------------------------------------------------------------------------
 // ENV
@@ -253,6 +254,17 @@ serve(async (req)=>{
     }
     const clinicId = connection.clinic_id;
     const channelConnectionId = connection.id;
+    // Contato bloqueado: descarta antes de baixar mídia, criar conversa,
+    // acionar bot ou IA (só conta a mensagem barrada)
+    if (await registerBlockedInbound(supabase, clinicId, blockIdentifiers(waId))) {
+      console.log("[BLOCKED_CONTACT] mensagem descartada:", {
+        clinicId,
+        providerMessageId
+      });
+      return new Response("Blocked contact", {
+        status: 200
+      });
+    }
     let metaTokenForMedia = META_WHATSAPP_TOKEN;
     if (connection.access_token && String(connection.access_token).trim()) {
       metaTokenForMedia = String(connection.access_token).trim();

@@ -31,6 +31,8 @@ export type Conversation = {
   channel: Channel;
   // Cliente da carteira (liga a conversa ao funil de vendas)
   contactId?: string;
+  // Contato bloqueado pela empresa: não recebe nem envia mensagens
+  contactBlocked?: boolean;
   contactName: string;
   contactNumber?: string;
   contactAvatar?: string;

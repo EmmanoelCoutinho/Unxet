@@ -27,6 +27,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
+import { blockIdentifiers, isIdentifierBlocked } from "../_shared/contactBlock.ts";
 import { describeProviderError, renderScheduledText, sendDelayMs } from "../_shared/scheduledMessages.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
 import { buildTemplateMessage, describeTemplateSendError, renderTemplateText } from "../_shared/metaTemplates.ts";
@@ -413,6 +414,13 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
     return {
       status: "failed",
       error: "Não foi possível identificar o número deste contato."
+    };
+  }
+  // Contato bloqueado: a empresa também não envia para ele
+  if (await isIdentifierBlocked(supabase, recipient.clinic_id, blockIdentifiers(number, onlyDigits(recipient.phone)))) {
+    return {
+      status: "failed",
+      error: "Contato bloqueado."
     };
   }
   let text = renderScheduledText(recipient.message, recipient.name);
