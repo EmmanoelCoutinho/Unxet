@@ -151,7 +151,7 @@ export const ConversationFilesPanel: React.FC<{
         aria-labelledby="conversation-files-title"
         className="absolute left-1/2 top-1/2 flex max-h-[90dvh] w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border border-slate-200 bg-white shadow-xl"
       >
-        <div className="flex items-start justify-between gap-3 px-5 pt-4">
+        <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-4">
           <div className="min-w-0">
             <h3 id="conversation-files-title" className="text-base font-semibold text-slate-900">
               Arquivos da conversa
@@ -163,14 +163,15 @@ export const ConversationFilesPanel: React.FC<{
           <CloseButton onClick={onClose} />
         </div>
 
-        <div className="mt-3 flex gap-1.5 overflow-x-auto px-5 pb-1">
+        {/* shrink-0: com muitos arquivos a lista rola, os filtros não encolhem */}
+        <div className="mt-3 flex shrink-0 gap-1.5 overflow-x-auto px-5 pb-2">
           {KIND_FILTERS.map((option) => (
             <button
               key={option.value || "all"}
               type="button"
               onClick={() => setKind(option.value)}
               aria-pressed={kind === option.value}
-              className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 kind === option.value ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
@@ -179,7 +180,7 @@ export const ConversationFilesPanel: React.FC<{
           ))}
         </div>
 
-        <div className="mt-2 min-h-[200px] flex-1 overflow-y-auto border-t border-slate-100 px-3 py-3">
+        <div className="mt-1 min-h-[120px] flex-1 overflow-y-auto border-t border-slate-100 px-3 py-3">
           {error ? (
             <div className="px-4 py-8 text-center">
               <p className="text-sm text-slate-600">{error}</p>
