@@ -74,30 +74,35 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
-  {
-    kind: "new",
-    text: "Banco de arquivos (menu Atendimento): guarde tabelas de preço, contratos, catálogos e outros arquivos da empresa, organizados em pastas, e envie numa conversa pelo + > Banco de arquivos, sem procurar no computador. Ali também ficam as imagens e documentos que a equipe já enviou, para mandar de novo sem salvar antes. Na aba Das conversas ficam todos os arquivos enviados e recebidos, com busca por cliente e atalho para abrir a conversa ou salvar o arquivo na biblioteca.",
-  },
-  {
-    kind: "new",
-    text: "Nova permissão nos cargos: Gerenciar banco de arquivos (adicionar, editar e apagar arquivos da biblioteca). Sem ela, a pessoa só envia os arquivos nas conversas.",
-    adminOnly: true,
-  },
-  {
-    kind: "new",
-    text: "Agendar mensagem (na Carteira de clientes e no Funil de vendas) agora aceita um arquivo: foto, vídeo, áudio ou documento, do computador ou do Banco de arquivos. O texto vai como legenda e pode ficar vazio.",
-  },
-  {
-    kind: "new",
-    text: "Arquivos da conversa: o botão de clipe no topo da conversa mostra todas as fotos, documentos, áudios e vídeos trocados com o cliente, com filtro por tipo e atalho para salvar no Banco de arquivos.",
-  },
-  {
-    kind: "new",
-    text: "Carteira de clientes: botão Editar para corrigir o nome, o telefone e o e-mail do cliente.",
-  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
+  {
+    date: "2026-11-11",
+    changes: [
+      {
+        kind: "new",
+        text: "Banco de arquivos (menu Atendimento): guarde tabelas de preço, contratos, catálogos e outros arquivos da empresa, organizados em pastas, e envie numa conversa pelo + > Banco de arquivos, sem procurar no computador. Ali também ficam as imagens e documentos que a equipe já enviou, para mandar de novo sem salvar antes. Na aba Das conversas ficam todos os arquivos enviados e recebidos, com busca por cliente e atalho para abrir a conversa ou salvar o arquivo na biblioteca.",
+      },
+      {
+        kind: "new",
+        text: "Nova permissão nos cargos: Gerenciar banco de arquivos (adicionar, editar e apagar arquivos da biblioteca). Sem ela, a pessoa só envia os arquivos nas conversas.",
+        adminOnly: true,
+      },
+      {
+        kind: "new",
+        text: "Agendar mensagem (na Carteira de clientes e no Funil de vendas) agora aceita um arquivo: foto, vídeo, áudio ou documento, do computador ou do Banco de arquivos. O texto vai como legenda e pode ficar vazio.",
+      },
+      {
+        kind: "new",
+        text: "Arquivos da conversa: o botão de clipe no topo da conversa mostra todas as fotos, documentos, áudios e vídeos trocados com o cliente, com filtro por tipo e atalho para salvar no Banco de arquivos.",
+      },
+      {
+        kind: "new",
+        text: "Carteira de clientes: botão Editar para corrigir o nome, o telefone e o e-mail do cliente.",
+      },
+    ],
+  },
   {
     date: "2026-11-11",
     changes: [
