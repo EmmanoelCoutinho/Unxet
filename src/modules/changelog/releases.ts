@@ -105,6 +105,10 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
         kind: "fixed",
         text: "Pesquisa de satisfação: a nota do cliente não reabre mais a conversa encerrada quando o WhatsApp entrega a mesma mensagem duas vezes. Uma nota fora da escala também não reabre a conversa e, se a mensagem pedir uma escala diferente da escolhida em Automações (por exemplo, de 1 a 10), vale a da mensagem.",
       },
+      {
+        kind: "fixed",
+        text: "Conversa transferida para uma pessoa de outro setor (ou sem setor) agora aparece na lista dela e abre normalmente. Antes, ela não via a conversa e, ao abrir pela Carteira de clientes ou pelo aviso, aparecia \"Conversa não encontrada\".",
+      },
     ],
   },
   {

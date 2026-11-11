@@ -243,15 +243,6 @@ export function useConversations(options: UseConversationsOptions = {}) {
           ]);
         participantConversationIdsRef.current = new Set(participantConversationIds);
 
-        if (
-          !seesAllConversations &&
-          accessibleDepartmentIds.length === 0 &&
-          participantConversationIds.length === 0
-        ) {
-          setConversations([]);
-          return;
-        }
-
         const baseSelect = `
           id,
           status,
@@ -307,67 +298,61 @@ export function useConversations(options: UseConversationsOptions = {}) {
             .limit(1, { referencedTable: "messages" });
         };
 
-        // Atendente vê só as abertas dele; admin vê as de todos
-        const applyOpenOwner = (q: any) =>
-          seesAllConversations ? q : q.eq("assigned_user_id", authUser.id);
-
         const applyChannel = (q: any) =>
           options.channel ? q.eq("channel", options.channel) : q;
 
-        let data: any[] = [];
+        const nothing = Promise.resolve({ data: [] as any[], error: null });
+        const wantsOpen = !options.status || options.status === "open";
+        const wantsPending = !options.status || options.status === "pending";
+
+        // Em atendimento: admin vê as de todos; atendente vê as dele, de
+        // qualquer setor (a conversa transferida para uma pessoa continua no
+        // setor de origem)
+        const openPromise = !wantsOpen
+          ? nothing
+          : seesAllConversations
+            ? applyChannel(makeBase()).eq("status", "open")
+            : applyChannel(makeBase(false))
+                .eq("status", "open")
+                .eq("assigned_user_id", authUser.id);
+
+        // Fila: só a dos setores do atendente
+        const pendingPromise =
+          wantsPending &&
+          (seesAllConversations || accessibleDepartmentIds.length > 0)
+            ? applyChannel(makeBase()).eq("status", "pending")
+            : nothing;
 
         // Em atendimento com você adicionado: entram na aba "abertas" de
         // qualquer setor (quem vê todas já recebe essas conversas)
-        const wantsOpen = !options.status || options.status === "open";
         const sharedOpenPromise =
           wantsOpen && !seesAllConversations && participantConversationIds.length > 0
             ? applyChannel(makeBase(false))
                 .eq("status", "open")
                 .in("id", participantConversationIds)
-            : Promise.resolve({ data: [] as any[], error: null });
+            : nothing;
 
-        if (!seesAllConversations && accessibleDepartmentIds.length === 0) {
-          // Sem setor: só as conversas a que foi adicionado
-          const res = await sharedOpenPromise;
-          if (res.error) throw res.error;
-          data = res.data ?? [];
-        } else if (options.status) {
-          let q = applyChannel(makeBase()).eq("status", options.status);
+        const [openRes, pendingRes, sharedRes] = await Promise.all([
+          openPromise,
+          pendingPromise,
+          sharedOpenPromise,
+        ]);
 
-          if (options.status === "open") {
-            q = applyOpenOwner(q);
-          }
+        if (openRes.error) throw openRes.error;
+        if (pendingRes.error) throw pendingRes.error;
+        if (sharedRes.error) throw sharedRes.error;
 
-          const [res, sharedRes] = await Promise.all([q, sharedOpenPromise]);
-          if (res.error) throw res.error;
-          if (sharedRes.error) throw sharedRes.error;
-          const map = new Map<string, any>();
-          (res.data ?? []).forEach((r: any) => map.set(r.id, r));
-          (sharedRes.data ?? []).forEach((r: any) => map.set(r.id, r));
-          data = Array.from(map.values());
-        } else {
-          const [openRes, pendingRes, sharedRes] = await Promise.all([
-            applyOpenOwner(applyChannel(makeBase()).eq("status", "open")),
-            applyChannel(makeBase()).eq("status", "pending"),
-            sharedOpenPromise,
-          ]);
+        const byId = new Map<string, any>();
+        (openRes.data ?? []).forEach((r: any) => byId.set(r.id, r));
+        (pendingRes.data ?? []).forEach((r: any) => byId.set(r.id, r));
+        (sharedRes.data ?? []).forEach((r: any) => byId.set(r.id, r));
+        const data: any[] = Array.from(byId.values());
 
-          if (openRes.error) throw openRes.error;
-          if (pendingRes.error) throw pendingRes.error;
-          if (sharedRes.error) throw sharedRes.error;
-
-          const map = new Map<string, any>();
-          (openRes.data ?? []).forEach((r: any) => map.set(r.id, r));
-          (pendingRes.data ?? []).forEach((r: any) => map.set(r.id, r));
-          (sharedRes.data ?? []).forEach((r: any) => map.set(r.id, r));
-          data = Array.from(map.values());
-
-          data.sort(
-            (a, b) =>
-              new Date(b.last_message_at ?? 0).getTime() -
-              new Date(a.last_message_at ?? 0).getTime(),
-          );
-        }
+        data.sort(
+          (a, b) =>
+            new Date(b.last_message_at ?? 0).getTime() -
+            new Date(a.last_message_at ?? 0).getTime(),
+        );
 
         let mapped: Conversation[] =
           data?.map((row: any) => {
@@ -588,14 +573,6 @@ export function useConversations(options: UseConversationsOptions = {}) {
         : await getAccessibleDeptIdsRef.current();
       if (!active) return;
 
-      if (
-        !seesAllConversations &&
-        !accessibleDepartmentIds.length &&
-        participantConversationIdsRef.current.size === 0
-      ) {
-        return;
-      }
-
       const filter = `clinic_id=eq.${clinicId}`;
 
       rtChannel = supabase
@@ -619,10 +596,16 @@ export function useConversations(options: UseConversationsOptions = {}) {
               ? String(nextRow.department_id)
               : null;
 
+            // De outro setor só interessa a conversa que é (ou era) sua ou
+            // a que você foi adicionado
+            const mineNowOrBefore =
+              nextRow?.assigned_user_id === authUser.id ||
+              prevRow?.assigned_user_id === authUser.id;
             if (
               !seesAllConversations &&
               nextDept &&
               !accessibleDepartmentIds.includes(nextDept) &&
+              !mineNowOrBefore &&
               !participantConversationIdsRef.current.has(conversationId)
             ) {
               return;
