@@ -267,7 +267,7 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + settings.satisfaction_survey_window_minutes * 60_000);
 
-    await admin.from("satisfaction_surveys").insert({
+    const { error: insertError } = await admin.from("satisfaction_surveys").insert({
       clinic_id: conversation.clinic_id,
       conversation_id: conversation.id,
       contact_id: conversation.contact_id,
@@ -282,6 +282,7 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
       sent_at: now.toISOString(),
       expires_at: expiresAt.toISOString(),
     });
+    if (insertError) console.error("[SURVEY] erro ao gravar a pesquisa enviada:", insertError);
 
     if (!sendError) {
       await admin.from("conversation_events").insert({
@@ -296,6 +297,46 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
   }
 };
 
+// Reentregas do webhook chegam em segundos ou minutos (a fila tenta de novo)
+const DUPLICATE_ANSWER_WINDOW_MS = 30 * 60_000;
+
+/**
+ * A mesma resposta entregue duas vezes (webhook duplicado ou reenviado pela
+ * fila): a primeira entrega já registrou a nota, então a segunda não encontra
+ * pesquisa pendente. Sem isto ela seguia como mensagem comum e reabria a
+ * conversa encerrada. Retorna a pesquisa já respondida com duplicate: true.
+ */
+const findDuplicateAnswer = async (admin, params: {
+  clinicId: string;
+  contactId: string;
+  channelConnectionId: string;
+  text: unknown;
+}) => {
+  if (typeof params.text !== "string" || !params.text.trim()) return null;
+
+  const { data: answered, error } = await admin
+    .from("satisfaction_surveys")
+    .select("id, conversation_id, score, raw_answer")
+    .eq("clinic_id", params.clinicId)
+    .eq("contact_id", params.contactId)
+    .eq("channel_connection_id", params.channelConnectionId)
+    .eq("status", "answered")
+    .gt("answered_at", new Date(Date.now() - DUPLICATE_ANSWER_WINDOW_MS).toISOString())
+    .order("answered_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) console.error("[SURVEY] erro ao buscar resposta repetida:", error);
+  if (!answered || answered.raw_answer !== params.text.slice(0, 500)) return null;
+
+  return {
+    surveyId: answered.id,
+    conversationId: answered.conversation_id,
+    score: answered.score,
+    duplicate: true,
+  };
+};
+
 /**
  * Verifica se a mensagem recebida responde a uma pesquisa pendente.
  * - Nota válida: registra, envia agradecimento e retorna a pesquisa
@@ -305,6 +346,8 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
  * - Só agradecimento/emoji ("Obrigado!", "👍") ou nota fora da escala ("8" em
  *   1 a 5): mantém a pesquisa pendente e retorna a pesquisa com score null (o
  *   chamador grava na conversa encerrada sem reabrir).
+ * - Mesma nota entregue de novo (webhook duplicado): retorna a pesquisa já
+ *   respondida com duplicate: true, sem registrar nem agradecer outra vez.
  * - Outro texto: marca a pesquisa como "skipped" e retorna null.
  */
 export const matchSurveyAnswer = async (admin, params: {
@@ -325,7 +368,9 @@ export const matchSurveyAnswer = async (admin, params: {
     .limit(1)
     .maybeSingle();
 
-  if (error || !survey) return null;
+  if (error) console.error("[SURVEY] erro ao buscar pesquisa pendente:", error);
+  // Sem pesquisa pendente: pode ser a mesma resposta entregue de novo
+  if (error || !survey) return findDuplicateAnswer(admin, params);
 
   let scaleMin = survey.scale_min ?? DEFAULT_SCALE_MIN;
   let scaleMax = survey.scale_max ?? DEFAULT_SCALE_MAX;
@@ -357,7 +402,7 @@ export const matchSurveyAnswer = async (admin, params: {
   }
 
   // Atualização condicional evita registrar a nota duas vezes (webhooks duplicados)
-  const { data: updated } = await admin
+  const { data: updated, error: updateError } = await admin
     .from("satisfaction_surveys")
     .update({
       status: "answered",
@@ -372,7 +417,14 @@ export const matchSurveyAnswer = async (admin, params: {
     .select("id")
     .maybeSingle();
 
-  if (!updated) return null;
+  if (updateError) {
+    // A resposta é uma nota válida: mesmo sem conseguir gravar, não reabre
+    console.error("[SURVEY] erro ao registrar a nota:", updateError);
+    return { surveyId: survey.id, conversationId: survey.conversation_id, score: null };
+  }
+
+  // Outra entrega da mesma mensagem registrou a nota primeiro
+  if (!updated) return findDuplicateAnswer(admin, params);
 
   await admin.from("conversation_events").insert({
     conversation_id: survey.conversation_id,
@@ -384,13 +436,20 @@ export const matchSurveyAnswer = async (admin, params: {
   if (settings === undefined) settings = await getSurveySettings(admin, params.clinicId);
   const thanks = settings?.satisfaction_survey_thanks_message?.trim();
   if (thanks) {
-    await sendAutomatedText({
+    // Em segundo plano: a resposta do cliente é gravada na conversa sem esperar
+    // o envio (uma reentrega nesse intervalo reabria a conversa)
+    const thanksTask = sendAutomatedText({
       clinicId: params.clinicId,
       conversationId: survey.conversation_id,
       channelConnectionId: survey.channel_connection_id,
       channel: survey.channel,
       text: thanks,
     });
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(thanksTask);
+    } else {
+      await thanksTask;
+    }
   }
 
   return { surveyId: survey.id, conversationId: survey.conversation_id, score };

@@ -82,7 +82,7 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
     changes: [
       {
         kind: "fixed",
-        text: "Pesquisa de satisfação: quando a mensagem pede uma nota (por exemplo, de 1 a 10) diferente da escala escolhida em Automações, vale a escala da mensagem. Antes a nota do cliente era recusada e a conversa encerrada reabria. Uma nota fora da escala também não reabre mais a conversa.",
+        text: "Pesquisa de satisfação: a nota do cliente não reabre mais a conversa encerrada quando o WhatsApp entrega a mesma mensagem duas vezes. Uma nota fora da escala também não reabre a conversa e, se a mensagem pedir uma escala diferente da escolhida em Automações (por exemplo, de 1 a 10), vale a da mensagem.",
       },
     ],
   },
