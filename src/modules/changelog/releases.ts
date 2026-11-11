@@ -83,6 +83,18 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     text: "Nova permissão nos cargos: Gerenciar banco de arquivos (adicionar, editar e apagar arquivos da biblioteca). Sem ela, a pessoa só envia os arquivos nas conversas.",
     adminOnly: true,
   },
+  {
+    kind: "new",
+    text: "Agendar mensagem (na Carteira de clientes e no Funil de vendas) agora aceita um arquivo: foto, vídeo, áudio ou documento, do computador ou do Banco de arquivos. O texto vai como legenda e pode ficar vazio.",
+  },
+  {
+    kind: "new",
+    text: "Arquivos da conversa: o botão de clipe no topo da conversa mostra todas as fotos, documentos, áudios e vídeos trocados com o cliente, com filtro por tipo e atalho para salvar no Banco de arquivos.",
+  },
+  {
+    kind: "new",
+    text: "Carteira de clientes: botão Editar para corrigir o nome, o telefone e o e-mail do cliente.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
