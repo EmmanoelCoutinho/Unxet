@@ -1,4 +1,5 @@
 // Funil de vendas: funis, etapas e negociações (cartões do Kanban)
+import type { ScheduledAttachment } from "../../scheduledMessages/utils/attachment";
 
 export type StageKind = "open" | "won" | "lost";
 export type DealStatus = StageKind;
@@ -102,6 +103,7 @@ export type DealTask = {
 export type DealScheduledMessage = {
   id: string;
   message: string;
+  attachment: ScheduledAttachment | null;
   scheduledAt: string;
   status: "scheduled" | "processing" | "sent" | "partial" | "failed" | "cancelled";
   recipientStatus: string | null;

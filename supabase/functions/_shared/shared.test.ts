@@ -10,13 +10,14 @@ let isScoreAttempt: (raw: unknown) => boolean;
 let scaleFromMessage: (message: unknown) => { min: number; max: number } | null;
 let matchSurveyAnswer: (admin: unknown, params: Record<string, unknown>) => Promise<any>;
 let mediaPathFromUrl: (url: unknown) => string | null;
+let isClinicMediaUrl: (url: string | null | undefined, clinicId: string) => boolean;
 
 beforeAll(async () => {
   vi.stubGlobal("Deno", {
     env: { get: (name: string) => (name === "SUPABASE_URL" ? SUPABASE_URL : "") },
   });
   ({ parseSurveyScore, isCourtesyReply, isScoreAttempt, scaleFromMessage, matchSurveyAnswer } = await import("./satisfactionSurvey"));
-  ({ mediaPathFromUrl } = await import("./media"));
+  ({ mediaPathFromUrl, isClinicMediaUrl } = await import("./media"));
 });
 
 describe("parseSurveyScore (pesquisa de satisfação)", () => {
@@ -213,6 +214,26 @@ describe("mediaPathFromUrl (bucket privado)", () => {
     [null, "vazio"],
   ])("rejeita %s (%s)", (url) => {
     expect(mediaPathFromUrl(url)).toBeNull();
+  });
+});
+
+describe("isClinicMediaUrl (envio só de arquivos da própria empresa)", () => {
+  const object = `${SUPABASE_URL}/storage/v1/object/public/whatsapp-media`;
+
+  it("aceita arquivo da pasta da empresa", () => {
+    expect(isClinicMediaUrl(`${object}/emp-1/library/a.pdf`, "emp-1")).toBe(true);
+    expect(isClinicMediaUrl(`${object}/emp-1/5511/inbound-documents/m/a.pdf`, "emp-1")).toBe(true);
+  });
+
+  it("recusa arquivo de outra empresa", () => {
+    expect(isClinicMediaUrl(`${object}/emp-2/library/a.pdf`, "emp-1")).toBe(false);
+    expect(isClinicMediaUrl(`${object}/emp-10/library/a.pdf`, "emp-1")).toBe(false);
+    expect(isClinicMediaUrl(`${object}/emp-1/a.pdf`, "")).toBe(false);
+  });
+
+  it("não se aplica a links de fora do nosso Storage", () => {
+    expect(isClinicMediaUrl("https://cdn.exemplo.com/a.pdf", "emp-1")).toBe(true);
+    expect(isClinicMediaUrl(null, "emp-1")).toBe(true);
   });
 });
 

@@ -42,6 +42,7 @@ import { TbMessageCheck } from "react-icons/tb";
 import { useAuth } from "../../contexts/AuthContext";
 import { TransferModal, type TransferTarget } from "./TransferModal";
 import { ParticipantsModal } from "./ParticipantsModal";
+import { ConversationFilesPanel } from "./ConversationFilesPanel";
 import { OtherNumbersBanner } from "./OtherNumbersBanner";
 import { GENERIC_SEND_ERROR, sendErrorMessage } from "../../lib/sendError";
 import { useConversationParticipants } from "../../hooks/useConversationParticipants";
@@ -281,6 +282,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const [transferringConversation, setTransferringConversation] =
     useState(false);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [isFilesOpen, setIsFilesOpen] = useState(false);
   const [participantBusyId, setParticipantBusyId] = useState<string | null>(
     null,
   );
@@ -1583,6 +1585,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
               ? () => setIsParticipantsOpen(true)
               : undefined
           }
+          onOpenFiles={conversation.contactId ? () => setIsFilesOpen(true) : undefined}
           onAccept={handleAcceptConversation}
           onClose={handleCloseConversation}
           onRefresh={loadConversation}
@@ -1801,6 +1804,15 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {conversation?.contactId && (
+        <ConversationFilesPanel
+          open={isFilesOpen}
+          contactId={conversation.contactId}
+          contactName={conversation.contactName}
+          onClose={() => setIsFilesOpen(false)}
+        />
       )}
 
       <ParticipantsModal

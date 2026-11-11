@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   CalendarClockIcon,
   CheckIcon,
+  PaperclipIcon,
   PauseIcon,
   PencilIcon,
   PlayIcon,
@@ -116,7 +117,15 @@ export const ContactScheduledMessages: React.FC<{
                         {status.label}
                       </span>
                     </div>
-                    <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-gray-600">{item.message}</p>
+                    {item.message && (
+                      <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-gray-600">{item.message}</p>
+                    )}
+                    {item.attachment && (
+                      <p className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-gray-600">
+                        <PaperclipIcon className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+                        <span className="truncate">{item.attachment.filename}</span>
+                      </p>
+                    )}
                     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
                       {item.status === "active" && item.nextRunAt && (
                         <span>Próximo envio: {when(item.nextRunAt)}</span>

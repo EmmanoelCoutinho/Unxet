@@ -6,6 +6,7 @@
  * Recebe as URLs que o front quer exibir e só assina as que pertencem a uma
  * mensagem ou contato visível para o usuário. A checagem é feita com o JWT do
  * próprio usuário, então vale o RLS (clínica + isolamento por departamento).
+ * Arquivos do Banco de arquivos valem para todos da empresa.
  */
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -54,14 +55,16 @@ serve(async (req) => {
   const urls = Array.from(pathByUrl.keys());
   if (!urls.length) return json(200, { urls: {} });
 
-  // Quais dessas URLs o usuário pode ver (RLS de messages e contacts)
-  const [byMedia, byImage, byAvatar] = await Promise.all([
+  // Quais dessas URLs o usuário pode ver (RLS de messages, contacts e do
+  // Banco de arquivos da empresa)
+  const [byMedia, byImage, byAvatar, byLibrary] = await Promise.all([
     userClient.from("messages").select("media_url").in("media_url", urls),
     userClient.from("messages").select("image_url").in("image_url", urls),
-    userClient.from("contacts").select("image_url").in("image_url", urls)
+    userClient.from("contacts").select("image_url").in("image_url", urls),
+    userClient.from("file_library").select("url").in("url", urls)
   ]);
 
-  const queryError = byMedia.error ?? byImage.error ?? byAvatar.error;
+  const queryError = byMedia.error ?? byImage.error ?? byAvatar.error ?? byLibrary.error;
   if (queryError) {
     console.error("[MEDIA_URLS] erro ao verificar acesso:", queryError);
     return json(500, { error: "Failed to check access" });
@@ -70,7 +73,8 @@ serve(async (req) => {
   const allowed = new Set<string>([
     ...(byMedia.data ?? []).map((row) => row.media_url),
     ...(byImage.data ?? []).map((row) => row.image_url),
-    ...(byAvatar.data ?? []).map((row) => row.image_url)
+    ...(byAvatar.data ?? []).map((row) => row.image_url),
+    ...(byLibrary.data ?? []).map((row) => row.url)
   ]);
 
   const allowedUrls = urls.filter((url) => allowed.has(url));

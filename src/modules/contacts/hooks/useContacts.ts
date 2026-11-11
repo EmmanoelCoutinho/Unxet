@@ -5,8 +5,23 @@ import {
   getContactMetrics,
   listContactNotes,
   listContacts,
+  updateContact,
 } from "../api/contacts";
 import type { ContactListFilters } from "../types/contacts";
+
+/** Salva nome, telefone e e-mail do cliente e atualiza a Carteira. */
+export const useUpdateContact = () => {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: updateContact,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      // Conversas, funil e agendamentos mostram o nome do cliente
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+  return { save: mutation.mutateAsync, saving: mutation.isPending };
+};
 
 export const contactQueryKeys = {
   all: ["contacts"] as const,

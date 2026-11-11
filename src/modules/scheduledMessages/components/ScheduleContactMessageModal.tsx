@@ -14,6 +14,8 @@ import {
   type RecurrenceDraft,
 } from "../utils/recurrence";
 import { MAX_MESSAGE_LENGTH, defaultScheduleDate, toDateInputValue, toTimeInputValue } from "../utils/schedule";
+import { resolveAttachment, type AttachmentDraft } from "../utils/attachment";
+import { AttachmentField } from "./AttachmentField";
 
 const FIELD =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100";
@@ -43,6 +45,10 @@ export const ScheduleContactMessageModal: React.FC<{
   const initial = useMemo(() => defaultScheduleDate(), []);
 
   const [message, setMessage] = useState(existing?.message ?? "");
+  const [attachment, setAttachment] = useState<AttachmentDraft | null>(
+    existing?.attachment ? { source: "saved", attachment: existing.attachment } : null,
+  );
+  const [uploading, setUploading] = useState(false);
   const [frequency, setFrequency] = useState<Frequency>(existing?.frequency ?? "once");
   const [sendNow, setSendNow] = useState(false);
   const [startsOn, setStartsOn] = useState(existing?.startsOn ?? toDateInputValue(initial));
@@ -99,8 +105,8 @@ export const ScheduleContactMessageModal: React.FC<{
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!message.trim()) {
-      toast.error("Escreva a mensagem.");
+    if (!message.trim() && !attachment) {
+      toast.error("Escreva a mensagem ou anexe um arquivo.");
       return;
     }
     if (frequency === "weekly" && weekdays.length === 0) {
@@ -112,11 +118,16 @@ export const ScheduleContactMessageModal: React.FC<{
       return;
     }
     try {
+      setUploading(true);
+      const savedAttachment = await resolveAttachment(clinicId, attachment).finally(() => setUploading(false));
+      // Já subiu: se o salvar falhar, tentar de novo não sobe outra vez
+      if (savedAttachment) setAttachment({ source: "saved", attachment: savedAttachment });
       await save({
         ...draft,
         id: existing?.id ?? null,
         contactId,
         message,
+        attachment: savedAttachment,
         sendNow: frequency === "once" && sendNow,
         channelConnectionId: numbers.length > 0 ? connectionId : null,
       });
@@ -169,6 +180,20 @@ export const ScheduleContactMessageModal: React.FC<{
             <UserPlusIcon className="h-3.5 w-3.5" />
             Inserir nome do cliente
           </button>
+        </div>
+
+        {/* Anexo */}
+        <div>
+          <span className={LABEL}>Arquivo (opcional)</span>
+          <p className="mt-0.5 text-xs text-slate-500">Foto, vídeo, áudio ou documento.</p>
+          <div className="mt-1.5">
+            <AttachmentField
+              clinicId={clinicId}
+              value={attachment}
+              onChange={setAttachment}
+              disabled={saving || uploading}
+            />
+          </div>
         </div>
 
         {/* Repetição */}
@@ -397,10 +422,12 @@ export const ScheduleContactMessageModal: React.FC<{
           </button>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploading}
             className="rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
           >
-            {saving
+            {uploading
+              ? "Enviando arquivo..."
+              : saving
               ? "Salvando..."
               : existing
                 ? "Salvar alterações"

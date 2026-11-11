@@ -6,6 +6,7 @@ import {
   MegaphoneIcon,
   MessageCircleIcon,
   MoreHorizontalIcon,
+  PaperclipIcon,
   PencilIcon,
   PlusIcon,
   SendIcon,
@@ -26,6 +27,8 @@ import {
   toDateInputValue,
   toTimeInputValue,
 } from "../../scheduledMessages/utils/schedule";
+import { AttachmentField } from "../../scheduledMessages/components/AttachmentField";
+import { resolveAttachment, type AttachmentDraft } from "../../scheduledMessages/utils/attachment";
 import { findLatestConversation } from "../api/leads";
 import {
   useDeal,
@@ -906,6 +909,8 @@ const MessagesTab: React.FC<{
   const [date, setDate] = useState(toDateInputValue(initial));
   const [time, setTime] = useState(toTimeInputValue(initial));
   const [connectionId, setConnectionId] = useState<string | null>(null);
+  const [attachment, setAttachment] = useState<AttachmentDraft | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (numbers.length === 0 || connectionId) return;
@@ -922,8 +927,8 @@ const MessagesTab: React.FC<{
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!text.trim()) {
-      toast.error("Escreva a mensagem.");
+    if (!text.trim() && !attachment) {
+      toast.error("Escreva a mensagem ou anexe um arquivo.");
       return;
     }
     let scheduledAt: string | null = null;
@@ -935,14 +940,20 @@ const MessagesTab: React.FC<{
       }
     }
     try {
+      setUploading(true);
+      const savedAttachment = await resolveAttachment(clinicId, attachment).finally(() => setUploading(false));
+      // Já subiu: se o salvar falhar, tentar de novo não sobe outra vez
+      if (savedAttachment) setAttachment({ source: "saved", attachment: savedAttachment });
       await actions.scheduleMessage({
         dealId: deal.id,
         message: text,
         scheduledAt,
         sendNow,
         channelConnectionId: numbers.length > 0 ? connectionId : null,
+        attachment: savedAttachment,
       });
       setText("");
+      setAttachment(null);
       setFormOpen(false);
       toast.success(sendNow ? "Mensagem a caminho (sai em até 1 minuto)." : "Mensagem agendada.");
     } catch (err: any) {
@@ -968,6 +979,12 @@ const MessagesTab: React.FC<{
             Sai pelo WhatsApp só para {contactLabel(deal.contact)}. Use{" "}
             <code className="rounded bg-slate-100 px-1">{"{nome}"}</code> para o nome do cliente.
           </p>
+          <AttachmentField
+            clinicId={clinicId}
+            value={attachment}
+            onChange={setAttachment}
+            disabled={actions.scheduling || uploading}
+          />
           <div className="grid grid-cols-2 gap-2">
             {(
               [
@@ -1026,10 +1043,10 @@ const MessagesTab: React.FC<{
             </button>
             <button
               type="submit"
-              disabled={actions.scheduling}
+              disabled={actions.scheduling || uploading}
               className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
             >
-              {actions.scheduling ? "Salvando..." : sendNow ? "Enviar" : "Agendar"}
+              {uploading ? "Enviando arquivo..." : actions.scheduling ? "Salvando..." : sendNow ? "Enviar" : "Agendar"}
             </button>
           </div>
         </form>
@@ -1053,7 +1070,15 @@ const MessagesTab: React.FC<{
                     {MESSAGE_STATUS_LABEL[m.status]}
                   </span>
                 </div>
-                <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">{m.message}</p>
+                {m.message && (
+                  <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">{m.message}</p>
+                )}
+                {m.attachment && (
+                  <p className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-slate-600">
+                    <PaperclipIcon className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+                    <span className="truncate">{m.attachment.filename}</span>
+                  </p>
+                )}
                 {m.recipientError && <p className="mt-1 text-xs text-red-600">{m.recipientError}</p>}
               </li>
             ))}
