@@ -10,7 +10,6 @@ import {
 import { Conversation } from "../../types";
 import { CustomTooltip } from "../ui/CustomTooltip";
 import { SecureImage } from "../ui/SecureImage";
-import { departmentLabel } from "../../hooks/useDepartmentNames";
 interface ConversationItemProps {
   conversation: Conversation;
   // Responsável pela conversa (exibido só para admin)
@@ -151,7 +150,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
             >
               <UserIcon className="h-3.5 w-3.5 flex-shrink-0" />
               <span className="truncate">
-                {[assigneeName, departmentLabel(departmentName)].filter(Boolean).join(" - ")}
+                {[assigneeName, departmentName].filter(Boolean).join(" - ")}
               </span>
             </p>
           )}

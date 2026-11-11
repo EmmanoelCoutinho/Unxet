@@ -80,7 +80,7 @@ export const NEXT_RELEASE: ReleaseChange[] = [
   },
   {
     kind: "improved",
-    text: "Lista de conversas: o card agora mostra também o departamento, ao lado do responsável (ex.: Você - Dep. Fiscal), quando a empresa tem mais de um departamento.",
+    text: "Lista de conversas: o card agora mostra também o departamento, ao lado do responsável (ex.: Você - Fiscal), quando a empresa tem mais de um departamento.",
   },
 ];
 
