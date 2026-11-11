@@ -42,6 +42,9 @@ const getEventText = (event: ConversationEvent) => {
     case "conversation_closed":
       return `${actor} finalizou a conversa`;
 
+    case "conversation_started":
+      return `${actor} iniciou a conversa`;
+
     case "conversation_reopened":
       return `${actor} reabriu a conversa`;
 
@@ -92,7 +95,7 @@ const getEventText = (event: ConversationEvent) => {
       const toUser = meta.to_user_name ?? meta.assigned_user_name;
 
       if (toUser) {
-        return `${actor} atribuiu a conversa para ${toUser}`;
+        return `${actor} transferiu a conversa para ${toUser}`;
       }
 
       if (toDepartment) {

@@ -33,6 +33,80 @@ const SCORE_PATTERN =
 const wordToNumber = (value: string): number | undefined =>
   /^\d+$/.test(value) ? Number(value) : SCORE_WORDS[value];
 
+// Palavras de agradecimento/elogio que o cliente costuma mandar junto com a
+// nota ("5, obrigado!") ou sozinhas depois do encerramento ("Obrigada 🙏").
+const COURTESY_WORDS = new Set([
+  "ok", "okay", "blz", "beleza", "certo", "certinho", "combinado", "entendi", "joia",
+  "obrigado", "obrigada", "obrigados", "obrigadas", "obg", "brigado", "brigada",
+  "grato", "grata", "gratidao", "valeu", "vlw", "tmj", "agradeco",
+  "tchau", "ate", "mais", "logo", "amem", "deus", "abencoe", "abraco", "abracos", "igualmente",
+  "top", "show", "legal", "perfeito", "perfeita", "otimo", "otima", "excelente",
+  "maravilha", "maravilhoso", "maravilhosa", "bom", "boa", "amei", "adorei", "gostei",
+  "parabens", "muito", "mto", "mt", "super", "tudo", "bem", "dia", "tarde", "noite",
+  "de", "nada", "pelo", "pela", "atendimento", "por", "voce", "vc", "voces", "vcs",
+  "a", "o", "e", "foi", "ta", "esta",
+]);
+
+// Palavras que só fazem sentido junto da nota ("minha nota é 5", "dou 5 estrelas")
+const SCORE_CONTEXT_WORDS = new Set([
+  "nota", "minha", "dou", "estrela", "estrelas", "ponto", "pontos",
+]);
+
+const normalizeAnswer = (raw: string) =>
+  raw
+    .replace(/🔟/g, " 10 ")
+    // emojis de número do teclado (5️⃣) viram o próprio dígito
+    .replace(/([0-9])️?⃣/g, " $1 ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim();
+
+const wordsOf = (text: string) => text.split(/[^a-z0-9]+/).filter(Boolean);
+
+const isCourtesyWord = (word: string) => COURTESY_WORDS.has(word) || /^(ok+|k{3,}|rs+)$/.test(word);
+
+/**
+ * Mensagem só de agradecimento, cumprimento ou emoji ("Obrigado!", "ok 👍",
+ * "🙏"). Enquanto a pesquisa espera a nota, ela fica na conversa encerrada,
+ * sem reabrir o atendimento.
+ */
+export const isCourtesyReply = (raw: unknown): boolean => {
+  if (typeof raw !== "string" || !raw.trim() || raw.includes("?")) return false;
+  const words = wordsOf(normalizeAnswer(raw));
+  if (words.length > 10) return false;
+  return words.every(isCourtesyWord);
+};
+
+/**
+ * Escala que o texto da pesquisa pede ao cliente ("nota de 1 a 10" -> 1 a 10).
+ * É o que o cliente lê, então vale mais que a escala configurada quando as
+ * duas divergem (mensagem escrita à mão com "1 a 10" e escala ainda em 1 a 5).
+ * Retorna null se o texto não cita uma escala válida (0 a 10, mínima < máxima).
+ */
+export const scaleFromMessage = (message: unknown): { min: number; max: number } | null => {
+  if (typeof message !== "string") return null;
+  const ranges = normalizeAnswer(message).matchAll(/(?<![\d:,.h])(\d{1,2})\s*(?:a|ate|ao|-|–)\s*(\d{1,2})(?![\d:h])/g);
+  for (const range of ranges) {
+    const min = Number(range[1]);
+    const max = Number(range[2]);
+    if (min >= 0 && max <= 10 && min < max) return { min, max };
+  }
+  return null;
+};
+
+/**
+ * Resposta que é só uma nota ("8", "nota 8", "8/10"), ainda que fora da
+ * escala. Não é pedido de atendimento: não reabre a conversa.
+ */
+export const isScoreAttempt = (raw: unknown): boolean => {
+  if (typeof raw !== "string") return false;
+  const match = normalizeAnswer(raw).match(SCORE_PATTERN);
+  if (!match) return false;
+  const value = wordToNumber(match[1]);
+  return value !== undefined && value >= 0 && value <= 10;
+};
+
 /**
  * Interpreta a resposta do cliente como nota dentro da escala da pesquisa
  * (padrão 1 a 5). Aceita "5", "nota 4", "4 estrelas", "8/10", "8 de 10",
@@ -50,23 +124,35 @@ export const parseSurveyScore = (
     n !== undefined && Number.isInteger(n) && n >= scaleMin && n <= scaleMax ? n : null;
 
   const stars = (raw.match(/⭐|★/g) ?? []).length;
-  if (stars >= 1 && raw.replace(/⭐|★|\s/g, "") === "") {
+  const withoutStars = raw.replace(/⭐|★/g, " ");
+  if (stars >= 1 && (withoutStars.trim() === "" || isCourtesyReply(withoutStars))) {
     return inScale(stars);
   }
 
-  const text = raw
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .trim();
+  const text = normalizeAnswer(raw);
 
   const match = text.match(SCORE_PATTERN);
-  if (!match) return null;
+  if (match) {
+    // "8 de 10" só vale quando o 10 é o máximo da escala
+    if (match[2] !== undefined && wordToNumber(match[2]) !== scaleMax) return null;
+    return inScale(wordToNumber(match[1]));
+  }
 
-  // "8 de 10" só vale quando o 10 é o máximo da escala
-  if (match[2] !== undefined && wordToNumber(match[2]) !== scaleMax) return null;
+  // Nota acompanhada de agradecimento ou elogio: "5, obrigado!", "Nota: 10 👏",
+  // "5️⃣ excelente atendimento". Vale quando há um único número e todo o resto
+  // é cortesia; "5 consultas" ou "1 minuto" continuam fora. "um"/"uma" não
+  // contam como número aqui ("obrigado, um ótimo dia").
+  if (raw.includes("?")) return null;
+  const words = wordsOf(text);
+  if (words.length > 12) return null;
+  const numbers = words.filter(
+    (w) => /^\d{1,2}$/.test(w) || (w !== "um" && w !== "uma" && SCORE_WORDS[w] !== undefined),
+  );
+  if (numbers.length !== 1) return null;
+  const others = words.filter((w) => w !== numbers[0]);
+  if (!others.every((w) => isCourtesyWord(w) || SCORE_CONTEXT_WORDS.has(w))) return null;
 
-  return inScale(wordToNumber(match[1]));
+  return inScale(wordToNumber(numbers[0]));
 };
 
 export type SurveySettings = {
@@ -173,10 +259,15 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
       text: settings.satisfaction_survey_message,
     });
 
+    // A escala que vale é a que o cliente lê na mensagem
+    const messageScale = scaleFromMessage(settings.satisfaction_survey_message);
+    const scaleMin = messageScale?.min ?? settings.satisfaction_survey_scale_min ?? DEFAULT_SCALE_MIN;
+    const scaleMax = messageScale?.max ?? settings.satisfaction_survey_scale_max ?? DEFAULT_SCALE_MAX;
+
     const now = new Date();
     const expiresAt = new Date(now.getTime() + settings.satisfaction_survey_window_minutes * 60_000);
 
-    await admin.from("satisfaction_surveys").insert({
+    const { error: insertError } = await admin.from("satisfaction_surveys").insert({
       clinic_id: conversation.clinic_id,
       conversation_id: conversation.id,
       contact_id: conversation.contact_id,
@@ -184,13 +275,14 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
       channel: conversation.channel,
       agent_user_id: conversation.assigned_user_id,
       department_id: conversation.department_id,
-      scale_min: settings.satisfaction_survey_scale_min ?? DEFAULT_SCALE_MIN,
-      scale_max: settings.satisfaction_survey_scale_max ?? DEFAULT_SCALE_MAX,
+      scale_min: scaleMin,
+      scale_max: scaleMax,
       status: sendError ? "failed" : "sent",
       error: sendError,
       sent_at: now.toISOString(),
       expires_at: expiresAt.toISOString(),
     });
+    if (insertError) console.error("[SURVEY] erro ao gravar a pesquisa enviada:", insertError);
 
     if (!sendError) {
       await admin.from("conversation_events").insert({
@@ -205,10 +297,57 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
   }
 };
 
+// Reentregas do webhook chegam em segundos ou minutos (a fila tenta de novo)
+const DUPLICATE_ANSWER_WINDOW_MS = 30 * 60_000;
+
+/**
+ * A mesma resposta entregue duas vezes (webhook duplicado ou reenviado pela
+ * fila): a primeira entrega já registrou a nota, então a segunda não encontra
+ * pesquisa pendente. Sem isto ela seguia como mensagem comum e reabria a
+ * conversa encerrada. Retorna a pesquisa já respondida com duplicate: true.
+ */
+const findDuplicateAnswer = async (admin, params: {
+  clinicId: string;
+  contactId: string;
+  channelConnectionId: string;
+  text: unknown;
+}) => {
+  if (typeof params.text !== "string" || !params.text.trim()) return null;
+
+  const { data: answered, error } = await admin
+    .from("satisfaction_surveys")
+    .select("id, conversation_id, score, raw_answer")
+    .eq("clinic_id", params.clinicId)
+    .eq("contact_id", params.contactId)
+    .eq("channel_connection_id", params.channelConnectionId)
+    .eq("status", "answered")
+    .gt("answered_at", new Date(Date.now() - DUPLICATE_ANSWER_WINDOW_MS).toISOString())
+    .order("answered_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) console.error("[SURVEY] erro ao buscar resposta repetida:", error);
+  if (!answered || answered.raw_answer !== params.text.slice(0, 500)) return null;
+
+  return {
+    surveyId: answered.id,
+    conversationId: answered.conversation_id,
+    score: answered.score,
+    duplicate: true,
+  };
+};
+
 /**
  * Verifica se a mensagem recebida responde a uma pesquisa pendente.
  * - Nota válida: registra, envia agradecimento e retorna a pesquisa
  *   (o chamador grava a mensagem na conversa encerrada e NÃO a reabre).
+ * - Nota dentro da escala que a mensagem da pesquisa pede, mesmo que a
+ *   escala gravada seja outra: registra e corrige a escala da pesquisa.
+ * - Só agradecimento/emoji ("Obrigado!", "👍") ou nota fora da escala ("8" em
+ *   1 a 5): mantém a pesquisa pendente e retorna a pesquisa com score null (o
+ *   chamador grava na conversa encerrada sem reabrir).
+ * - Mesma nota entregue de novo (webhook duplicado): retorna a pesquisa já
+ *   respondida com duplicate: true, sem registrar nem agradecer outra vez.
  * - Outro texto: marca a pesquisa como "skipped" e retorna null.
  */
 export const matchSurveyAnswer = async (admin, params: {
@@ -229,24 +368,47 @@ export const matchSurveyAnswer = async (admin, params: {
     .limit(1)
     .maybeSingle();
 
-  if (error || !survey) return null;
+  if (error) console.error("[SURVEY] erro ao buscar pesquisa pendente:", error);
+  // Sem pesquisa pendente: pode ser a mesma resposta entregue de novo
+  if (error || !survey) return findDuplicateAnswer(admin, params);
 
-  const score = parseSurveyScore(
-    params.text,
-    survey.scale_min ?? DEFAULT_SCALE_MIN,
-    survey.scale_max ?? DEFAULT_SCALE_MAX,
-  );
+  let scaleMin = survey.scale_min ?? DEFAULT_SCALE_MIN;
+  let scaleMax = survey.scale_max ?? DEFAULT_SCALE_MAX;
+  let score = parseSurveyScore(params.text, scaleMin, scaleMax);
+  let settings: SurveySettings | null | undefined;
+
   if (score === null) {
+    // A mensagem enviada pede outra escala ("nota de 1 a 10" com a escala
+    // gravada em 1 a 5): vale a escala que o cliente leu.
+    settings = await getSurveySettings(admin, params.clinicId);
+    const messageScale = scaleFromMessage(settings?.satisfaction_survey_message);
+    if (messageScale && (messageScale.min !== scaleMin || messageScale.max !== scaleMax)) {
+      score = parseSurveyScore(params.text, messageScale.min, messageScale.max);
+      if (score !== null) {
+        scaleMin = messageScale.min;
+        scaleMax = messageScale.max;
+      }
+    }
+  }
+
+  if (score === null) {
+    // "Obrigado!", "ok 👍" ou nota fora da escala: a pesquisa continua valendo
+    // e a conversa não reabre
+    if (isCourtesyReply(params.text) || isScoreAttempt(params.text)) {
+      return { surveyId: survey.id, conversationId: survey.conversation_id, score: null };
+    }
     await admin.from("satisfaction_surveys").update({ status: "skipped" }).eq("id", survey.id);
     return null;
   }
 
   // Atualização condicional evita registrar a nota duas vezes (webhooks duplicados)
-  const { data: updated } = await admin
+  const { data: updated, error: updateError } = await admin
     .from("satisfaction_surveys")
     .update({
       status: "answered",
       score,
+      scale_min: scaleMin,
+      scale_max: scaleMax,
       raw_answer: String(params.text).slice(0, 500),
       answered_at: new Date().toISOString(),
     })
@@ -255,25 +417,39 @@ export const matchSurveyAnswer = async (admin, params: {
     .select("id")
     .maybeSingle();
 
-  if (!updated) return null;
+  if (updateError) {
+    // A resposta é uma nota válida: mesmo sem conseguir gravar, não reabre
+    console.error("[SURVEY] erro ao registrar a nota:", updateError);
+    return { surveyId: survey.id, conversationId: survey.conversation_id, score: null };
+  }
+
+  // Outra entrega da mesma mensagem registrou a nota primeiro
+  if (!updated) return findDuplicateAnswer(admin, params);
 
   await admin.from("conversation_events").insert({
     conversation_id: survey.conversation_id,
     event_type: "satisfaction_survey_answered",
     performed_by: null,
-    metadata: { score, scale_min: survey.scale_min, scale_max: survey.scale_max },
+    metadata: { score, scale_min: scaleMin, scale_max: scaleMax },
   });
 
-  const settings = await getSurveySettings(admin, params.clinicId);
+  if (settings === undefined) settings = await getSurveySettings(admin, params.clinicId);
   const thanks = settings?.satisfaction_survey_thanks_message?.trim();
   if (thanks) {
-    await sendAutomatedText({
+    // Em segundo plano: a resposta do cliente é gravada na conversa sem esperar
+    // o envio (uma reentrega nesse intervalo reabria a conversa)
+    const thanksTask = sendAutomatedText({
       clinicId: params.clinicId,
       conversationId: survey.conversation_id,
       channelConnectionId: survey.channel_connection_id,
       channel: survey.channel,
       text: thanks,
     });
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(thanksTask);
+    } else {
+      await thanksTask;
+    }
   }
 
   return { surveyId: survey.id, conversationId: survey.conversation_id, score };

@@ -1061,6 +1061,11 @@ serve(async (req)=>{
             text
           });
           if (surveyAnswer) {
+            // Entrega repetida: a mensagem pode já ter sido gravada pela primeira
+            const { data: alreadySaved } = surveyAnswer.duplicate && providerMessageId ? await supabase.from("messages").select("id").eq("meta_message_id", providerMessageId).limit(1) : {
+              data: null
+            };
+            if (alreadySaved?.length) continue;
             const { error: surveyMsgErr } = await supabase.from("messages").insert({
               conversation_id: surveyAnswer.conversationId,
               meta_message_id: providerMessageId || `no-mid:${Date.now()}:${counterpartyId}`,

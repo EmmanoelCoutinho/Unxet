@@ -87,6 +87,41 @@ export const NEXT_RELEASE: ReleaseChange[] = [
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    date: "2026-11-11",
+    changes: [
+      {
+        kind: "new",
+        text: "Carteira de clientes: botão Novo cliente. Informe nome e WhatsApp, escolha o número da empresa e a conversa já abre em atendimento com você, pronta para enviar mensagem. Nos detalhes de um cliente, Iniciar conversa faz o mesmo.",
+      },
+      {
+        kind: "new",
+        text: "Transferir conversa para uma pessoa: escolha o atendente e ele vira o responsável, já podendo responder o cliente, e recebe um aviso no sino. A transferência para um setor continua disponível.",
+      },
+      {
+        kind: "improved",
+        text: "Conversa finalizada agora mostra o botão Iniciar conversa: você fica como responsável e pode escrever para o cliente na hora.",
+      },
+      {
+        kind: "fixed",
+        text: "Pesquisa de satisfação: a nota do cliente não reabre mais a conversa encerrada quando o WhatsApp entrega a mesma mensagem duas vezes. Uma nota fora da escala também não reabre a conversa e, se a mensagem pedir uma escala diferente da escolhida em Automações (por exemplo, de 1 a 10), vale a da mensagem.",
+      },
+    ],
+  },
+  {
+    date: "2026-11-10",
+    changes: [
+      {
+        kind: "improved",
+        text: "Administradores podem alterar o nome de cada atendente em Atendentes > Editar. É esse nome que aparece no chat e nas mensagens enviadas ao cliente.",
+        adminOnly: true,
+      },
+      {
+        kind: "fixed",
+        text: "Pesquisa de satisfação: respostas como \"5, obrigado!\", \"Nota: 4\" ou \"5️⃣\" contam como nota, e um \"Obrigado!\" antes da nota não reabre mais a conversa encerrada.",
+      },
+    ],
+  },
+  {
     date: "2026-11-09",
     changes: [
       {
