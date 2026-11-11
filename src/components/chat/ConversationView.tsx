@@ -228,8 +228,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const isFloating = variant === "floating";
   const { getDraft, setDraft } = useFloatingChats();
   const { authUser } = useAuth();
-  const authUserId = authUser?.id;
-  const { clinicId, membership, can, hasFeature } = useClinic();
+  const { clinicId, can, hasFeature } = useClinic();
   const { refetch: refetchConversationList } = useConversationList();
   const { hasMultiple: hasMultipleWhatsapp } = useWhatsappConnections(clinicId);
   const seesAllConversations = can("conversations.all");
@@ -315,26 +314,6 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       id ?? null,
       `${conversation?.status ?? ""}:${conversation?.assignedTo ?? ""}:${conversation?.departmentId ?? ""}`,
     );
-
-  const getAccessibleDepartmentIds = useCallback(async (): Promise<
-    string[]
-  > => {
-    if (!clinicId || !authUser) return [];
-
-    const { data, error } = await supabase
-      .from("department_members")
-      .select("department_id")
-      .eq("clinic_user_id", authUser.id);
-
-    if (!error) {
-      const ids = (data ?? [])
-        .map((row: any) => row.department_id)
-        .filter(Boolean);
-      if (ids.length > 0) return ids;
-    }
-
-    return membership?.department_id ? [membership.department_id] : [];
-  }, [authUser, clinicId, membership?.department_id]);
 
   const timelineItems = useMemo(() => {
     const messageItems = messages.map((message) => ({
@@ -574,36 +553,11 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
       if (shouldHardLoad) setLoadingConversation(true);
 
-      // Atendente adicionado à conversa abre mesmo sendo de outro setor
-      let addedToConversation = false;
-      if (!seesAllConversations && authUserId) {
-        const { data: participantRow } = await supabase
-          .from("conversation_participants")
-          .select("id")
-          .eq("conversation_id", requestedId)
-          .eq("user_id", authUserId)
-          .maybeSingle();
-        addedToConversation = !!participantRow;
-      }
-      const filterByDepartment = !seesAllConversations && !addedToConversation;
-
-      const accessibleDepartmentIds = filterByDepartment
-        ? await getAccessibleDepartmentIds()
-        : [];
-      if (filterByDepartment && accessibleDepartmentIds.length === 0) {
-        if (
-          requestId !== conversationLoadRequestRef.current ||
-          activeRouteConversationIdRef.current !== requestedId
-        ) {
-          return;
-        }
-        setConversation(null);
-        setLoadingConversation(false);
-        didInitialConversationLoadRef.current = true;
-        return;
-      }
-
-      let conversationQuery = supabase
+      // Quem pode abrir a conversa é decidido pelo banco (RLS): quem atende
+      // todos os setores, o responsável, quem foi adicionado e, na fila, quem
+      // é do setor. Não filtramos por setor aqui: a conversa transferida para
+      // uma pessoa continua no setor de origem.
+      const conversationQuery = supabase
         .from("conversations")
         .select(
           `
@@ -648,13 +602,6 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         )
         .eq("id", requestedId)
         .eq("clinic_id", clinicId);
-      // Admin abre conversas de qualquer setor
-      if (filterByDepartment) {
-        conversationQuery = conversationQuery.in(
-          "department_id",
-          accessibleDepartmentIds,
-        );
-      }
 
       const { data, error } = await conversationQuery
         // Só a última mensagem (prévia); a lista completa vem paginada
@@ -757,7 +704,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       setLoadingConversation(false);
       didInitialConversationLoadRef.current = true;
     },
-    [id, clinicId, seesAllConversations, getAccessibleDepartmentIds, authUserId],
+    [id, clinicId],
   );
 
   useEffect(() => {
