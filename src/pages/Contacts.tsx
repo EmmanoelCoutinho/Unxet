@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon, UserPlusIcon } from "lucide-react";
+import { Button } from "../components/ui/Button";
+import { StartConversationModal } from "../modules/contacts/components/StartConversationModal";
 import { toast } from "react-toastify";
 import { ContactDashboard } from "../components/contacts/ContactDashboard";
 import { ContactDetails } from "../components/contacts/ContactDetails";
@@ -35,6 +37,7 @@ export const ContactsPage: React.FC = () => {
   // Abaixo de lg lista e detalhes ocupam a tela inteira, um de cada vez
   const isBelowLg = useIsBelowLg();
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+  const [newContactOpen, setNewContactOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const showMobileDetails = isBelowLg && mobileDetailsOpen && !!selectedContact;
 
@@ -133,6 +136,16 @@ export const ContactsPage: React.FC = () => {
             <span className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
               {emptyStateLabel}
             </span>
+          ) : clinicId ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setNewContactOpen(true)}
+              className="inline-flex items-center gap-1.5 self-start px-4 sm:self-auto"
+            >
+              <UserPlusIcon className="h-4 w-4" />
+              Novo cliente
+            </Button>
           ) : null}
         </header>
 
@@ -165,6 +178,13 @@ export const ContactsPage: React.FC = () => {
           </>
         )}
       </div>
+
+      {newContactOpen && clinicId && (
+        <StartConversationModal
+          clinicId={clinicId}
+          onClose={() => setNewContactOpen(false)}
+        />
+      )}
     </div>
   );
 };

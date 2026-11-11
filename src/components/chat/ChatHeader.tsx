@@ -549,19 +549,22 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 </CustomTooltip>
               )}
 
-              <CustomTooltip
-                text={isAccepting ? "Aceitando..." : "Aceitar conversa"}
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleAccept}
-                  disabled={acceptIsDisabled || !onAccept}
-                  aria-disabled={acceptIsDisabled || !onAccept}
+              {/* Finalizada: o "Iniciar conversa" fica no rodapé (ConversationView) */}
+              {conversation.status !== "closed" && (
+                <CustomTooltip
+                  text={isAccepting ? "Aceitando..." : "Aceitar conversa"}
                 >
-                  <TbMessageCheck className="h-5 w-5 text-green-600" />
-                </Button>
-              </CustomTooltip>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleAccept}
+                    disabled={acceptIsDisabled || !onAccept}
+                    aria-disabled={acceptIsDisabled || !onAccept}
+                  >
+                    <TbMessageCheck className="h-5 w-5 text-green-600" />
+                  </Button>
+                </CustomTooltip>
+              )}
 
               <CustomTooltip
                 text={isClosing ? "Finalizando..." : "Finalizar conversa"}

@@ -168,7 +168,12 @@ export const ContactDetails: React.FC<ContactDetailsProps> = ({
         </div>
       </div>
 
-      <ContactConversations contactId={contact.id} contactName={contact.name} />
+      <ContactConversations
+        clinicId={contact.tenant_id}
+        contactId={contact.id}
+        contactName={contact.name}
+        contactPhone={contact.phone}
+      />
 
       <ContactScheduledMessages
         contactId={contact.id}

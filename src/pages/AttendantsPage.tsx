@@ -357,6 +357,7 @@ export const AttendantsPage: React.FC = () => {
 
   const [activeModal, setActiveModal] = useState<ModalMode | null>(null);
   const [editingUser, setEditingUser] = useState<ClinicUser | null>(null);
+  const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<Role>("agent");
   const [editRoleId, setEditRoleId] = useState<string | null>(null);
   const [roles, setRoles] = useState<ClinicRole[]>([]);
@@ -512,6 +513,28 @@ export const AttendantsPage: React.FC = () => {
     [],
   );
 
+  const updateClinicUserName = useCallback(
+    async (userId: string, name: string) => {
+      if (!clinicId) return;
+
+      // Sem permissão o update não dá erro, só não altera nada: confere a linha
+      const { data, error: updateError } = await supabase
+        .from("clinic_users")
+        .update({ name })
+        .eq("clinic_id", clinicId)
+        .eq("user_id", userId)
+        .select("user_id");
+
+      if (updateError) {
+        throw updateError;
+      }
+      if (!data?.length) {
+        throw new Error("Sem permissão para alterar o nome");
+      }
+    },
+    [clinicId],
+  );
+
   const updateClinicUserRole = useCallback(
     async (userId: string, role: Role, roleId: string | null) => {
       if (!clinicId) return;
@@ -631,6 +654,7 @@ export const AttendantsPage: React.FC = () => {
 
   const handleOpenEdit = (user: ClinicUser) => {
     setEditingUser(user);
+    setEditName(user.name ?? "");
     setEditRole(user.role);
     setEditRoleId(user.role === "admin" ? null : user.role_id ?? null);
     setEditDepartmentId(user.department_id ?? null);
@@ -697,10 +721,20 @@ export const AttendantsPage: React.FC = () => {
       return;
     }
 
+    const nextName = editName.trim();
+    if (!nextName) {
+      toast.error("Informe o nome do atendente");
+      return;
+    }
+
     setIsSaving(true);
 
     try {
       const updates: Promise<void>[] = [];
+
+      if (nextName !== (editingUser.name ?? "").trim()) {
+        updates.push(updateClinicUserName(editingUser.user_id, nextName));
+      }
 
       if (
         editingUser.role !== editRole ||
@@ -1160,6 +1194,17 @@ export const AttendantsPage: React.FC = () => {
       >
         {editingUser && (
           <div className="space-y-6">
+            <label className="block text-sm font-medium text-gray-700">
+              Nome
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Nome do atendente"
+                disabled={!isAdmin}
+                maxLength={120}
+                className="mt-2"
+              />
+            </label>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="text-sm font-medium text-gray-700">
                 Cargo

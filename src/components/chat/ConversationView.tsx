@@ -40,7 +40,7 @@ import { MessageInput } from "./MessageInput";
 import { ArrowDownIcon, ArrowLeftIcon } from "lucide-react";
 import { TbMessageCheck } from "react-icons/tb";
 import { useAuth } from "../../contexts/AuthContext";
-import { TransferModal } from "./TransferModal";
+import { TransferModal, type TransferTarget } from "./TransferModal";
 import { ParticipantsModal } from "./ParticipantsModal";
 import { OtherNumbersBanner } from "./OtherNumbersBanner";
 import { GENERIC_SEND_ERROR, sendErrorMessage } from "../../lib/sendError";
@@ -276,6 +276,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagsSavingId, setTagsSavingId] = useState<string | null>(null);
   const [acceptingConversation, setAcceptingConversation] = useState(false);
+  const [startingConversation, setStartingConversation] = useState(false);
   const [closingConversation, setClosingConversation] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [transferringConversation, setTransferringConversation] =
@@ -921,6 +922,28 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     setAcceptingConversation(false);
   }, [id, loadConversation]);
 
+  // Conversa finalizada: o atendente puxa a conversa e fica como responsável
+  const handleStartConversation = useCallback(async () => {
+    if (!id) return;
+    setStartingConversation(true);
+    const { error } = await supabase.functions.invoke("start-conversation", {
+      body: { conversationId: id },
+    });
+    if (error) {
+      console.error("Erro ao iniciar conversa:", error);
+      const response = (error as { context?: Response }).context;
+      const payload = await response?.json?.().catch(() => null);
+      toast.error(payload?.error ?? "Não foi possível iniciar a conversa.");
+      setStartingConversation(false);
+      return;
+    }
+    await loadConversation();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("inbox:tab", { detail: "open" }));
+    }
+    setStartingConversation(false);
+  }, [id, loadConversation]);
+
   const handleCloseConversation = useCallback(async () => {
     if (!id) return;
 
@@ -960,9 +983,11 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   }, [id, onExit]);
 
   const handleTransferConversation = useCallback(
-    async (target: { departmentId: string }) => {
+    async (target: TransferTarget) => {
       if (!id) return;
-      if (!target.departmentId) return;
+      const toUserId = "userId" in target ? target.userId : null;
+      const toDepartmentId = "departmentId" in target ? target.departmentId : null;
+      if (!toUserId && !toDepartmentId) return;
 
       setTransferringConversation(true);
 
@@ -971,7 +996,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         {
           body: {
             conversationId: id,
-            toDepartmentId: target.departmentId,
+            ...(toUserId ? { toUserId } : { toDepartmentId }),
           },
         },
       );
@@ -993,6 +1018,12 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       setTransferringConversation(false);
       toast.success("Conversa transferida.");
 
+      // Transferiu para si mesmo: continua na conversa, agora como responsável
+      if (toUserId && toUserId === authUser?.id) {
+        await loadConversation();
+        return;
+      }
+
       // Quem transferiu pode perder o acesso à conversa (outro setor, sem
       // responsável): o aviso em tempo real dessa mudança não chega até essa
       // pessoa, então a lista é recarregada para tirar a conversa de lá
@@ -1000,7 +1031,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
       onExit();
     },
-    [id, onExit, refetchConversationList],
+    [id, onExit, refetchConversationList, authUser?.id, loadConversation],
   );
 
   const addTagToConversation = async (
@@ -1609,9 +1640,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           onClose={handleCloseConversation}
           onRefresh={loadConversation}
           // Plano sem departamentos: o botão de transferir nem aparece
-          onTransfer={
-            hasFeature("departments") ? () => setIsTransferOpen(true) : undefined
-          }
+          // Plano sem departamentos: transfere só para uma pessoa
+          onTransfer={() => setIsTransferOpen(true)}
           acceptDisabled={
             acceptingConversation ||
             !authUser ||
@@ -1848,6 +1878,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         loading={transferringConversation}
         clinicId={clinicId}
         currentDepartmentId={conversation?.departmentId ?? null}
+        currentAssigneeId={conversation?.assignedTo ?? null}
+        allowDepartments={hasFeature("departments")}
       />
 
       {/* Caixa flutuante: aceitar fica no rodapé, onde o campo de mensagem
@@ -1868,6 +1900,30 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           >
             <TbMessageCheck className="h-4 w-4" />
             {acceptingConversation ? "Aceitando..." : "Aceitar"}
+          </Button>
+        </div>
+      )}
+
+      {/* Finalizada: "Iniciar conversa" reabre com o atendente como responsável */}
+      {conversation?.status === "closed" && !conversation.connectionRemoved && (
+        <div className="flex shrink-0 items-center gap-3 border-t border-gray-200 bg-gray-50 px-3 py-2.5 sm:px-4">
+          <p className="min-w-0 flex-1 text-xs leading-snug text-gray-500 sm:text-sm">
+            {conversation.provider === "meta" &&
+            !isInside24hWindow(
+              latestIso(conversation.lastInboundAt, getLastInboundClientAt(messages)),
+            )
+              ? "Conversa finalizada. Pelo WhatsApp oficial, depois de 24h sem resposta do cliente só dá para enviar modelo aprovado (em Campanhas)."
+              : "Conversa finalizada. Inicie a conversa para enviar mensagem ao cliente."}
+          </p>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleStartConversation}
+            disabled={startingConversation || !authUser}
+            className="flex flex-shrink-0 items-center gap-1.5 px-4"
+          >
+            <TbMessageCheck className="h-4 w-4" />
+            {startingConversation ? "Iniciando..." : "Iniciar conversa"}
           </Button>
         </div>
       )}

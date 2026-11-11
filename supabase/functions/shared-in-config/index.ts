@@ -136,19 +136,25 @@ serve(async (req)=>{
         text
       });
       if (surveyAnswer) {
-        const { error: surveyMsgErr } = await supabase.from("messages").insert({
-          conversation_id: surveyAnswer.conversationId,
-          meta_message_id: providerMessageId,
-          direction: DIRECTION_INBOUND,
-          type: messageType,
-          sender: waId,
-          text,
-          payload: rawPayload,
-          sent_at: timestampIso,
-          is_automated: false
-        });
-        if (surveyMsgErr) {
-          console.error("Erro inserindo resposta da pesquisa:", surveyMsgErr);
+        // Entrega repetida: a mensagem pode já ter sido gravada pela primeira
+        const { data: alreadySaved } = surveyAnswer.duplicate ? await supabase.from("messages").select("id").eq("meta_message_id", providerMessageId).limit(1) : {
+          data: null
+        };
+        if (!alreadySaved?.length) {
+          const { error: surveyMsgErr } = await supabase.from("messages").insert({
+            conversation_id: surveyAnswer.conversationId,
+            meta_message_id: providerMessageId,
+            direction: DIRECTION_INBOUND,
+            type: messageType,
+            sender: waId,
+            text,
+            payload: rawPayload,
+            sent_at: timestampIso,
+            is_automated: false
+          });
+          if (surveyMsgErr) {
+            console.error("Erro inserindo resposta da pesquisa:", surveyMsgErr);
+          }
         }
         await supabase.from("conversations").update({
           last_message_at: timestampIso,

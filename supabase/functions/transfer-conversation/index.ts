@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hasClinicPermission } from "../_shared/security.ts";
 import { clinicHasFeature, PLAN_LIMIT_MESSAGES } from "../_shared/plan.ts";
+import { sendPushToUsers } from "../_shared/push.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -10,6 +11,90 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
 };
+/**
+ * Transfere para um atendente: ele vira o responsável e a conversa fica em
+ * atendimento (pode responder na hora). O setor continua o mesmo; o
+ * responsável vê a conversa mesmo sendo de outro setor.
+ */ async function transferToUser(admin, params) {
+  const { conv, conversationId, toUserId, user, actorName, reject } = params;
+  if (toUserId === conv.assigned_user_id) {
+    return reject(400, "Essa pessoa já é a responsável pela conversa.");
+  }
+  const { data: target } = await admin.from("clinic_users").select("user_id, name, email, accepted_at").eq("clinic_id", conv.clinic_id).eq("user_id", toUserId).maybeSingle();
+  if (!target) return reject(400, "Atendente não encontrado nesta empresa.");
+  if (!target.accepted_at) {
+    return reject(400, "Esse atendente ainda não aceitou o convite para entrar no Unxet.");
+  }
+  const nowIso = new Date().toISOString();
+  const { data: updated, error: updErr } = await admin.from("conversations").update({
+    assigned_user_id: toUserId,
+    in_bot_flow: false,
+    status: "open",
+    status_changed_at: nowIso,
+    updated_at: nowIso
+  }).eq("id", conversationId).neq("status", "closed").select("id, status, assigned_user_id, department_id, clinic_id").maybeSingle();
+  if (updErr) return reject(500, "Failed to transfer");
+  if (!updated) {
+    return reject(409, "Esta conversa já foi finalizada e não pode ser transferida.", "conversation_closed");
+  }
+  // Quem virou responsável deixa de ser só "adicionado"
+  await admin.from("conversation_participants").delete().eq("conversation_id", conversationId).eq("user_id", toUserId);
+  const targetName = target.name || target.email || "Atendente";
+  await admin.from("conversation_events").insert({
+    conversation_id: conversationId,
+    event_type: "conversation_transferred",
+    performed_by: user.id,
+    metadata: {
+      performed_by_name: actorName,
+      from_user_id: conv.assigned_user_id ?? null,
+      to_user_id: toUserId,
+      to_user_name: targetName,
+      assigned_user_id: toUserId,
+      status: "open"
+    }
+  });
+  // Aviso para quem recebeu (sino + push), sem atrasar a resposta
+  if (toUserId !== user.id) {
+    const contactLabel = conv.contacts?.name || conv.contacts?.phone || "um cliente";
+    const url = `/inbox/chat/${conversationId}`;
+    const title = "Conversa transferida para você";
+    const body = `${actorName} transferiu para você a conversa com ${contactLabel}.`;
+    const notifyTask = (async ()=>{
+      const { error: notifErr } = await admin.from("user_notifications").insert({
+        user_id: toUserId,
+        clinic_id: conv.clinic_id,
+        kind: "conversation_transferred",
+        title,
+        body,
+        url
+      });
+      if (notifErr) console.error("transfer.notification_failed", notifErr);
+      await sendPushToUsers(admin, [
+        toUserId
+      ], {
+        title,
+        body,
+        conversationId,
+        url
+      });
+    })().catch((err)=>console.error("transfer.notify_failed", err?.message ?? String(err)));
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(notifyTask);
+    } else {
+      await notifyTask;
+    }
+  }
+  return new Response(JSON.stringify({
+    ok: true,
+    conversation: updated
+  }), {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json"
+    }
+  });
+}
 serve(async (req)=>{
   if (req.method === "OPTIONS") {
     return new Response("ok", {
@@ -52,9 +137,11 @@ serve(async (req)=>{
     const body = await req.json().catch(()=>({}));
     const conversationId = body?.conversationId;
     const toDepartmentId = body?.toDepartmentId;
-    if (!conversationId || !toDepartmentId) {
+    // Para uma pessoa: a conversa vai direto para ela, em atendimento
+    const toUserId = body?.toUserId;
+    if (!conversationId || !toDepartmentId && !toUserId) {
       return new Response(JSON.stringify({
-        error: "conversationId and toDepartmentId are required"
+        error: "conversationId and toDepartmentId or toUserId are required"
       }), {
         status: 400,
         headers: {
@@ -65,7 +152,7 @@ serve(async (req)=>{
     }
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     // 1) conversa
-    const { data: conv, error: convErr } = await admin.from("conversations").select("id, clinic_id, department_id, assigned_user_id, status").eq("id", conversationId).maybeSingle();
+    const { data: conv, error: convErr } = await admin.from("conversations").select("id, clinic_id, department_id, assigned_user_id, status, contacts ( name, phone )").eq("id", conversationId).maybeSingle();
     if (convErr || !conv) {
       return new Response(JSON.stringify({
         error: "Conversation not found"
@@ -102,7 +189,8 @@ serve(async (req)=>{
           "Content-Type": "application/json"
         }
       });
-    if (!await clinicHasFeature(admin, conv.clinic_id, "departments")) {
+    // Transferir para uma pessoa não depende de setores no plano
+    if (!toUserId && !await clinicHasFeature(admin, conv.clinic_id, "departments")) {
       return reject(403, PLAN_LIMIT_MESSAGES.departments, "plan_limit");
     }
     // 3) quem pode transferir: admin ou cargo que atende todos os setores, o
@@ -122,6 +210,17 @@ serve(async (req)=>{
     }
     if (conv.status === "closed") {
       return reject(409, "Esta conversa já foi finalizada e não pode ser transferida.", "conversation_closed");
+    }
+    const actorName = membership.name ?? user.user_metadata?.name ?? user.email ?? membership.email ?? "Atendente";
+    if (toUserId) {
+      return await transferToUser(admin, {
+        conv,
+        conversationId,
+        toUserId: String(toUserId),
+        user,
+        actorName,
+        reject
+      });
     }
     if (toDepartmentId === conv.department_id) {
       return reject(400, "A conversa já está neste setor.");
@@ -159,7 +258,6 @@ serve(async (req)=>{
         }
       });
     }
-    const actorName = membership.name ?? user.user_metadata?.name ?? user.email ?? membership.email ?? "Atendente";
     await admin.from("conversation_events").insert({
       conversation_id: conversationId,
       event_type: "conversation_transferred",
