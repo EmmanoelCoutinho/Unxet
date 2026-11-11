@@ -76,6 +76,14 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
+    text: "Painel: nova lista Atendimentos de hoje, com todas as conversas que tiveram movimento no dia. Cada card mostra o departamento, a situação (em atendimento, na fila, no bot ou finalizada) e o responsável, e clicar abre a conversa. Dá para filtrar por situação.",
+  },
+  {
+    kind: "improved",
+    text: "Lista de conversas: o card agora mostra também o departamento, ao lado do responsável (ex.: Você - Fiscal), quando a empresa tem mais de um departamento.",
+  },
+  {
+    kind: "new",
     text: "Bloquear contato: na conversa, em Mais ações > Bloquear contato, ou pelo menu Contatos bloqueados (que também bloqueia um número que ainda nem escreveu). As mensagens de quem está bloqueado são descartadas assim que chegam (não abrem conversa, não acionam bot nem IA) e a empresa também não envia para ele: conversas, campanhas e agendamentos. A lista mostra quem bloqueou, o motivo e quantas mensagens foram barradas, e dá para desbloquear a qualquer momento.",
   },
   {

@@ -15,6 +15,7 @@ import {
   useClinicUserNames,
 } from "../hooks/useClinicUserNames";
 import { useWhatsappConnections } from "../hooks/useWhatsappConnections";
+import { useDepartmentNames } from "../hooks/useDepartmentNames";
 import { useAuth } from "../contexts/AuthContext";
 import { useClinic } from "../contexts/ClinicContext";
 import { setAppBadge } from "../lib/pushNotifications";
@@ -55,6 +56,9 @@ export const Inbox: React.FC = () => {
   const listFillsScreen =
     isInboxRoot && !(can("dashboard.view") && hasFeature("analytics"));
   const userNames = useClinicUserNames(clinicId);
+  // Departamento no card: só faz sentido quando a empresa tem mais de um
+  const departmentNames = useDepartmentNames(clinicId);
+  const hasSeveralDepartments = Object.keys(departmentNames).length > 1;
   const { hasMultiple: hasMultipleWhatsapp } = useWhatsappConnections(clinicId);
 
   useEffect(() => {
@@ -328,6 +332,11 @@ export const Inbox: React.FC = () => {
                           authUser?.id,
                           userNames,
                         )
+                      : undefined
+                  }
+                  departmentName={
+                    hasSeveralDepartments && conversation.departmentId
+                      ? departmentNames[conversation.departmentId]
                       : undefined
                   }
                   connectionLabel={

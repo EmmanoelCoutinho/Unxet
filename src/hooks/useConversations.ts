@@ -257,6 +257,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
           ),
           last_message_at,
           created_at,
+          department_id,
           assigned_user_id,
           in_bot_flow,
           sla_breached_at,
@@ -393,6 +394,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
             return {
               id: row.id,
+              departmentId: row.department_id ?? undefined,
               channel: row.channel as Channel,
               status: row.status,
               provider: row.channel_connections?.provider,
@@ -635,6 +637,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
               const updated: Conversation = {
                 ...old,
                 status: nextRow?.status ?? old.status,
+                departmentId: nextDept ?? old.departmentId,
                 assignedTo: nextRow?.assigned_user_id ?? undefined,
                 inBotFlow,
                 unreadCount: inBotFlow ? 0 : old.unreadCount,
