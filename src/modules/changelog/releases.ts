@@ -85,6 +85,10 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
         text: "Carteira de clientes: botão Novo cliente. Informe nome e WhatsApp, escolha o número da empresa e a conversa já abre em atendimento com você, pronta para enviar mensagem. Nos detalhes de um cliente, Iniciar conversa faz o mesmo.",
       },
       {
+        kind: "new",
+        text: "Transferir conversa para uma pessoa: escolha o atendente e ele vira o responsável, já podendo responder o cliente, e recebe um aviso no sino. A transferência para um setor continua disponível.",
+      },
+      {
         kind: "improved",
         text: "Conversa finalizada agora mostra o botão Iniciar conversa: você fica como responsável e pode escrever para o cliente na hora.",
       },

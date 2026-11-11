@@ -95,7 +95,7 @@ const getEventText = (event: ConversationEvent) => {
       const toUser = meta.to_user_name ?? meta.assigned_user_name;
 
       if (toUser) {
-        return `${actor} atribuiu a conversa para ${toUser}`;
+        return `${actor} transferiu a conversa para ${toUser}`;
       }
 
       if (toDepartment) {

@@ -40,7 +40,7 @@ import { MessageInput } from "./MessageInput";
 import { ArrowDownIcon, ArrowLeftIcon } from "lucide-react";
 import { TbMessageCheck } from "react-icons/tb";
 import { useAuth } from "../../contexts/AuthContext";
-import { TransferModal } from "./TransferModal";
+import { TransferModal, type TransferTarget } from "./TransferModal";
 import { ParticipantsModal } from "./ParticipantsModal";
 import { OtherNumbersBanner } from "./OtherNumbersBanner";
 import { GENERIC_SEND_ERROR, sendErrorMessage } from "../../lib/sendError";
@@ -983,9 +983,11 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   }, [id, onExit]);
 
   const handleTransferConversation = useCallback(
-    async (target: { departmentId: string }) => {
+    async (target: TransferTarget) => {
       if (!id) return;
-      if (!target.departmentId) return;
+      const toUserId = "userId" in target ? target.userId : null;
+      const toDepartmentId = "departmentId" in target ? target.departmentId : null;
+      if (!toUserId && !toDepartmentId) return;
 
       setTransferringConversation(true);
 
@@ -994,7 +996,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         {
           body: {
             conversationId: id,
-            toDepartmentId: target.departmentId,
+            ...(toUserId ? { toUserId } : { toDepartmentId }),
           },
         },
       );
@@ -1016,6 +1018,12 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       setTransferringConversation(false);
       toast.success("Conversa transferida.");
 
+      // Transferiu para si mesmo: continua na conversa, agora como responsável
+      if (toUserId && toUserId === authUser?.id) {
+        await loadConversation();
+        return;
+      }
+
       // Quem transferiu pode perder o acesso à conversa (outro setor, sem
       // responsável): o aviso em tempo real dessa mudança não chega até essa
       // pessoa, então a lista é recarregada para tirar a conversa de lá
@@ -1023,7 +1031,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
       onExit();
     },
-    [id, onExit, refetchConversationList],
+    [id, onExit, refetchConversationList, authUser?.id, loadConversation],
   );
 
   const addTagToConversation = async (
@@ -1632,9 +1640,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           onClose={handleCloseConversation}
           onRefresh={loadConversation}
           // Plano sem departamentos: o botão de transferir nem aparece
-          onTransfer={
-            hasFeature("departments") ? () => setIsTransferOpen(true) : undefined
-          }
+          // Plano sem departamentos: transfere só para uma pessoa
+          onTransfer={() => setIsTransferOpen(true)}
           acceptDisabled={
             acceptingConversation ||
             !authUser ||
@@ -1871,6 +1878,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         loading={transferringConversation}
         clinicId={clinicId}
         currentDepartmentId={conversation?.departmentId ?? null}
+        currentAssigneeId={conversation?.assignedTo ?? null}
+        allowDepartments={hasFeature("departments")}
       />
 
       {/* Caixa flutuante: aceitar fica no rodapé, onde o campo de mensagem
