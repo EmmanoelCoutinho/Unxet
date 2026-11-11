@@ -3,6 +3,7 @@ import React, { useCallback, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ActivityIcon,
+  BanIcon,
   BotIcon,
   Building2Icon,
   ChevronDownIcon,
@@ -99,6 +100,13 @@ const allSidebarItems: SidebarItem[] = [
     group: "atendimento",
   },
   { label: "Etiquetas", icon: TagIcon, path: "/inbox/tags", group: "atendimento" },
+  {
+    label: "Contatos bloqueados",
+    icon: BanIcon,
+    path: "/inbox/blocked",
+    group: "atendimento",
+    permission: "contacts.block",
+  },
   {
     label: "Bots",
     icon: BotIcon,

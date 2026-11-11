@@ -74,6 +74,15 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
+  {
+    kind: "new",
+    text: "Bloquear contato: na conversa, em Mais ações > Bloquear contato, ou pelo menu Contatos bloqueados (que também bloqueia um número que ainda nem escreveu). As mensagens de quem está bloqueado são descartadas assim que chegam (não abrem conversa, não acionam bot nem IA) e a empresa também não envia para ele: conversas, campanhas e agendamentos. A lista mostra quem bloqueou, o motivo e quantas mensagens foram barradas, e dá para desbloquear a qualquer momento.",
+  },
+  {
+    kind: "new",
+    text: "Nova permissão nos cargos: Bloquear contatos. Administradores já podem; para os demais, marque a permissão no cargo.",
+    adminOnly: true,
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

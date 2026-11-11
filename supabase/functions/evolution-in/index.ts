@@ -20,6 +20,7 @@ import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { redactWebhookSecrets, stripWebhookEventSuffix } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 import { isNonChatJid } from "../_shared/evolutionSettings.ts";
+import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 import { createCheckThrottle, imageHash, isCurrentProfilePic, profilePicFolder, profilePicPath } from "../_shared/profilePicture.ts";
 // ---------------------------------------------------------------------------
 // Env
@@ -527,6 +528,20 @@ serve(async (req)=>{
       return new Response(JSON.stringify({
         ignored: true,
         reason: "from_me"
+      }), {
+        status: 200
+      });
+    }
+    // ── Contato bloqueado: descarta antes de baixar mídia, criar conversa,
+    // acionar bot ou IA (só conta a mensagem barrada) ──────────────────────
+    if (await registerBlockedInbound(supabase, connection.clinic_id, blockIdentifiers(waId))) {
+      console.log("[BLOCKED_CONTACT] mensagem descartada:", {
+        clinicId: connection.clinic_id,
+        providerMessageId
+      });
+      return new Response(JSON.stringify({
+        ignored: true,
+        reason: "blocked_contact"
       }), {
         status: 200
       });

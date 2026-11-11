@@ -43,6 +43,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import { TransferModal, type TransferTarget } from "./TransferModal";
 import { ParticipantsModal } from "./ParticipantsModal";
 import { ConversationFilesPanel } from "./ConversationFilesPanel";
+import { BlockContactModal } from "../../modules/contacts/components/BlockContactModal";
+import { unblockContact } from "../../modules/contacts/api/blocking";
 import { OtherNumbersBanner } from "./OtherNumbersBanner";
 import { GENERIC_SEND_ERROR, sendErrorMessage } from "../../lib/sendError";
 import { useConversationParticipants } from "../../hooks/useConversationParticipants";
@@ -236,6 +238,20 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   // Nomes de todos da empresa: responsável (admin) e atendentes adicionados
   const userNames = useClinicUserNames(clinicId);
 
+  const handleUnblockContact = async () => {
+    const contactId = conversation?.contactId;
+    if (!contactId) return;
+    try {
+      await unblockContact(contactId);
+      setConversation((current) =>
+        current && current.contactId === contactId ? { ...current, contactBlocked: false } : current,
+      );
+      toast.success("Contato desbloqueado. As mensagens dele voltam a chegar.");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Não foi possível desbloquear o contato.");
+    }
+  };
+
   const didInitialConversationLoadRef = useRef(false);
   const activeRouteConversationIdRef = useRef<string | undefined>(id);
   const conversationLoadRequestRef = useRef(0);
@@ -283,6 +299,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     useState(false);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [isFilesOpen, setIsFilesOpen] = useState(false);
+  const [isBlockOpen, setIsBlockOpen] = useState(false);
+  const canBlockContacts = can("contacts.block");
   const [participantBusyId, setParticipantBusyId] = useState<string | null>(
     null,
   );
@@ -682,6 +700,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           ? whatsappConnectionLabel((data as any).channel_connections)
           : undefined,
         contactId: contactRow?.id ?? (data as any).contact_id ?? undefined,
+        contactBlocked: !!contactRow?.blocked_at,
         contactName:
           contactRow?.name ?? contactRow?.phone ?? "Contato sem nome",
         contactNumber: contactRow?.phone ?? "",
@@ -1586,6 +1605,16 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
               : undefined
           }
           onOpenFiles={conversation.contactId ? () => setIsFilesOpen(true) : undefined}
+          onBlockContact={
+            canBlockContacts && conversation.contactId && !conversation.contactBlocked
+              ? () => setIsBlockOpen(true)
+              : undefined
+          }
+          onUnblockContact={
+            canBlockContacts && conversation.contactId && conversation.contactBlocked
+              ? handleUnblockContact
+              : undefined
+          }
           onAccept={handleAcceptConversation}
           onClose={handleCloseConversation}
           onRefresh={loadConversation}
@@ -1804,6 +1833,19 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {isBlockOpen && conversation?.contactId && (
+        <BlockContactModal
+          contactId={conversation.contactId}
+          contactName={conversation.contactName}
+          onClose={() => setIsBlockOpen(false)}
+          onBlocked={() => {
+            // O bloqueio finaliza a conversa: recarrega esta tela e a lista
+            void loadConversation({ silent: true });
+            void refetchConversationList();
+          }}
+        />
       )}
 
       {conversation?.contactId && (
