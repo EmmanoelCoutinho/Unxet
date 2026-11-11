@@ -276,6 +276,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagsSavingId, setTagsSavingId] = useState<string | null>(null);
   const [acceptingConversation, setAcceptingConversation] = useState(false);
+  const [startingConversation, setStartingConversation] = useState(false);
   const [closingConversation, setClosingConversation] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [transferringConversation, setTransferringConversation] =
@@ -919,6 +920,28 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       window.dispatchEvent(new CustomEvent("inbox:tab", { detail: "open" }));
     }
     setAcceptingConversation(false);
+  }, [id, loadConversation]);
+
+  // Conversa finalizada: o atendente puxa a conversa e fica como responsável
+  const handleStartConversation = useCallback(async () => {
+    if (!id) return;
+    setStartingConversation(true);
+    const { error } = await supabase.functions.invoke("start-conversation", {
+      body: { conversationId: id },
+    });
+    if (error) {
+      console.error("Erro ao iniciar conversa:", error);
+      const response = (error as { context?: Response }).context;
+      const payload = await response?.json?.().catch(() => null);
+      toast.error(payload?.error ?? "Não foi possível iniciar a conversa.");
+      setStartingConversation(false);
+      return;
+    }
+    await loadConversation();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("inbox:tab", { detail: "open" }));
+    }
+    setStartingConversation(false);
   }, [id, loadConversation]);
 
   const handleCloseConversation = useCallback(async () => {
@@ -1868,6 +1891,30 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           >
             <TbMessageCheck className="h-4 w-4" />
             {acceptingConversation ? "Aceitando..." : "Aceitar"}
+          </Button>
+        </div>
+      )}
+
+      {/* Finalizada: "Iniciar conversa" reabre com o atendente como responsável */}
+      {conversation?.status === "closed" && !conversation.connectionRemoved && (
+        <div className="flex shrink-0 items-center gap-3 border-t border-gray-200 bg-gray-50 px-3 py-2.5 sm:px-4">
+          <p className="min-w-0 flex-1 text-xs leading-snug text-gray-500 sm:text-sm">
+            {conversation.provider === "meta" &&
+            !isInside24hWindow(
+              latestIso(conversation.lastInboundAt, getLastInboundClientAt(messages)),
+            )
+              ? "Conversa finalizada. Pelo WhatsApp oficial, depois de 24h sem resposta do cliente só dá para enviar modelo aprovado (em Campanhas)."
+              : "Conversa finalizada. Inicie a conversa para enviar mensagem ao cliente."}
+          </p>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleStartConversation}
+            disabled={startingConversation || !authUser}
+            className="flex flex-shrink-0 items-center gap-1.5 px-4"
+          >
+            <TbMessageCheck className="h-4 w-4" />
+            {startingConversation ? "Iniciando..." : "Iniciar conversa"}
           </Button>
         </div>
       )}

@@ -42,6 +42,9 @@ const getEventText = (event: ConversationEvent) => {
     case "conversation_closed":
       return `${actor} finalizou a conversa`;
 
+    case "conversation_started":
+      return `${actor} iniciou a conversa`;
+
     case "conversation_reopened":
       return `${actor} reabriu a conversa`;
 

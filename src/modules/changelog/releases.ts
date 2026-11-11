@@ -81,6 +81,14 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
     date: "2026-11-11",
     changes: [
       {
+        kind: "new",
+        text: "Carteira de clientes: botão Novo cliente. Informe nome e WhatsApp, escolha o número da empresa e a conversa já abre em atendimento com você, pronta para enviar mensagem. Nos detalhes de um cliente, Iniciar conversa faz o mesmo.",
+      },
+      {
+        kind: "improved",
+        text: "Conversa finalizada agora mostra o botão Iniciar conversa: você fica como responsável e pode escrever para o cliente na hora.",
+      },
+      {
         kind: "fixed",
         text: "Pesquisa de satisfação: a nota do cliente não reabre mais a conversa encerrada quando o WhatsApp entrega a mesma mensagem duas vezes. Uma nota fora da escala também não reabre a conversa e, se a mensagem pedir uma escala diferente da escolhida em Automações (por exemplo, de 1 a 10), vale a da mensagem.",
       },

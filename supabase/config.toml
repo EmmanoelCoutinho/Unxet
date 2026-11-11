@@ -382,6 +382,9 @@ verify_jwt = false
 [functions.accept-conversation]
 verify_jwt = false
 
+[functions.start-conversation]
+verify_jwt = false
+
 [functions.transfer-conversation]
 verify_jwt = false
 
