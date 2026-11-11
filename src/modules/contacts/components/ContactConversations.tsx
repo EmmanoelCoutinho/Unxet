@@ -4,6 +4,7 @@ import { supabase } from "../../../lib/supabaseClient";
 import { conversationConnectionLabel } from "../../../lib/whatsappConnections";
 import { useOpenConversation } from "../../floatingChats/useOpenConversation";
 import { formatDateTime } from "../../../components/contacts/contactLabels";
+import { StartConversationModal } from "./StartConversationModal";
 
 type ContactConversationRow = {
   id: string;
@@ -56,11 +57,17 @@ const statusBadge = (row: ContactConversationRow) => {
  * número da empresa tem a própria conversa.
  */
 export const ContactConversations: React.FC<{
+  clinicId: string;
   contactId: string;
   contactName: string;
-}> = ({ contactId, contactName }) => {
+  contactPhone: string | null;
+}> = ({ clinicId, contactId, contactName, contactPhone }) => {
   const [rows, setRows] = useState<ContactConversationRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [startOpen, setStartOpen] = useState(false);
+  // Recarrega a lista depois de iniciar uma conversa
+  const [reloadKey, setReloadKey] = useState(0);
+  const hasPhone = /^\d{10,13}$/.test(String(contactPhone ?? "").replace(/\D/g, ""));
   const openConversation = useOpenConversation();
 
   useEffect(() => {
@@ -87,11 +94,22 @@ export const ContactConversations: React.FC<{
     return () => {
       active = false;
     };
-  }, [contactId]);
+  }, [contactId, reloadKey]);
 
   return (
     <div className="border-t border-gray-100 p-4 sm:p-5">
-      <h3 className="text-base font-semibold text-gray-950">Conversas</h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-base font-semibold text-gray-950">Conversas</h3>
+        {hasPhone && (
+          <button
+            type="button"
+            onClick={() => setStartOpen(true)}
+            className="flex-shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-[#0A84FF] transition-colors hover:bg-blue-50"
+          >
+            Iniciar conversa
+          </button>
+        )}
+      </div>
       <p className="mt-1 text-sm text-gray-500">
         Uma conversa por canal: no WhatsApp, uma para cada número da empresa
         em que o cliente falou.
@@ -142,6 +160,15 @@ export const ContactConversations: React.FC<{
           })
         )}
       </div>
+
+      {startOpen && (
+        <StartConversationModal
+          clinicId={clinicId}
+          contact={{ id: contactId, name: contactName, phone: contactPhone }}
+          onClose={() => setStartOpen(false)}
+          onSaved={() => setReloadKey((key) => key + 1)}
+        />
+      )}
     </div>
   );
 };

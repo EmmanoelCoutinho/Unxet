@@ -431,6 +431,22 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
       String(Number(formValues.surveyScaleMax)),
     );
 
+  // Escala que o texto pede ("nota de 1 a 10"): é a que vale para o cliente
+  const surveyMessageScale = (() => {
+    const text = formValues.surveyMessage.toLowerCase();
+    for (const range of text.matchAll(/(?<![\d:,.h])(\d{1,2})\s*(?:a|até|ate|ao|-|–)\s*(\d{1,2})(?![\d:h])/g)) {
+      const min = Number(range[1]);
+      const max = Number(range[2]);
+      if (min >= 0 && max <= 10 && min < max) return { min, max };
+    }
+    return null;
+  })();
+  const surveyMessageOtherScale =
+    formValues.surveyEnabled &&
+    surveyMessageScale !== null &&
+    (String(surveyMessageScale.min) !== formValues.surveyScaleMin.trim() ||
+      String(surveyMessageScale.max) !== formValues.surveyScaleMax.trim());
+
   const handleToggleChange = async (patch: Partial<AutomationFormValues>) => {
     if (saving) return;
     const nextValues = { ...formValues, ...patch };
@@ -695,11 +711,23 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
                 disabled={!formValues.surveyEnabled}
                 error={formErrors.surveyMessage}
               />
-              {surveyMessageMissesScale && !formErrors.surveyMessage && (
+              {surveyMessageOtherScale && surveyMessageScale && !formErrors.surveyMessage ? (
                 <p className="-mt-3 text-xs text-amber-600">
-                  Confira se a mensagem explica a escala de{" "}
-                  {formValues.surveyScaleMin} a {formValues.surveyScaleMax}.
+                  A mensagem pede nota de {surveyMessageScale.min} a{" "}
+                  {surveyMessageScale.max}, diferente da escala escolhida (
+                  {formValues.surveyScaleMin} a {formValues.surveyScaleMax}). O
+                  cliente responde pelo que lê, então a nota será registrada de{" "}
+                  {surveyMessageScale.min} a {surveyMessageScale.max}. Ajuste a
+                  escala ou o texto para ficarem iguais.
                 </p>
+              ) : (
+                surveyMessageMissesScale &&
+                !formErrors.surveyMessage && (
+                  <p className="-mt-3 text-xs text-amber-600">
+                    Confira se a mensagem explica a escala de{" "}
+                    {formValues.surveyScaleMin} a {formValues.surveyScaleMax}.
+                  </p>
+                )
               )}
 
               <Textarea
