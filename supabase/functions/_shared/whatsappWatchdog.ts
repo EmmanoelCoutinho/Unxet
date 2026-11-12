@@ -81,7 +81,7 @@ export const watchdogNotification = (kind: "restart" | "alert", activity) => {
     return {
       kind: "whatsapp_watchdog_restart",
       title: "WhatsApp reiniciado automaticamente",
-      body: `O número ${label} ficou ${WATCHDOG_WINDOW_MINUTES} minutos sem receber mensagens num horário em que costuma receber. A conexão foi reiniciada sozinha; não é preciso fazer nada.`,
+      body: `O número ${label} ficou ${WATCHDOG_WINDOW_MINUTES} minutos sem receber mensagens num horário em que costuma receber. A conexão foi reiniciada sozinha. Se as mensagens não voltarem, você recebe outro aviso para ler o QR Code de novo.`,
     };
   }
   return {
