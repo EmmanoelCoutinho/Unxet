@@ -82,6 +82,15 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
     changes: [
       {
         kind: "new",
+        text: "Arquivos XML: agora dá para enviar XML (como o da nota fiscal) na conversa, no banco de arquivos e nas mensagens agendadas. O XML que o cliente manda também chega como documento, pronto para abrir ou baixar.",
+      },
+    ],
+  },
+  {
+    date: "2026-11-12",
+    changes: [
+      {
+        kind: "new",
         text: "Cancelar gravação de áudio: enquanto grava, aparece uma lixeira ao lado do botão de enviar (ou aperte Esc) para descartar o áudio sem mandar para o cliente. Sair da conversa no meio da gravação também descarta o áudio, em vez de enviar pela metade.",
       },
       {
