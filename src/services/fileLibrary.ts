@@ -59,6 +59,7 @@ const EXTENSION_MIME: Record<string, { mime: string; kind: FileKind }> = {
   "3gp": { mime: "video/3gpp", kind: "video" },
   txt: { mime: "text/plain", kind: "document" },
   pdf: { mime: "application/pdf", kind: "document" },
+  xml: { mime: "application/xml", kind: "document" },
   doc: { mime: "application/msword", kind: "document" },
   docx: {
     mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -82,7 +83,18 @@ export const LIBRARY_ACCEPT = Object.keys(EXTENSION_MIME)
   .join(",");
 
 export const LIBRARY_ACCEPTED_LABEL =
-  "imagens JPG ou PNG (até 5 MB), áudios MP3, M4A, AAC, AMR ou OGG (até 16 MB), vídeos MP4 e documentos PDF, TXT, Word, Excel ou PowerPoint (até 100 MB)";
+  "imagens JPG ou PNG (até 5 MB), áudios MP3, M4A, AAC, AMR ou OGG (até 16 MB), vídeos MP4 e documentos PDF, TXT, XML, Word, Excel ou PowerPoint (até 100 MB)";
+
+/**
+ * Content-Type gravado no Storage. XML fica como texto puro: a API oficial
+ * do WhatsApp só baixa documentos de tipos que ela conhece (texto é um
+ * deles) e o navegador não interpreta o arquivo ao abrir o link. O cliente
+ * recebe o arquivo com o nome e a extensão .xml normalmente.
+ */
+export const storageContentType = (mime: string) => {
+  const base = mime.toLowerCase().split(";")[0].trim();
+  return base === "application/xml" || base === "text/xml" ? "text/plain" : mime;
+};
 
 const extensionOf = (name: string) => {
   const dot = name.lastIndexOf(".");
@@ -220,7 +232,7 @@ export const uploadLibraryFile = async (params: {
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, params.file, {
     cacheControl: "3600",
     upsert: false,
-    contentType: check.mimeType,
+    contentType: storageContentType(check.mimeType),
   });
   if (uploadError) throw new Error("Não foi possível enviar o arquivo. Tente de novo.");
 
