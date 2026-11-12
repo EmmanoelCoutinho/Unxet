@@ -459,6 +459,7 @@ serve(async (req)=>{
   if (contentType.includes("officedocument.spreadsheetml")) return "xlsx";
   if (contentType.includes("officedocument.presentationml")) return "pptx";
   if (contentType.includes("plain")) return "txt";
+  if (contentType.includes("xml")) return "xml";
   return "bin";
 }
 async function getAutomationSettings(supabase, clinicId) {

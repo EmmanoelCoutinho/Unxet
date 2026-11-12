@@ -25,6 +25,7 @@ import {
 } from "../../lib/quickMessageSlash";
 import type { QuickMessage } from "../../services/quickMessages";
 import { compressImageFile } from "../../lib/imageUtils";
+import { storageContentType } from "../../services/fileLibrary";
 import type { SharedContact } from "../../lib/sharedContact";
 import { ShareContactModal } from "./ShareContactModal";
 import { AttachmentTray, type PendingAttachment } from "./AttachmentTray";
@@ -78,6 +79,7 @@ type AllowedAudioMime =
   | "audio/ogg";
 type AllowedDocumentMime =
   | "text/plain"
+  | "application/xml"
   | "application/pdf"
   | "application/msword"
   | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -491,6 +493,24 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     return null;
   };
 
+  const looksLikeXml = (bytes: Uint8Array) => {
+    // UTF-16 (com BOM) também é XML válido
+    if (bytes.length >= 2) {
+      const utf16 =
+        (bytes[0] === 0xff && bytes[1] === 0xfe) ||
+        (bytes[0] === 0xfe && bytes[1] === 0xff);
+      if (utf16) return true;
+    }
+    let start = 0;
+    if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+      start = 3;
+    }
+    while (start < bytes.length && [0x20, 0x09, 0x0a, 0x0d].includes(bytes[start])) {
+      start += 1;
+    }
+    return bytes[start] === 0x3c;
+  };
+
   const validateDocumentFile = async (
     file: File,
   ): Promise<{ mimeType: AllowedDocumentMime; extension: string } | null> => {
@@ -513,6 +533,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const isTxt = extension === "txt" && mimeType === "text/plain";
     if (isTxt) {
       return { mimeType: "text/plain", extension: "txt" };
+    }
+
+    // XML (ex.: nota fiscal): o navegador informa text/xml, application/xml
+    // ou nada, conforme o sistema. O conteúdo precisa começar como XML.
+    if (
+      extension === "xml" &&
+      (mimeType === "" || mimeType === "text/xml" || mimeType === "application/xml") &&
+      looksLikeXml(header)
+    ) {
+      return { mimeType: "application/xml", extension: "xml" };
     }
 
     const isOle = isOleSignature(header);
@@ -638,14 +668,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       .upload(filePath, file, {
         cacheControl: "3600",
         upsert: false,
-        contentType:
+        contentType: storageContentType(
           options?.contentType ||
-          file.type ||
-          (kind === "image"
-            ? "image/jpeg"
-            : kind === "audio"
-              ? "audio/mpeg"
-              : "application/octet-stream"),
+            file.type ||
+            (kind === "image"
+              ? "image/jpeg"
+              : kind === "audio"
+                ? "audio/mpeg"
+                : "application/octet-stream"),
+        ),
       });
 
     if (uploadError) {
@@ -903,8 +934,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     if (rejected > 0) {
       toast.info(
         rejected === 1
-          ? "Um arquivo foi ignorado. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB)."
-          : `${rejected} arquivos foram ignorados. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB).`,
+          ? "Um arquivo foi ignorado. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, XML, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB)."
+          : `${rejected} arquivos foram ignorados. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, XML, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB).`,
       );
     }
 
@@ -1369,7 +1400,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         ref={docInputRef}
         multiple
         type="file"
-        accept=".txt,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        accept=".txt,.pdf,.xml,.doc,.docx,.xls,.xlsx,.ppt,.pptx,text/plain,application/pdf,text/xml,application/xml,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
         className="invisible"
         onChange={handleDocumentChange}
       />
