@@ -74,6 +74,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
+  {
+    kind: "new",
+    text: "WhatsApp por QR Code: o sistema agora percebe quando um número conectado para de receber mensagens num horário em que costuma receber. Ele reinicia a conexão sozinho e avisa no sino; se as mensagens não voltarem, avisa de novo para ler o QR Code em Integrações.",
+    adminOnly: true,
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

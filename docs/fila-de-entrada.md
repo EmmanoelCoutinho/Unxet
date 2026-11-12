@@ -100,6 +100,11 @@ pode continuar publicado sem receber nada.
   - `[GATEWAY_DELIVERED_LATE]`: entregue depois de alguma tentativa.
   - `[GATEWAY_REJECTED]`: a função recusou (token, assinatura, conexão).
   - `[GATEWAY_DIRECT_FAILED]`: fila e Supabase fora ao mesmo tempo.
+  - `[GATEWAY_HISTORY_SET]`: resumo do histórico que o celular manda quando o
+    QR Code é lido (evento `messages.set`): quantas mensagens de clientes
+    vieram, de quantas conversas e de que período. O evento continua
+    descartado; o log serve para testar se as mensagens recebidas enquanto o
+    número esteve fora vêm nesse pacote. Não leva texto nem telefone.
 - Volume: painel do Cloudflare → Queues. O plano grátis tem 10 mil
   operações por dia (cerca de 3 mil webhooks). Acima disso, ou para guardar
   mensagens por mais de 24 horas, assinar o Workers Paid (US$ 5/mês) e subir a
