@@ -8,6 +8,7 @@ import { FiSearch } from "react-icons/fi";
 import { CustomTooltip } from "../ui/CustomTooltip";
 import {
   ArrowLeftIcon,
+  BanIcon,
   MessageCircleIcon,
   TagIcon,
   MoreVerticalIcon,
@@ -37,6 +38,9 @@ interface ChatHeaderProps {
   onManageParticipants?: () => void;
   // Arquivos enviados e recebidos com o cliente
   onOpenFiles?: () => void;
+  // Bloquear / desbloquear o contato (só para quem tem a permissão)
+  onBlockContact?: () => void;
+  onUnblockContact?: () => void;
   onAccept?: () => Promise<void> | void;
   onTransfer?: () => void;
   onSearch?: () => void;
@@ -62,6 +66,7 @@ const STATUS_BADGE: Record<
 };
 
 const BOT_BADGE = { label: "No bot", className: "bg-violet-50 text-violet-700" };
+const BLOCKED_BADGE = { label: "Bloqueado", className: "bg-red-50 text-red-700" };
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   conversation,
@@ -73,6 +78,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   participantNames = [],
   onManageParticipants,
   onOpenFiles,
+  onBlockContact,
+  onUnblockContact,
   onAccept,
   onTransfer,
   onSearch,
@@ -168,8 +175,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const acceptIsDisabled = acceptDisabled || isAccepting;
   const closeIsDisabled = closeDisabled || isClosing;
 
-  const statusBadge =
-    conversation.status === "pending" && conversation.inBotFlow
+  const statusBadge = conversation.contactBlocked
+    ? BLOCKED_BADGE
+    : conversation.status === "pending" && conversation.inBotFlow
       ? BOT_BADGE
       : STATUS_BADGE[conversation.status];
 
@@ -196,6 +204,25 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       ]
     : [];
 
+  const blockItem = onUnblockContact
+    ? [
+        {
+          label: "Desbloquear contato",
+          icon: <BanIcon className="h-4 w-4" />,
+          onSelect: () => onUnblockContact(),
+        },
+      ]
+    : onBlockContact
+      ? [
+          {
+            label: "Bloquear contato",
+            icon: <BanIcon className="h-4 w-4" />,
+            onSelect: () => onBlockContact(),
+            danger: true,
+          },
+        ]
+      : [];
+
   // No celular as ações secundárias vão para o menu "mais"
   const dropdownItems = [
     ...(isMobile ? participantsItem : []),
@@ -215,7 +242,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       icon: <TagIcon className="h-4 w-4" />,
       onSelect: () => onManageTags?.(),
     },
-    // Ação destrutiva sempre por último
+    // Ações destrutivas sempre por último
+    ...blockItem,
     ...(isMobile
       ? [
           {
@@ -251,6 +279,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         icon: <TagIcon className="h-4 w-4" />,
         onSelect: () => onManageTags?.(),
       },
+      ...blockItem,
       {
         label: isClosing ? "Finalizando..." : "Finalizar conversa",
         icon: <TbMessageOff className="h-4 w-4" />,

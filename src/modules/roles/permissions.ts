@@ -8,6 +8,7 @@ export type Permission =
   | "quick_messages.manage"
   | "tags.manage"
   | "file_library.manage"
+  | "contacts.block"
   | "contacts.view"
   | "leads.all"
   | "campaigns.all"
@@ -55,6 +56,13 @@ export const PERMISSIONS: PermissionInfo[] = [
     group: "Atendimento",
     label: "Gerenciar banco de arquivos",
     description: "Adiciona, edita e apaga arquivos da biblioteca. Sem isso, só envia nas conversas.",
+  },
+  {
+    key: "contacts.block",
+    group: "Atendimento",
+    label: "Bloquear contatos",
+    description:
+      "Bloqueia e desbloqueia contatos. As mensagens de um contato bloqueado não chegam e a empresa não envia para ele.",
   },
   {
     key: "contacts.view",

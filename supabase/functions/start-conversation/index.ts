@@ -14,6 +14,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hasClinicPermission } from "../_shared/security.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
+import { BLOCKED_CONTACT_CODE, BLOCKED_CONTACT_ERROR, blockIdentifiers, isContactBlocked, isIdentifierBlocked } from "../_shared/contactBlock.ts";
 import { brazilianPhoneVariants, isPlaceholderName, normalizeTypedPhone, parseWhatsappNumbersResponse } from "../_shared/startConversation.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -225,6 +226,10 @@ serve(async (req)=>{
         error: "Conversa não encontrada."
       });
       const ctx = await loadContext(conv.clinic_id);
+      if (await isContactBlocked(admin, conv.contact_id)) return json(409, {
+        error: BLOCKED_CONTACT_ERROR,
+        code: BLOCKED_CONTACT_CODE
+      });
       const conversationId = await takeConversation(admin, conv, ctx);
       return json(200, {
         ok: true,
@@ -271,6 +276,12 @@ serve(async (req)=>{
         phone = await checkEvolutionNumber(connection, phone);
       }
     }
+    // Contato bloqueado: a empresa também não inicia conversa com ele
+    const blocked = contactId ? await isContactBlocked(admin, contactId) : await isIdentifierBlocked(admin, clinicId, blockIdentifiers(phone));
+    if (blocked) return json(409, {
+      error: BLOCKED_CONTACT_ERROR,
+      code: BLOCKED_CONTACT_CODE
+    });
     if (!contactId) {
       const contact = await findOrCreateContact(admin, clinicId, name, phone);
       contactId = contact.id;

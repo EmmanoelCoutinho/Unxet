@@ -78,6 +78,32 @@ export const NEXT_RELEASE: ReleaseChange[] = [
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    date: "2026-11-12",
+    changes: [
+      {
+        kind: "new",
+        text: "Cancelar gravação de áudio: enquanto grava, aparece uma lixeira ao lado do botão de enviar (ou aperte Esc) para descartar o áudio sem mandar para o cliente. Sair da conversa no meio da gravação também descarta o áudio, em vez de enviar pela metade.",
+      },
+      {
+        kind: "new",
+        text: "Painel: nova lista Atendimentos de hoje, com todas as conversas que tiveram movimento no dia. Cada card mostra o departamento, a situação (em atendimento, na fila, no bot ou finalizada) e o responsável, e clicar abre a conversa. Dá para filtrar por situação.",
+      },
+      {
+        kind: "improved",
+        text: "Lista de conversas: o card agora mostra também o departamento, ao lado do responsável (ex.: Você - Fiscal), quando a empresa tem mais de um departamento.",
+      },
+      {
+        kind: "new",
+        text: "Bloquear contato: na conversa, em Mais ações > Bloquear contato, ou pelo menu Contatos bloqueados (que também bloqueia um número que ainda nem escreveu). As mensagens de quem está bloqueado são descartadas assim que chegam (não abrem conversa, não acionam bot nem IA) e a empresa também não envia para ele: conversas, campanhas e agendamentos. A lista mostra quem bloqueou, o motivo e quantas mensagens foram barradas, e dá para desbloquear a qualquer momento.",
+      },
+      {
+        kind: "new",
+        text: "Nova permissão nos cargos: Bloquear contatos. Administradores já podem; para os demais, marque a permissão no cargo.",
+        adminOnly: true,
+      },
+    ],
+  },
+  {
     date: "2026-11-11",
     changes: [
       {

@@ -10,6 +10,7 @@ import {
   MessageSquareTextIcon,
   ContactIcon,
   FolderOpenIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button } from "../ui/Button";
@@ -142,6 +143,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const docInputRef = useRef<HTMLInputElement | null>(null);
   const recordStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  // Gravação cancelada: ao parar, o áudio é descartado em vez de enviado
+  const discardRecordingRef = useRef(false);
   const message = draft ?? internalMessage;
   const setMessage = onDraftChange ?? setInternalMessage;
 
@@ -247,6 +250,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== "inactive"
     ) {
+      // Perdeu a permissão de responder no meio da gravação: não envia
+      discardRecordingRef.current = true;
       try {
         mediaRecorderRef.current.stop();
       } catch {
@@ -264,6 +269,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         mediaRecorderRef.current &&
         mediaRecorderRef.current.state !== "inactive"
       ) {
+        // Saiu da conversa gravando: o áudio pela metade não é enviado
+        discardRecordingRef.current = true;
         mediaRecorderRef.current.stop();
       }
       stopStreamTracks();
@@ -705,6 +712,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         : new MediaRecorder(stream);
 
       chunksRef.current = [];
+      discardRecordingRef.current = false;
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -713,6 +721,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       };
 
       recorder.onstop = async () => {
+        if (discardRecordingRef.current) {
+          discardRecordingRef.current = false;
+          chunksRef.current = [];
+          setIsRecording(false);
+          stopStreamTracks();
+          return;
+        }
         try {
           setIsSendingAudio(true);
 
@@ -749,6 +764,28 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     setIsRecording(false);
     recorder.stop();
   };
+
+  /** Para de gravar e joga o áudio fora, sem enviar. */
+  const cancelRecording = () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    discardRecordingRef.current = true;
+    setIsRecording(false);
+    recorder.stop();
+    toast.info("Gravação cancelada. O áudio não foi enviado.");
+  };
+
+  // Esc cancela a gravação de qualquer lugar da tela
+  useEffect(() => {
+    if (!isRecording) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      cancelRecording();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isRecording]);
 
   const handlePrimaryClick = () => {
     if (disabled) return;
@@ -1253,6 +1290,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           disabled={disabled}
           className={`min-h-11 min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2.5 resize-none ${sm("sm:min-h-12 sm:px-4 sm:py-3")} max-h-40 overflow-y-hidden focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400`}
         />
+
+        {isRecording && !disabled && (
+          <button
+            type="button"
+            onClick={cancelRecording}
+            aria-label="Cancelar gravação"
+            title="Cancelar gravação (Esc)"
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-red-200 text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 ${sm("sm:h-12 sm:w-12")}`}
+          >
+            <Trash2Icon className="h-4 w-4" />
+          </button>
+        )}
 
         <Button
           type="button"
