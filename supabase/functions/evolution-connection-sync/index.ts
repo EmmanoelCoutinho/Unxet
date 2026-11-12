@@ -10,10 +10,6 @@
  * que costuma receber mensagens e ficou em silêncio é reiniciado sozinho; se
  * continuar sem receber, os administradores são avisados.
  *
- * E recupera as mensagens recebidas enquanto o número esteve fora
- * (_shared/inboundRecovery.ts): depois que a conexão volta, busca na Evolution
- * o que chegou desde a última mensagem recebida e importa o que falta.
- *
  * Chamada a cada 5 minutos pelo pg_cron (migration
  * 20261011000000_evolution_connection_sync_cron.sql), autenticada pelo header
  * x-internal-secret (INTERNAL_BOT_SECRET).
@@ -24,19 +20,13 @@ import { reconcileConnectionStatus } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 import { ensureInstanceSettings } from "../_shared/evolutionSettings.ts";
 import { sendPushToUsers } from "../_shared/push.ts";
-import { fetchStoredMessages, pickRecoverable, recoveredWebhookBody, recoveryPhase, recoveryWindow } from "../_shared/inboundRecovery.ts";
 import { WATCHDOG_WINDOW_MINUTES, restartInstance, watchdogDecision, watchdogNotification } from "../_shared/whatsappWatchdog.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
 const EVOLUTION_API_URL = Deno.env.get("EVOLUTION_API_URL") ?? "";
 const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY") ?? "";
-const EVOLUTION_WEBHOOK_SECRET = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") ?? "";
 const REQUEST_TIMEOUT_MS = 8000;
-// Recuperação: tempo e quantidade por rodada (o que sobrar fica para a próxima)
-const RECOVERY_BUDGET_MS = 50_000;
-const RECOVERY_MAX_IMPORTS = 150;
-const RECOVERY_IMPORT_TIMEOUT_MS = 30_000;
 /**
  * Consulta o estado da instância. Retorna null quando a Evolution não
  * respondeu de forma confiável (rede, timeout, 5xx) — nesse caso não mexemos
@@ -164,111 +154,6 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
   if (actions.length > 0) console.log("[WATCHDOG]", JSON.stringify(actions));
   return actions;
 }
-/** Das mensagens guardadas na Evolution, as que o Unxet ainda não tem. */ async function missingRecords(supabase, records) {
-  const known = new Set();
-  for(let i = 0; i < records.length; i += 200){
-    const ids = records.slice(i, i + 200).map((record)=>record.key.id);
-    const { data, error } = await supabase.from("messages").select("meta_message_id").in("meta_message_id", ids);
-    if (error) throw error;
-    for (const row of data ?? [])known.add(row.meta_message_id);
-  }
-  return records.filter((record)=>!known.has(record.key.id));
-}
-/**
- * Entrega a mensagem recuperada ao evolution-in, como se fosse o webhook
- * dela: telefone, mídia, bloqueio e criação da conversa seguem o caminho de
- * sempre. O cabeçalho x-unxet-recovered evita bot e respostas automáticas.
- */ async function importRecovered(sessionName, record) {
-  try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/evolution-in`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-webhook-secret": EVOLUTION_WEBHOOK_SECRET,
-        "x-internal-secret": INTERNAL_BOT_SECRET,
-        "x-unxet-recovered": "1"
-      },
-      body: JSON.stringify(recoveredWebhookBody(sessionName, record)),
-      signal: AbortSignal.timeout(RECOVERY_IMPORT_TIMEOUT_MS)
-    });
-    await response.body?.cancel();
-    return response.ok;
-  } catch (err) {
-    console.warn("[INBOUND_RECOVERY_IMPORT_ERROR]", {
-      sessionName,
-      error: err instanceof Error ? err.message : String(err)
-    });
-    return false;
-  }
-}
-/**
- * Recupera as mensagens recebidas enquanto o número esteve fora. Roda nas
- * conexões que o gatilho mark_inbound_recovery marcou ao voltarem para
- * "connected". Nunca lança erro.
- */ async function runInboundRecovery(supabase) {
-  const results = [];
-  try {
-    const { data: connections, error } = await supabase.from("channel_connections").select("id, session_name, evolution_api_url, evolution_api_key, inbound_recovery_requested_at, inbound_recovery_from").eq("provider", "evolution").eq("status", "connected").is("archived_at", null).not("session_name", "is", null).not("inbound_recovery_requested_at", "is", null);
-    if (error) {
-      console.error("[INBOUND_RECOVERY_QUERY_ERROR]", error);
-      return results;
-    }
-    const startedAt = Date.now();
-    let imports = 0;
-    for (const connection of connections ?? []){
-      const phase = recoveryPhase(connection.inbound_recovery_requested_at);
-      if (phase === "wait") continue;
-      const apiUrl = connection.evolution_api_url || EVOLUTION_API_URL;
-      const apiKey = connection.evolution_api_key || EVOLUTION_API_KEY;
-      const window = recoveryWindow(connection.inbound_recovery_from);
-      const result = {
-        id: connection.id,
-        found: 0,
-        missing: 0,
-        imported: 0,
-        failed: 0,
-        truncated: false,
-        done: phase === "last"
-      };
-      let complete = true;
-      if (window && apiUrl && apiKey) {
-        const stored = await fetchStoredMessages(apiUrl, apiKey, connection.session_name, window);
-        if (!stored) {
-          complete = false;
-        } else {
-          const candidates = pickRecoverable(stored.records);
-          const missing = await missingRecords(supabase, candidates);
-          result.found = candidates.length;
-          result.missing = missing.length;
-          result.truncated = stored.truncated;
-          for (const record of missing){
-            if (imports >= RECOVERY_MAX_IMPORTS || Date.now() - startedAt > RECOVERY_BUDGET_MS) {
-              complete = false;
-              break;
-            }
-            imports += 1;
-            if (await importRecovered(connection.session_name, record)) result.imported += 1;
-            else result.failed += 1;
-          }
-        }
-      }
-      // Última rodada e nada ficou para trás: limpa a marca. A comparação com
-      // a hora da marca evita apagar uma reconexão que aconteceu nesse meio-tempo.
-      if (phase === "last" && complete) {
-        const { error: clearError } = await supabase.from("channel_connections").update({
-          inbound_recovery_requested_at: null,
-          inbound_recovery_from: null
-        }).eq("id", connection.id).eq("inbound_recovery_requested_at", connection.inbound_recovery_requested_at);
-        if (clearError) console.error("[INBOUND_RECOVERY_CLEAR_ERROR]", connection.id, clearError);
-      }
-      if (result.missing > 0 || result.truncated || result.done) results.push(result);
-    }
-  } catch (err) {
-    console.error("[INBOUND_RECOVERY_ERROR]", err);
-  }
-  if (results.length > 0) console.log("[INBOUND_RECOVERY]", JSON.stringify(results));
-  return results;
-}
 serve(async (req)=>{
   try {
     if (req.method !== "POST") {
@@ -354,13 +239,11 @@ serve(async (req)=>{
       settingsUpdated
     }));
     const watchdog = await runWatchdog(supabase, openConnectionIds);
-    const recovery = await runInboundRecovery(supabase);
     return new Response(JSON.stringify({
       success: true,
       checked: connections?.length ?? 0,
       changes,
-      watchdog,
-      recovery
+      watchdog
     }), {
       status: 200,
       headers: {

@@ -66,10 +66,6 @@ serve(async (req)=>{
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const payload = await req.json();
     const { provider, clinicId, channelConnectionId, waId, profileName, providerMessageId, timestamp: timestampIso, messageType, text, media, interactive, mediaFetchToken, rawPayload } = payload;
-    // Mensagem recuperada do histórico da Evolution (chegou enquanto o número
-    // esteve fora): entra com o horário original, sem acionar bot nem IA, e
-    // não pode fazer a conversa "voltar no tempo".
-    const isRecovered = payload.recovered === true;
     // ── Validação dos campos obrigatórios ─────────────────────────────────
     if (!clinicId || !channelConnectionId || !waId || !providerMessageId) {
       console.error("Payload inválido — campos obrigatórios ausentes:", {
@@ -319,11 +315,9 @@ serve(async (req)=>{
     }
     // ── 9. Atualização da conversa ────────────────────────────────────────
     const shouldReopen = conversation.status === STATUS_CLOSED && automationSettings.reopen_on_inbound_enabled === true;
-    // Recuperada: pode ser mais antiga que a última mensagem da conversa
-    const latest = (current)=>isRecovered && current && new Date(current) > new Date(timestampIso) ? current : timestampIso;
     const conversationUpdates = {
-      last_message_at: latest(conversation.last_message_at),
-      last_inbound_at: latest(conversation.last_inbound_at),
+      last_message_at: timestampIso,
+      last_inbound_at: timestampIso,
       updated_at: new Date().toISOString()
     };
     if (!conversation.first_inbound_at) {
@@ -358,7 +352,7 @@ serve(async (req)=>{
     // isso faria o engine cancelar a sessão em curso e reiniciar o fluxo,
     // ignorando a opção selecionada pelo usuário.
     let botFailed = false;
-    if (!isRecovered) try {
+    try {
       const reopenedFromClosed = wasClosed && !isInteractiveMessage;
       const botResp = await fetch(`${SUPABASE_URL}/functions/v1/bot-engine`, {
         method: "POST",
