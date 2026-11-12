@@ -13,6 +13,11 @@ workers_dev = true
 name = "develop"
 vars = { ENVIRONMENT = "develop", SUPABASE_FUNCTIONS_URL = "https://ketolvqnptmdczkzrqba.supabase.co/functions/v1" }
 
+# Guarda os logs no painel (Workers -> Logs). Sem isso só dá para ver ao vivo,
+# com o painel ou o `wrangler tail` abertos na hora.
+[env.develop.observability]
+enabled = true
+
 [[env.develop.queues.producers]]
 binding = "INBOUND"
 queue = "unxet-entrada-develop"
@@ -29,6 +34,11 @@ dead_letter_queue = "unxet-entrada-develop-falhas"
 [env.production]
 name = "producao"
 vars = { ENVIRONMENT = "production", SUPABASE_FUNCTIONS_URL = "https://karmtrldanuxqisgzlhk.supabase.co/functions/v1" }
+
+# Guarda os logs no painel (Workers -> Logs). Sem isso só dá para ver ao vivo,
+# com o painel ou o `wrangler tail` abertos na hora.
+[env.production.observability]
+enabled = true
 
 [[env.production.queues.producers]]
 binding = "INBOUND"
