@@ -60,6 +60,7 @@ const EXTENSION_MIME: Record<string, { mime: string; kind: FileKind }> = {
   txt: { mime: "text/plain", kind: "document" },
   pdf: { mime: "application/pdf", kind: "document" },
   xml: { mime: "application/xml", kind: "document" },
+  ofx: { mime: "application/x-ofx", kind: "document" },
   doc: { mime: "application/msword", kind: "document" },
   docx: {
     mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -83,17 +84,22 @@ export const LIBRARY_ACCEPT = Object.keys(EXTENSION_MIME)
   .join(",");
 
 export const LIBRARY_ACCEPTED_LABEL =
-  "imagens JPG ou PNG (até 5 MB), áudios MP3, M4A, AAC, AMR ou OGG (até 16 MB), vídeos MP4 e documentos PDF, TXT, XML, Word, Excel ou PowerPoint (até 100 MB)";
+  "imagens JPG ou PNG (até 5 MB), áudios MP3, M4A, AAC, AMR ou OGG (até 16 MB), vídeos MP4 e documentos PDF, TXT, XML, OFX, Word, Excel ou PowerPoint (até 100 MB)";
 
 /**
- * Content-Type gravado no Storage. XML fica como texto puro: a API oficial
+ * Content-Type gravado no Storage. XML e OFX ficam como texto puro: a API oficial
  * do WhatsApp só baixa documentos de tipos que ela conhece (texto é um
  * deles) e o navegador não interpreta o arquivo ao abrir o link. O cliente
  * recebe o arquivo com o nome e a extensão .xml normalmente.
  */
+const TEXT_DOCUMENT_MIMES = new Set(["application/xml", "text/xml", "application/x-ofx"]);
+
+/** Formatos em que o tipo informado pelo navegador varia ou vem vazio. */
+const FIXED_MIME_EXTENSIONS = new Set(["xml", "ofx", "doc", "docx", "xls", "xlsx", "ppt", "pptx"]);
+
 export const storageContentType = (mime: string) => {
   const base = mime.toLowerCase().split(";")[0].trim();
-  return base === "application/xml" || base === "text/xml" ? "text/plain" : mime;
+  return TEXT_DOCUMENT_MIMES.has(base) ? "text/plain" : mime;
 };
 
 const extensionOf = (name: string) => {
@@ -120,7 +126,8 @@ export const classifyLibraryFile = (
     return { ok: false, reason: `Arquivo maior que ${formatBytes(limit)}.` };
   }
   if (file.size === 0) return { ok: false, reason: "O arquivo está vazio." };
-  return { ok: true, kind: known.kind, mimeType: file.type || known.mime, extension };
+  const mimeType = FIXED_MIME_EXTENSIONS.has(extension) ? known.mime : file.type || known.mime;
+  return { ok: true, kind: known.kind, mimeType, extension };
 };
 
 export const kindFromMime = (mime: string | null | undefined, fallback: FileKind = "document"): FileKind => {
