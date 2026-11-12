@@ -459,6 +459,9 @@ serve(async (req)=>{
   if (contentType.includes("officedocument.spreadsheetml")) return "xlsx";
   if (contentType.includes("officedocument.presentationml")) return "pptx";
   if (contentType.includes("plain")) return "txt";
+  if (contentType.includes("ms-excel")) return "xls";
+  if (contentType.includes("ms-powerpoint")) return "ppt";
+  if (contentType.includes("ofx")) return "ofx";
   if (contentType.includes("xml")) return "xml";
   return "bin";
 }

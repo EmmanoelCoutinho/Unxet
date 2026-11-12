@@ -84,6 +84,14 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
         kind: "new",
         text: "Arquivos XML: agora dá para enviar XML (como o da nota fiscal) na conversa, no banco de arquivos e nas mensagens agendadas. O XML que o cliente manda também chega como documento, pronto para abrir ou baixar.",
       },
+      {
+        kind: "new",
+        text: "Arquivos OFX: o extrato bancário em OFX também pode ser enviado na conversa, no banco de arquivos e nas mensagens agendadas.",
+      },
+      {
+        kind: "fixed",
+        text: "Planilhas do Excel (e arquivos do Word e do PowerPoint) eram recusadas no envio em computadores sem o Office instalado. Agora são aceitas normalmente.",
+      },
     ],
   },
   {
