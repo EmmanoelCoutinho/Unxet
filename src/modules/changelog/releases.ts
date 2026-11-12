@@ -76,6 +76,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
+    text: "Cancelar gravação de áudio: enquanto grava, aparece uma lixeira ao lado do botão de enviar (ou aperte Esc) para descartar o áudio sem mandar para o cliente. Sair da conversa no meio da gravação também descarta o áudio, em vez de enviar pela metade.",
+  },
+  {
+    kind: "new",
     text: "Painel: nova lista Atendimentos de hoje, com todas as conversas que tiveram movimento no dia. Cada card mostra o departamento, a situação (em atendimento, na fila, no bot ou finalizada) e o responsável, e clicar abre a conversa. Dá para filtrar por situação.",
   },
   {

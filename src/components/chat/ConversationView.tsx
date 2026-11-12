@@ -1756,7 +1756,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
               </span>
             </div>
             <p className="mt-1 text-xs text-gray-500">
-              Toque no botão de envio para concluir e enviar.
+              Toque no botão de envio para concluir e enviar, ou na lixeira (Esc) para cancelar.
             </p>
           </div>
         </div>
