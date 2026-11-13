@@ -24,7 +24,7 @@ import { reconcileConnectionStatus } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 import { ensureInstanceSettings } from "../_shared/evolutionSettings.ts";
 import { sendPushToUsers } from "../_shared/push.ts";
-import { fetchStoredMessages, pickRecoverable, recoveredWebhookBody, recoveryPhase, recoveryWindow } from "../_shared/inboundRecovery.ts";
+import { RECOVERY_MAX_LID_LOOKUPS, fetchLidPhone, fetchStoredMessages, importOutcome, lidPhoneMap, pickRecoverable, recoveredWebhookBody, recoveryPhase, recoveryWindow, unresolvedLids, withPhone } from "../_shared/inboundRecovery.ts";
 import { WATCHDOG_WINDOW_MINUTES, restartInstance, watchdogDecision, watchdogNotification } from "../_shared/whatsappWatchdog.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -191,14 +191,13 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
       body: JSON.stringify(recoveredWebhookBody(sessionName, record)),
       signal: AbortSignal.timeout(RECOVERY_IMPORT_TIMEOUT_MS)
     });
-    await response.body?.cancel();
-    return response.ok;
+    return importOutcome(response.status, await response.text().catch(()=>""));
   } catch (err) {
     console.warn("[INBOUND_RECOVERY_IMPORT_ERROR]", {
       sessionName,
       error: err instanceof Error ? err.message : String(err)
     });
-    return false;
+    return "failed";
   }
 }
 /**
@@ -226,6 +225,10 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
         found: 0,
         missing: 0,
         imported: 0,
+        // Descartadas pelo evolution-in, por motivo (ex.: contato bloqueado)
+        ignored: {},
+        // Sem o telefone do contato (@lid): não há como importar
+        unresolved: 0,
         failed: 0,
         truncated: false,
         done: phase === "last"
@@ -241,14 +244,30 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
           result.found = candidates.length;
           result.missing = missing.length;
           result.truncated = stored.truncated;
+          // Telefone das mensagens do histórico que vieram só com o @lid
+          const lidMap = lidPhoneMap(stored.records);
+          for (const lid of unresolvedLids(missing, lidMap).slice(0, RECOVERY_MAX_LID_LOOKUPS)){
+            const phone = await fetchLidPhone(apiUrl, apiKey, connection.session_name, lid);
+            if (phone) lidMap.set(lid, phone);
+          }
           for (const record of missing){
             if (imports >= RECOVERY_MAX_IMPORTS || Date.now() - startedAt > RECOVERY_BUDGET_MS) {
               complete = false;
               break;
             }
+            const ready = withPhone(record, lidMap);
+            if (!ready) {
+              result.unresolved += 1;
+              continue;
+            }
             imports += 1;
-            if (await importRecovered(connection.session_name, record)) result.imported += 1;
-            else result.failed += 1;
+            const outcome = await importRecovered(connection.session_name, ready);
+            if (outcome === "imported") result.imported += 1;
+            else if (outcome === "failed") result.failed += 1;
+            else {
+              const reason = outcome.replace(/^ignored:/, "");
+              result.ignored[reason] = (result.ignored[reason] ?? 0) + 1;
+            }
           }
         }
       }
