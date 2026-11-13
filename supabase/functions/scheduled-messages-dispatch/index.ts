@@ -27,6 +27,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/security.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
+import { findContactByPhone } from "../_shared/startConversation.ts";
 import { blockIdentifiers, isIdentifierBlocked } from "../_shared/contactBlock.ts";
 import { describeProviderError, renderScheduledText, sendDelayMs } from "../_shared/scheduledMessages.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
@@ -147,8 +148,8 @@ async function findOrCreateContact(supabase, clinicId, recipient, number) {
     if (data) return data;
   }
   const findByPhone = async ()=>{
-    const { data } = await supabase.from("contacts").select("id, phone").eq("clinic_id", clinicId).eq("phone", number).limit(1);
-    return data?.[0] ?? null;
+    const { contact } = await findContactByPhone(supabase, clinicId, number, "id, phone");
+    return contact;
   };
   const found = await findByPhone();
   if (found) return found;

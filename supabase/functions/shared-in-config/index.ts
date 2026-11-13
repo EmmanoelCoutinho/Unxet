@@ -19,6 +19,7 @@ import { queueTranscription, runInBackground } from "../_shared/transcription.ts
 import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 import { queueInboundPush } from "../_shared/push.ts";
 import { timingSafeEqual } from "../_shared/security.ts";
+import { findContactByPhone } from "../_shared/startConversation.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
 // ---------------------------------------------------------------------------
 // Env
@@ -481,12 +482,14 @@ async function getAutomationSettings(supabase, clinicId) {
 }
 async function findOrCreateContact(params) {
   const { supabase, clinicId, waId, profileName, timestampIso } = params;
-  const { data: foundContacts, error: contactFindErr } = await supabase.from("contacts").select("*").eq("phone", waId).eq("clinic_id", clinicId).limit(1);
+  // Aceita o número com e sem o 9: o WhatsApp pode informar o número antigo
+  // de um cliente que está na carteira com o 9
+  const { contact: foundContact, error: contactFindErr } = await findContactByPhone(supabase, clinicId, waId);
   if (contactFindErr) {
     console.error("Erro ao buscar contato:", contactFindErr);
     throw new Error("Contact lookup error");
   }
-  let contact = foundContacts?.[0];
+  let contact = foundContact;
   if (!contact) {
     const { data: newContact, error: insertErr } = await supabase.from("contacts").insert({
       phone: waId,
