@@ -79,6 +79,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     text: "WhatsApp por QR Code: o sistema agora percebe quando um número conectado para de receber mensagens num horário em que costuma receber. Ele reinicia a conexão sozinho e avisa no sino; se as mensagens não voltarem, avisa de novo para ler o QR Code em Integrações.",
     adminOnly: true,
   },
+  {
+    kind: "new",
+    text: "WhatsApp por QR Code: as mensagens que os clientes mandaram enquanto o número esteve desconectado agora são recuperadas. Alguns minutos depois de ler o QR Code de novo, elas aparecem nas conversas com o horário em que foram enviadas, sem acionar o bot.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

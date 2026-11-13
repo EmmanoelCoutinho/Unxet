@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   MAX_QUEUE_MESSAGE_BYTES,
   deliveryOutcome,
-  evolutionHistorySummary,
   evolutionSkipReason,
   fromBase64,
   functionUrl,
@@ -260,68 +259,5 @@ describe("gateway: filtro da Evolution", () => {
       env,
     );
     expect(env.send).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("gateway: resumo do histórico do pareamento", () => {
-  const summary = (payload: unknown) =>
-    evolutionHistorySummary(new TextEncoder().encode(typeof payload === "string" ? payload : JSON.stringify(payload)));
-  const message = (remoteJid: string, fromMe: boolean, messageTimestamp: unknown) => ({
-    key: { remoteJid, fromMe, id: "X" },
-    message: { conversation: "texto que não pode ir para o log" },
-    messageTimestamp,
-  });
-
-  it("ignora os outros eventos e JSON inválido", () => {
-    expect(summary({ event: "messages.upsert", data: {} })).toBeNull();
-    expect(summary("não é json")).toBeNull();
-  });
-
-  it("conta só mensagens de clientes em conversas individuais", () => {
-    const result = summary({
-      event: "MESSAGES_SET",
-      instance: "loja",
-      data: [
-        message("5511999998888@s.whatsapp.net", false, 1794490000),
-        message("5511999998888@s.whatsapp.net", false, "1794493600"),
-        message("5511888887777@s.whatsapp.net", false, { low: 1794480000, high: 0 }),
-        message("5511999998888@s.whatsapp.net", true, 1794499999),
-        message("123@g.us", false, 1794400000),
-        message("status@broadcast", false, 1794400000),
-      ],
-    });
-    expect(result).toEqual({
-      instance: "loja",
-      total: 6,
-      fromCustomers: 3,
-      customerChats: 2,
-      oldest: new Date(1794480000 * 1000).toISOString(),
-      newest: new Date(1794493600 * 1000).toISOString(),
-    });
-    expect(JSON.stringify(result)).not.toContain("5511");
-  });
-
-  it("aceita o pacote dentro de data.messages e um pacote vazio", () => {
-    expect(
-      summary({ event: "messages.set", data: { messages: [message("5511@s.whatsapp.net", false, 1794490000)] } })
-        ?.fromCustomers,
-    ).toBe(1);
-    expect(summary({ event: "messages.set", data: [] })).toMatchObject({ total: 0, oldest: null });
-  });
-
-  it("registra o resumo e continua descartando o evento", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    const env = makeEnv();
-    const res = await handleRequest(
-      new Request("https://gw.test/evolution-in?token=abc", {
-        method: "POST",
-        body: JSON.stringify({ event: "messages.set", instance: "loja", data: [] }),
-      }),
-      env,
-    );
-    expect(await res.json()).toEqual({ ignored: true, reason: "event:messages.set" });
-    expect(env.send).not.toHaveBeenCalled();
-    expect(log).toHaveBeenCalledWith("[GATEWAY_HISTORY_SET]", expect.objectContaining({ instance: "loja" }));
-    log.mockRestore();
   });
 });

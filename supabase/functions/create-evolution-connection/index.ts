@@ -42,9 +42,6 @@ const newSessionName = (clinicId)=>`clinic_${clinicId}_${crypto.randomUUID().rep
         events: [
           "MESSAGES_UPSERT",
           "MESSAGES_UPDATE",
-          // Histórico do pareamento: o gateway só registra um resumo no log
-          // (teste da recuperação de mensagens) e descarta
-          "MESSAGES_SET",
           "CONNECTION_UPDATE",
           "QRCODE_UPDATED"
         ]

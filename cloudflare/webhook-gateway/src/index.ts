@@ -4,7 +4,6 @@ import {
   MAX_QUEUE_MESSAGE_BYTES,
   buildQueuedWebhook,
   deliveryOutcome,
-  evolutionHistorySummary,
   evolutionSkipReason,
   fromBase64,
   functionUrl,
@@ -98,9 +97,6 @@ export const handleRequest = async (
 
   // Eventos que o evolution-in não usa não entram na fila (economiza operações)
   if (target === "evolution-in") {
-    // Histórico do pareamento: só registra o resumo (o evento segue descartado)
-    const history = evolutionHistorySummary(body);
-    if (history) console.log("[GATEWAY_HISTORY_SET]", history);
     const reason = evolutionSkipReason(body);
     if (reason) return json({ ignored: true, reason });
   }
