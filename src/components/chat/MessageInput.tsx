@@ -81,6 +81,8 @@ type AllowedDocumentMime =
   | "text/plain"
   | "application/xml"
   | "application/x-ofx"
+  | "text/csv"
+  | "application/x-pkcs12"
   | "application/pdf"
   | "application/msword"
   | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -564,6 +566,22 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       return { mimeType: "application/x-ofx", extension: "ofx" };
     }
 
+    // CSV: texto sem assinatura própria, e o navegador informa text/csv,
+    // tipo de Excel ou nada. Vale a extensão, desde que não seja um binário.
+    if (
+      extension === "csv" &&
+      !isZipSignature(header) &&
+      !isOleSignature(header) &&
+      !header.slice(0, 32).includes(0x00)
+    ) {
+      return { mimeType: "text/csv", extension: "csv" };
+    }
+
+    // PFX (certificado digital): arquivo PKCS#12, que sempre começa com 0x30.
+    if (extension === "pfx" && header[0] === 0x30) {
+      return { mimeType: "application/x-pkcs12", extension: "pfx" };
+    }
+
     // Office: o tipo informado pelo navegador depende de ter o Office
     // instalado (sem ele vem vazio), então valem a extensão e a assinatura.
     const isOle = isOleSignature(header);
@@ -943,8 +961,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     if (rejected > 0) {
       toast.info(
         rejected === 1
-          ? "Um arquivo foi ignorado. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, XML, OFX, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB)."
-          : `${rejected} arquivos foram ignorados. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, XML, OFX, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB).`,
+          ? "Um arquivo foi ignorado. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, XML, OFX, CSV, PFX, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB)."
+          : `${rejected} arquivos foram ignorados. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, XML, OFX, CSV, PFX, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB).`,
       );
     }
 
@@ -1409,7 +1427,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         ref={docInputRef}
         multiple
         type="file"
-        accept=".txt,.pdf,.xml,.ofx,.doc,.docx,.xls,.xlsx,.ppt,.pptx,text/plain,application/pdf,text/xml,application/xml,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        accept=".txt,.pdf,.xml,.ofx,.csv,.pfx,.doc,.docx,.xls,.xlsx,.ppt,.pptx,text/plain,application/pdf,text/xml,application/xml,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
         className="invisible"
         onChange={handleDocumentChange}
       />

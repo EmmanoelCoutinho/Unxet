@@ -103,6 +103,8 @@ const getDocumentLabel = (filename?: string, mimeType?: string) => {
   if (!mimeType) return "DOC";
   if (mimeType === "application/pdf") return "PDF";
   if (mimeType.includes("ofx")) return "OFX";
+  if (mimeType.includes("csv")) return "CSV";
+  if (mimeType.includes("pkcs12")) return "PFX";
   if (mimeType.includes("xml") && !mimeType.includes("officedocument")) return "XML";
   if (mimeType.includes("word")) return "DOC";
   if (mimeType.includes("excel") || mimeType.includes("spreadsheet"))
@@ -123,6 +125,7 @@ const getDocumentAccentClass = (label: string) => {
       return "bg-blue-500";
     case "XLS":
     case "XLSX":
+    case "CSV":
       return "bg-emerald-500";
     case "PPT":
     case "PPTX":

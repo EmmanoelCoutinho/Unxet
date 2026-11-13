@@ -78,6 +78,15 @@ export const NEXT_RELEASE: ReleaseChange[] = [
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    date: "2026-11-13",
+    changes: [
+      {
+        kind: "new",
+        text: "Arquivos CSV e PFX: planilhas em CSV e certificados digitais em PFX agora podem ser enviados na conversa, no banco de arquivos e nas mensagens agendadas.",
+      },
+    ],
+  },
+  {
     date: "2026-11-12",
     changes: [
       {

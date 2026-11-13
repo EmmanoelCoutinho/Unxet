@@ -462,6 +462,8 @@ serve(async (req)=>{
   if (contentType.includes("ms-excel")) return "xls";
   if (contentType.includes("ms-powerpoint")) return "ppt";
   if (contentType.includes("ofx")) return "ofx";
+  if (contentType.includes("csv")) return "csv";
+  if (contentType.includes("pkcs12")) return "pfx";
   if (contentType.includes("xml")) return "xml";
   return "bin";
 }
