@@ -147,3 +147,98 @@ export const fetchStoredMessages = async (
   }
   return { records, truncated: pages > maxPages };
 };
+
+// ── Telefone das mensagens com @lid ─────────────────────────────────────────
+// As mensagens que chegam ao vivo trazem o telefone real junto do @lid
+// (remoteJidAlt). As que vêm do histórico do pareamento podem vir só com o
+// @lid, e sem telefone o evolution-in descarta a mensagem. O telefone é
+// procurado em outras mensagens do mesmo contato guardadas na Evolution.
+
+/** Máximo de contatos com @lid procurados na Evolution por rodada. */
+export const RECOVERY_MAX_LID_LOOKUPS = 30;
+
+const PHONE_JID = /^\d{8,15}@s\.whatsapp\.net$/;
+
+/** Telefone real da mensagem (remoteJidAlt ou o próprio remoteJid), ou null. */
+export const phoneJidOf = (key) => {
+  if (typeof key?.remoteJidAlt === "string" && PHONE_JID.test(key.remoteJidAlt)) return key.remoteJidAlt;
+  if (typeof key?.remoteJid === "string" && PHONE_JID.test(key.remoteJid)) return key.remoteJid;
+  return null;
+};
+
+/** @lid -> telefone, a partir das mensagens que trazem os dois. */
+export const lidPhoneMap = (records: unknown) => {
+  const map = new Map<string, string>();
+  for (const record of Array.isArray(records) ? records : []) {
+    const jid = record?.key?.remoteJid;
+    const alt = record?.key?.remoteJidAlt;
+    if (typeof jid !== "string" || !jid.endsWith("@lid") || map.has(jid)) continue;
+    if (typeof alt === "string" && PHONE_JID.test(alt)) map.set(jid, alt);
+  }
+  return map;
+};
+
+/** Contatos com @lid cujas mensagens ainda estão sem telefone. */
+export const unresolvedLids = (records: unknown, map: Map<string, string>) => {
+  const lids = new Set<string>();
+  for (const record of Array.isArray(records) ? records : []) {
+    const jid = record?.key?.remoteJid;
+    if (typeof jid !== "string" || !jid.endsWith("@lid")) continue;
+    if (phoneJidOf(record.key) || map.has(jid)) continue;
+    lids.add(jid);
+  }
+  return [...lids];
+};
+
+/** A mensagem com o telefone preenchido, ou null se não houver como. */
+export const withPhone = (record, map: Map<string, string>) => {
+  if (phoneJidOf(record?.key)) return record;
+  const alt = map.get(record?.key?.remoteJid);
+  return alt ? { ...record, key: { ...record.key, remoteJidAlt: alt } } : null;
+};
+
+/** Procura o telefone de um @lid nas mensagens mais recentes dele na Evolution. */
+export const fetchLidPhone = async (
+  apiUrl: string,
+  apiKey: string,
+  sessionName: string,
+  lid: string,
+  { fetchImpl = fetch, timeoutMs = 15000 } = {},
+) => {
+  try {
+    const response = await fetchImpl(
+      `${apiUrl.replace(/\/$/, "")}/chat/findMessages/${encodeURIComponent(sessionName)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: apiKey },
+        body: JSON.stringify({ where: { key: { remoteJid: lid } }, page: 1, offset: 50 }),
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+    );
+    if (!response.ok) {
+      await response.body?.cancel?.();
+      return null;
+    }
+    const json = await response.json();
+    const result = json?.messages ?? json;
+    const records = Array.isArray(result?.records) ? result.records : Array.isArray(result) ? result : [];
+    return lidPhoneMap(records).get(lid) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Resultado da entrega ao evolution-in: "imported", "failed" ou
+ * "ignored:<motivo>" (ele responde 200 também quando descarta a mensagem).
+ */
+export const importOutcome = (status: number, bodyText: string) => {
+  if (status < 200 || status >= 300) return "failed";
+  try {
+    const json = JSON.parse(bodyText);
+    if (json?.ignored) return `ignored:${json.reason ?? json.event ?? "unknown"}`;
+  } catch {
+    // Resposta sem JSON: tratada como entregue
+  }
+  return "imported";
+};

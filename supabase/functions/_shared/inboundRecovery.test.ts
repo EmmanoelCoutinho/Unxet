@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  fetchLidPhone,
   fetchStoredMessages,
+  importOutcome,
+  lidPhoneMap,
+  unresolvedLids,
+  withPhone,
   pickRecoverable,
   recoveredWebhookBody,
   recoveryPhase,
@@ -122,5 +127,62 @@ describe("fetchStoredMessages", () => {
     expect(await fetchStoredMessages("https://evo.test", "key", "loja", window, { fetchImpl: failing })).toBeNull();
     const offline = vi.fn().mockRejectedValue(new Error("offline"));
     expect(await fetchStoredMessages("https://evo.test", "key", "loja", window, { fetchImpl: offline })).toBeNull();
+  });
+});
+
+describe("telefone das mensagens com @lid", () => {
+  const live = record("VIVO", 500, { remoteJid: "111@lid", remoteJidAlt: "5511999998888@s.whatsapp.net" });
+  const fromHistory = (id: string, remoteJid = "111@lid") => {
+    const r = record(id, 400, { remoteJid });
+    delete (r.key as Record<string, unknown>).remoteJidAlt;
+    return r;
+  };
+
+  it("monta o mapa a partir das mensagens que trazem os dois", () => {
+    const map = lidPhoneMap([fromHistory("A"), live, record("X", 1, { remoteJid: "222@lid", remoteJidAlt: "222@lid" })]);
+    expect([...map]).toEqual([["111@lid", "5511999998888@s.whatsapp.net"]]);
+  });
+
+  it("lista os @lid que ainda estão sem telefone", () => {
+    const map = lidPhoneMap([live]);
+    const pn = record("PN", 1, { remoteJid: "5511988887777@s.whatsapp.net" });
+    delete (pn.key as Record<string, unknown>).remoteJidAlt;
+    expect(unresolvedLids([fromHistory("A"), fromHistory("B", "333@lid"), fromHistory("C", "333@lid"), pn], map)).toEqual([
+      "333@lid",
+    ]);
+  });
+
+  it("completa o telefone ou devolve null", () => {
+    const map = lidPhoneMap([live]);
+    expect(withPhone(fromHistory("A"), map)?.key.remoteJidAlt).toBe("5511999998888@s.whatsapp.net");
+    expect(withPhone(live, new Map())).toBe(live);
+    expect(withPhone(fromHistory("B", "333@lid"), map)).toBeNull();
+  });
+
+  it("procura o telefone na Evolution pelas mensagens do contato", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ messages: { records: [fromHistory("A"), live] } }),
+    });
+    expect(await fetchLidPhone("https://evo.test", "key", "loja", "111@lid", { fetchImpl })).toBe(
+      "5511999998888@s.whatsapp.net",
+    );
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({
+      where: { key: { remoteJid: "111@lid" } },
+      page: 1,
+      offset: 50,
+    });
+    const offline = vi.fn().mockRejectedValue(new Error("offline"));
+    expect(await fetchLidPhone("https://evo.test", "key", "loja", "111@lid", { fetchImpl: offline })).toBeNull();
+  });
+});
+
+describe("importOutcome", () => {
+  it("separa importada, descartada e falha", () => {
+    expect(importOutcome(200, '{"success":true}')).toBe("imported");
+    expect(importOutcome(200, '{"ignored":true,"reason":"lid_unresolvable"}')).toBe("ignored:lid_unresolvable");
+    expect(importOutcome(200, "OK")).toBe("imported");
+    expect(importOutcome(502, "Upstream error")).toBe("failed");
   });
 });
