@@ -235,6 +235,10 @@ serve(async (req)=>{
       console.warn("[SECURITY] evolution-in: EVOLUTION_WEBHOOK_SECRET não configurado — webhook aceita qualquer origem");
     }
     const body = await req.json();
+    // Mensagem recuperada do histórico da Evolution pelo evolution-connection-sync
+    // (_shared/inboundRecovery.ts). Só vale com o segredo interno: entra com o
+    // horário original e sem acionar bot nem respostas automáticas.
+    const isRecovered = req.headers.get("x-unxet-recovered") === "1" && !!INTERNAL_BOT_SECRET && timingSafeEqual(req.headers.get("x-internal-secret") ?? "", INTERNAL_BOT_SECRET);
     console.log("[EVOLUTION_WEBHOOK_FULL]", JSON.stringify(redactWebhookSecrets(body), null, 2));
     // ── Status de entrega/leitura das mensagens enviadas (ticks) ──────────
     if (body?.event === "messages.update" || body?.event === "MESSAGES_UPDATE") {
@@ -691,6 +695,9 @@ serve(async (req)=>{
       } : {},
       ...interactive ? {
         interactive
+      } : {},
+      ...isRecovered ? {
+        recovered: true
       } : {},
       rawPayload: body
     };
