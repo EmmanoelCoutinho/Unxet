@@ -81,6 +81,16 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
     date: "2026-11-13",
     changes: [
       {
+        kind: "improved",
+        text: "Reabrir conversa automaticamente não pode mais ser desligado: quando o cliente responde depois de um atendimento finalizado, a mensagem volta para a mesma conversa, com todo o histórico. Quem está com a opção desligada pode ligar em Automações do chat.",
+        adminOnly: true,
+      },
+    ],
+  },
+  {
+    date: "2026-11-13",
+    changes: [
+      {
         kind: "new",
         text: "Arquivos CSV e PFX: planilhas em CSV e certificados digitais em PFX agora podem ser enviados na conversa, no banco de arquivos e nas mensagens agendadas.",
       },
