@@ -7,7 +7,8 @@ const quotedAuthorLabel = (
   contactName?: string,
 ) =>
   preview.author === "cliente"
-    ? contactName?.trim() || "Cliente"
+    ? // no grupo, o nome de quem escreveu
+      preview.senderName?.trim() || contactName?.trim() || "Cliente"
     : preview.senderName?.trim() || "Você";
 
 const MEDIA_LABELS: Record<string, string> = {

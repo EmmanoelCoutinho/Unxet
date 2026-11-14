@@ -17,6 +17,7 @@ import { getAuthenticatedUser, getClinicMembership } from "../_shared/security.t
 import { isConversationParticipant } from "../_shared/conversationParticipants.ts";
 import { clinicIsSuspended } from "../_shared/plan.ts";
 import { evolutionQuoted, normalizeReaction } from "../_shared/messageReply.ts";
+import { evolutionRecipient } from "../_shared/whatsappGroups.ts";
 
 const META_WABA_TOKEN = Deno.env.get("META_WABA_TOKEN") ?? "";
 
@@ -76,6 +77,7 @@ serve(async (req) => {
           whatsapp_number_id,
           channel,
           contacts ( phone, blocked_at ),
+          whatsapp_groups ( jid ),
           channel_connections (
             id, provider, channel, archived_at, session_name,
             evolution_api_url, evolution_api_key, meta_phone_number_id, access_token
@@ -127,7 +129,7 @@ serve(async (req) => {
       if (!baseUrl || !connection.evolution_api_key || !connection.session_name) {
         return json(422, { error: "Conexão do WhatsApp incompleta." });
       }
-      const { key } = evolutionQuoted(message, `${phone}@s.whatsapp.net`);
+      const { key } = evolutionQuoted(message, evolutionRecipient(conversation)?.remoteJid ?? `${phone}@s.whatsapp.net`);
       const resp = await fetch(`${baseUrl}/message/sendReaction/${connection.session_name}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: connection.evolution_api_key },

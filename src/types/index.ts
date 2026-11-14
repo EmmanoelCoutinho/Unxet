@@ -36,6 +36,10 @@ export type Conversation = {
   contactName: string;
   contactNumber?: string;
   contactAvatar?: string;
+  // Conversa de um grupo do WhatsApp: nome e foto acima são os do grupo e
+  // não há contato (cada mensagem traz quem escreveu)
+  isGroup?: boolean;
+  groupId?: string;
   lastMessage: string;
   lastMessageType?:
     | "text"

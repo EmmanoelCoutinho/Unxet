@@ -36,6 +36,14 @@ describe("settingsPatch", () => {
   it("aceita a resposta dentro de settings", () => {
     expect(settingsPatch({ settings: { ...current, groupsIgnore: true } })).toBeNull();
   });
+
+  it("com grupos ligados no número, deixa a Evolution mandar os grupos", () => {
+    expect(settingsPatch(current, { groupsEnabled: true })).toBeNull();
+    expect(settingsPatch({ ...current, groupsIgnore: true }, { groupsEnabled: true })).toEqual({
+      ...current,
+      groupsIgnore: false,
+    });
+  });
 });
 
 describe("normalizeSettings", () => {

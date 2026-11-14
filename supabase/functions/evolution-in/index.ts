@@ -2,7 +2,8 @@
  * evolution-in — Gateway da Evolution API (WhatsApp via QR Code)
  *
  * Responsabilidades:
- *  1. Filtrar apenas eventos "messages.upsert" do tipo inbound (não grupos, não reações)
+ *  1. Filtrar apenas eventos "messages.upsert" do tipo inbound (grupos só com
+ *     channel_connections.groups_enabled; reações gravam o emoji)
  *  2. Resolver clinicId + channelConnectionId via session_name
  *  3. Normalizar todos os tipos de mensagem (text, image, audio, document, interactive)
  *  4. Buscar mídia via Evolution API (base64) e repassar para o shared
@@ -20,6 +21,7 @@ import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { redactWebhookSecrets, stripWebhookEventSuffix } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 import { isNonChatJid } from "../_shared/evolutionSettings.ts";
+import { ensureWhatsappGroup, groupSender, isGroupJid } from "../_shared/whatsappGroups.ts";
 import { findContactByPhone } from "../_shared/startConversation.ts";
 import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 import { createCheckThrottle, imageHash, isCurrentProfilePic, profilePicFolder, profilePicPath } from "../_shared/profilePicture.ts";
@@ -273,16 +275,9 @@ serve(async (req)=>{
     const remoteJidAlt = body?.data?.key?.remoteJidAlt ?? "";
     const participantPn = body?.data?.key?.participantPn ?? "";
     const participant = body?.data?.key?.participant ?? "";
-    // ── Ignora grupos ─────────────────────────────────────────────────────
-    if (remoteJidRaw.endsWith("@g.us")) {
-      console.log("Mensagem de grupo ignorada:", remoteJidRaw);
-      return new Response(JSON.stringify({
-        ignored: true,
-        reason: "group_message"
-      }), {
-        status: 200
-      });
-    }
+    // ── Grupo: só entra se o número tiver grupos ligados (conferido abaixo,
+    // depois de achar a conexão). O autor vem em key.participant. ─────────
+    const groupJid = isGroupJid(remoteJidRaw) ? remoteJidRaw : null;
     // ── Ignora Status do WhatsApp, canais e listas de transmissão ─────────
     if (isNonChatJid(remoteJidRaw)) {
       return new Response(JSON.stringify({
@@ -380,7 +375,7 @@ serve(async (req)=>{
         status: 400
       });
     }
-    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
+    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key, groups_enabled").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
     // Erro do banco é temporário: 503 faz a fila de entrada tentar de novo.
     // Conexão inexistente (ex.: instância do outro ambiente) é 404 e é descartada.
     if (connectionError) {
@@ -492,9 +487,68 @@ serve(async (req)=>{
         status: 200
       });
     }
-    // ── Resolve LID → número real (se necessário) ─────────────────────────
-    // Feito APÓS buscar a connection pois precisamos das credenciais da Evolution
-    if (connection.evolution_api_url && connection.evolution_api_key) {
+    // ── Grupo ─────────────────────────────────────────────────────────────
+    let group = null;
+    if (groupJid) {
+      // Número sem grupos ligados (a Evolution já devia ter barrado)
+      if (connection.groups_enabled !== true) {
+        return new Response(JSON.stringify({
+          ignored: true,
+          reason: "group_message"
+        }), {
+          status: 200
+        });
+      }
+      // Enviada pelo celular da empresa no grupo: fica só no WhatsApp (v1)
+      if (isFromMe) {
+        return new Response(JSON.stringify({
+          ignored: true,
+          reason: "group_from_me"
+        }), {
+          status: 200
+        });
+      }
+      // Autor: telefone quando o WhatsApp informa; LID tenta resolver; sem
+      // número a mensagem entra assim mesmo, só com o nome de quem mandou.
+      const sender = groupSender(body?.data?.key);
+      let memberPhone = sender.phone;
+      if (!memberPhone && sender.lid && connection.evolution_api_url && connection.evolution_api_key) {
+        memberPhone = await resolveWaId({
+          evolutionApiUrl: connection.evolution_api_url,
+          evolutionApiKey: connection.evolution_api_key,
+          instanceName,
+          remoteJidRaw: sender.lid,
+          remoteJidAlt: "",
+          currentWaId: ""
+        }) || null;
+      }
+      waId = memberPhone ?? "";
+      try {
+        group = await ensureWhatsappGroup(supabase, {
+          clinicId: connection.clinic_id,
+          channelConnectionId: connection.id,
+          jid: groupJid,
+          evolution: connection.evolution_api_url && connection.evolution_api_key ? {
+            apiUrl: connection.evolution_api_url,
+            apiKey: connection.evolution_api_key,
+            instanceName
+          } : null
+        });
+      } catch (err) {
+        // Banco fora: 503 faz a fila de entrada tentar de novo
+        console.error("[GROUP_ENSURE_ERROR]", err);
+        return new Response("Database unavailable", {
+          status: 503
+        });
+      }
+      console.log("[GROUP_MESSAGE]", JSON.stringify({
+        groupId: group.id,
+        hasPhone: !!memberPhone,
+        hasLid: !!sender.lid
+      }));
+    } else if (connection.evolution_api_url && connection.evolution_api_key) {
+      // ── Resolve LID → número real (se necessário) ───────────────────────
+      // Feito APÓS buscar a connection pois precisamos das credenciais da Evolution
       waId = await resolveWaId({
         evolutionApiUrl: connection.evolution_api_url,
         evolutionApiKey: connection.evolution_api_key,
@@ -511,7 +565,7 @@ serve(async (req)=>{
     });
     // ── Descarta mensagem se o waId não pôde ser resolvido para telefone real
     // Isso evita salvar LIDs numéricos (ex: 123304753004612) como telefone
-    if (!waId || !/^\d{10,13}$/.test(waId)) {
+    if (!group && (!waId || !/^\d{10,13}$/.test(waId))) {
       console.warn("[DROPPED] waId não resolvido ou parece LID numérico, descartando mensagem:", {
         remoteJidRaw,
         waId
@@ -554,7 +608,8 @@ serve(async (req)=>{
     }
     // ── Contato bloqueado: descarta antes de baixar mídia, criar conversa,
     // acionar bot ou IA (só conta a mensagem barrada) ──────────────────────
-    if (await registerBlockedInbound(supabase, connection.clinic_id, blockIdentifiers(waId))) {
+    // (no grupo o bloqueio não vale: ele é para a conversa particular)
+    if (!group && await registerBlockedInbound(supabase, connection.clinic_id, blockIdentifiers(waId))) {
       console.log("[BLOCKED_CONTACT] mensagem descartada:", {
         clinicId: connection.clinic_id,
         providerMessageId
@@ -566,7 +621,7 @@ serve(async (req)=>{
         status: 200
       });
     }
-    const profileName = body?.data?.pushName ?? "Cliente";
+    const profileName = body?.data?.pushName ?? (group ? null : "Cliente");
     const timestampRaw = body?.data?.messageTimestamp;
     const timestamp = timestampRaw ? new Date(Number(timestampRaw) * 1000).toISOString() : new Date().toISOString();
     // ── Detecta tipo de mensagem ──────────────────────────────────────────
@@ -717,6 +772,14 @@ serve(async (req)=>{
       ...isRecovered ? {
         recovered: true
       } : {},
+      // Grupo: a conversa é do grupo; waId (se houver) é de quem escreveu
+      ...group ? {
+        group: {
+          id: group.id,
+          jid: groupJid,
+          participantJid: body?.data?.key?.participant ?? null
+        }
+      } : {},
       rawPayload: body
     };
     console.log("[SHARED_PAYLOAD]", JSON.stringify({
@@ -742,7 +805,8 @@ serve(async (req)=>{
       });
     }
     // ── Foto de perfil (fire-and-forget assíncrono) ───────────────────────
-    if (connection.evolution_api_url && connection.evolution_api_key) {
+    // (no grupo, a de quem escreveu, se o número for conhecido)
+    if (waId && connection.evolution_api_url && connection.evolution_api_key) {
       const profilePicTask = fetchAndStoreProfilePic({
         supabase,
         evolutionApiUrl: connection.evolution_api_url,

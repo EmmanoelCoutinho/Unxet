@@ -241,11 +241,12 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
   try {
     const { data: conversation, error } = await admin
       .from("conversations")
-      .select("id, clinic_id, contact_id, channel, channel_connection_id, assigned_user_id, department_id")
+      .select("id, clinic_id, contact_id, group_id, channel, channel_connection_id, assigned_user_id, department_id")
       .eq("id", conversationId)
       .maybeSingle();
 
-    if (error || !conversation?.channel_connection_id) return;
+    // Grupo não recebe pesquisa (ela iria para todos os participantes)
+    if (error || !conversation?.channel_connection_id || conversation.group_id || !conversation.contact_id) return;
 
     const settings = await getSurveySettings(admin, conversation.clinic_id);
     if (!settings?.satisfaction_survey_enabled) return;
