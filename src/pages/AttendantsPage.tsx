@@ -198,7 +198,10 @@ const getFunctionResponseMessage = async (error: any) => {
 
 const RoleBadge: React.FC<{ role: Role; customName?: string | null }> = ({ role, customName }) =>
   role !== "admin" && customName ? (
-    <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+    <span
+      className="inline-block max-w-full truncate whitespace-nowrap rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 align-middle"
+      title={customName}
+    >
       {customName}
     </span>
   ) : (
@@ -259,7 +262,7 @@ const StatusBadge: React.FC<{ status: "active" | "pending" }> = ({
 
 // Colunas da lista no desktop, compartilhadas entre o cabeçalho e as linhas.
 const LIST_GRID_COLS =
-  "2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_7.5rem_minmax(0,1fr)_9.5rem_12rem]";
+  "2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(9rem,1.1fr)_minmax(0,1fr)_9.5rem_12rem]";
 
 const Divider: React.FC = () => <div className="h-px w-full bg-gray-100" />;
 
@@ -1116,7 +1119,7 @@ export const AttendantsPage: React.FC = () => {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 2xl:contents">
-                    <div>
+                    <div className="min-w-0 max-w-full">
                       <RoleBadge
                         role={user.role}
                         customName={roles.find((r) => r.id === user.role_id)?.name}
