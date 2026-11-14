@@ -131,7 +131,7 @@ export const ProfileModal: React.FC<{
     setResetSent(true);
   };
 
-  // Portal no body: renderizada dentro do header (fixed z-30), a modal ficaria
+  // Portal no body: renderizada dentro do header (fixed z-[38]), a modal ficaria
   // presa no empilhamento dele e a sidebar continuaria clicável por cima.
   return createPortal(
     <div className="fixed inset-0 z-[9999]">

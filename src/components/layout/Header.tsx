@@ -69,7 +69,7 @@ export const Header = () => {
   }, [open]);
 
   return (
-    <header className="w-full border-b border-gray-200 bg-white fixed top-0 h-16 z-30">
+    <header className="w-full border-b border-gray-200 bg-white fixed top-0 h-16 z-[38]">
       <div className="mx-auto max-w-7xl px-3 sm:px-4 h-full flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-1 sm:gap-3">
           <button
