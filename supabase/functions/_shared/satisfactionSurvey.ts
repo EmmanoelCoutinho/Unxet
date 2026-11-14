@@ -1,14 +1,15 @@
 // deno-lint-ignore-file
 // @ts-nocheck
 // Pesquisa de satisfação: envio ao encerrar e captura da resposta.
-// A escala da nota (ex.: 1 a 5, 0 a 10) é escolhida por cada empresa.
+// A nota é sempre de 0 a 10 e a pesquisa não tem prazo: espera até o cliente
+// mandar outra mensagem que não seja nota ou até a próxima pesquisa.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
 
-export const DEFAULT_SCALE_MIN = 1;
-export const DEFAULT_SCALE_MAX = 5;
+export const DEFAULT_SCALE_MIN = 0;
+export const DEFAULT_SCALE_MAX = 10;
 
 const SCORE_WORDS: Record<string, number> = {
   zero: 0,
@@ -32,6 +33,13 @@ const SCORE_PATTERN =
 
 const wordToNumber = (value: string): number | undefined =>
   /^\d+$/.test(value) ? Number(value) : SCORE_WORDS[value];
+
+// Nota fracionada ("9.9", "9,99", "3.5") vira a inteira mais próxima
+// (10, 10, 4). Até 2 dígitos antes da vírgula e até 3 depois.
+const roundDecimalScores = (text: string) =>
+  text.replace(/(?<![\d.,])(\d{1,2})[.,](\d{1,3})(?![.,]?\d)/g, (_, int, frac) =>
+    String(Math.round(Number(`${int}.${frac}`))),
+  );
 
 // Palavras de agradecimento/elogio que o cliente costuma mandar junto com a
 // nota ("5, obrigado!") ou sozinhas depois do encerramento ("Obrigada 🙏").
@@ -101,7 +109,7 @@ export const scaleFromMessage = (message: unknown): { min: number; max: number }
  */
 export const isScoreAttempt = (raw: unknown): boolean => {
   if (typeof raw !== "string") return false;
-  const match = normalizeAnswer(raw).match(SCORE_PATTERN);
+  const match = roundDecimalScores(normalizeAnswer(raw)).match(SCORE_PATTERN);
   if (!match) return false;
   const value = wordToNumber(match[1]);
   return value !== undefined && value >= 0 && value <= 10;
@@ -109,9 +117,10 @@ export const isScoreAttempt = (raw: unknown): boolean => {
 
 /**
  * Interpreta a resposta do cliente como nota dentro da escala da pesquisa
- * (padrão 1 a 5). Aceita "5", "nota 4", "4 estrelas", "8/10", "8 de 10",
- * "cinco", "⭐⭐⭐". Nota fora da escala ou qualquer outro texto retorna null
- * (não é resposta da pesquisa).
+ * (padrão 0 a 10). Aceita "5", "nota 4", "4 estrelas", "8/10", "8 de 10",
+ * "cinco", "⭐⭐⭐" e nota fracionada, arredondada ("9.9" -> 10, "3,5" -> 4).
+ * Nota fora da escala ou qualquer outro texto retorna null (não é resposta
+ * da pesquisa).
  */
 export const parseSurveyScore = (
   raw: unknown,
@@ -129,7 +138,7 @@ export const parseSurveyScore = (
     return inScale(stars);
   }
 
-  const text = normalizeAnswer(raw);
+  const text = roundDecimalScores(normalizeAnswer(raw));
 
   const match = text.match(SCORE_PATTERN);
   if (match) {
@@ -161,14 +170,13 @@ export type SurveySettings = {
   satisfaction_survey_scale_max: number | null;
   satisfaction_survey_message: string;
   satisfaction_survey_thanks_message: string | null;
-  satisfaction_survey_window_minutes: number;
 };
 
 export const getSurveySettings = async (admin, clinicId: string): Promise<SurveySettings | null> => {
   const { data, error } = await admin
     .from("conversation_automation_settings")
     .select(
-      "satisfaction_survey_enabled, satisfaction_survey_message, satisfaction_survey_thanks_message, satisfaction_survey_window_minutes, satisfaction_survey_scale_min, satisfaction_survey_scale_max",
+      "satisfaction_survey_enabled, satisfaction_survey_message, satisfaction_survey_thanks_message, satisfaction_survey_scale_min, satisfaction_survey_scale_max",
     )
     .eq("clinic_id", clinicId)
     .maybeSingle();
@@ -259,13 +267,13 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
       text: settings.satisfaction_survey_message,
     });
 
-    // A escala que vale é a que o cliente lê na mensagem
+    // A nota é sempre de 0 a 10. Texto antigo da empresa que ainda peça outra
+    // escala ("de 1 a 5") vale pelo que o cliente lê, até ser corrigido.
     const messageScale = scaleFromMessage(settings.satisfaction_survey_message);
-    const scaleMin = messageScale?.min ?? settings.satisfaction_survey_scale_min ?? DEFAULT_SCALE_MIN;
-    const scaleMax = messageScale?.max ?? settings.satisfaction_survey_scale_max ?? DEFAULT_SCALE_MAX;
+    const scaleMin = messageScale?.min ?? DEFAULT_SCALE_MIN;
+    const scaleMax = messageScale?.max ?? DEFAULT_SCALE_MAX;
 
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + settings.satisfaction_survey_window_minutes * 60_000);
 
     const { error: insertError } = await admin.from("satisfaction_surveys").insert({
       clinic_id: conversation.clinic_id,
@@ -280,7 +288,6 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
       status: sendError ? "failed" : "sent",
       error: sendError,
       sent_at: now.toISOString(),
-      expires_at: expiresAt.toISOString(),
     });
     if (insertError) console.error("[SURVEY] erro ao gravar a pesquisa enviada:", insertError);
 
@@ -363,7 +370,6 @@ export const matchSurveyAnswer = async (admin, params: {
     .eq("contact_id", params.contactId)
     .eq("channel_connection_id", params.channelConnectionId)
     .eq("status", "sent")
-    .gt("expires_at", new Date().toISOString())
     .order("sent_at", { ascending: false })
     .limit(1)
     .maybeSingle();

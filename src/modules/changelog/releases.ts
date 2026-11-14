@@ -75,6 +75,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "improved",
+    text: "Pesquisa de satisfação: a nota agora é sempre de 0 a 10 e não tem mais prazo para resposta. Se o cliente responder dias depois, a nota é registrada sem reabrir a conversa; notas com vírgula (como 9,5) são arredondadas. Avaliações antigas continuam nos relatórios, convertidas para 0 a 10.",
+    adminOnly: true,
+  },
+  {
     kind: "new",
     text: "Menu da mensagem: passe o mouse no balão (ou segure no celular) e clique na setinha para Responder citando a mensagem, Reagir com emoji, Copiar o texto ou Baixar o arquivo. As respostas citadas e as reações dos clientes também aparecem na conversa. Responder e Reagir valem para o WhatsApp.",
   },
