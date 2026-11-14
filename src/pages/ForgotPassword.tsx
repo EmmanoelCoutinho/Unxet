@@ -1,16 +1,17 @@
 import React, { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Card } from '../components/ui/Card';
+import { ArrowLeft, KeyRound, MailCheck } from 'lucide-react';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
-import logo from '../assets/logo-unxet.png';
+import { AuthShell } from '../components/AuthShell';
 import { toast } from 'react-toastify';
-import { useAuth } from '../contexts/AuthContext'; // Importado o hook de auth
+import { useAuth } from '../contexts/AuthContext';
 import { translateAuthError } from '../lib/authErrors';
 
 export const ForgotPassword: React.FC = () => {
-  const { sendPasswordResetEmail } = useAuth(); // Extraído o método do contexto
+  const { sendPasswordResetEmail } = useAuth();
   const [email, setEmail] = useState('');
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
@@ -23,16 +24,10 @@ export const ForgotPassword: React.FC = () => {
 
     try {
       setLoading(true);
-      
-      // Executa a chamada ao Supabase
       const { error } = await sendPasswordResetEmail(email);
-      
-      if (error) {
-        throw error;
-      }
-
-      toast.success('E-mail de redefinição enviado! Verifique sua caixa de entrada.');
-      setEmail(''); 
+      if (error) throw error;
+      setSentTo(email);
+      setEmail('');
     } catch (err: any) {
       toast.error(translateAuthError(err, 'Erro ao tentar enviar o e-mail de redefinição.'));
     } finally {
@@ -40,49 +35,68 @@ export const ForgotPassword: React.FC = () => {
     }
   }
 
-  return (
-    <div className="min-h-screen w-full bg-white flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-5 sm:p-8">
-        <div className="text-center mb-8">
-          <img
-            src={logo}
-            alt="Unxet"
-            className="mx-auto w-56 mb-2 object-contain"
-          />
-          <p className="text-gray-900 text-lg">Central de Mensagens</p>
-        </div>
-
-        <h2 className="text-2xl font-semibold text-gray-900 mb-2">Recuperar Senha</h2>
-        <p className="text-sm text-gray-500 mb-6">
-          Digite o seu e-mail cadastrado e enviaremos um link para você criar uma nova senha.
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="E-mail"
-            type="email"
-            placeholder="seu@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={loading}
-          />
-
-          <Button
-            type="submit"
-            variant="primary"
-            className="w-full"
-            isLoading={loading}
-          >
-            Enviar link de recuperação
-          </Button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <Link to="/login" className="text-sm text-[#0A84FF] hover:underline">
-            Voltar para o Login
-          </Link>
-        </div>
-      </Card>
+  const backLink = (
+    <div className="mt-6 text-center">
+      <Link
+        to="/login"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-[#0A84FF] hover:underline"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Voltar para o login
+      </Link>
     </div>
+  );
+
+  if (sentTo) {
+    return (
+      <AuthShell
+        icon={<MailCheck className="h-7 w-7" />}
+        title="Verifique seu e-mail"
+        subtitle={
+          <>
+            Se <span className="font-medium text-gray-900">{sentTo}</span> estiver
+            cadastrado, você vai receber um link para criar uma nova senha.
+          </>
+        }
+      >
+        <div className="rounded-xl bg-[#0A84FF]/5 border border-[#0A84FF]/20 px-4 py-3 text-sm text-gray-600">
+          Não chegou? Confira a caixa de spam ou{' '}
+          <button
+            type="button"
+            onClick={() => setSentTo(null)}
+            className="font-medium text-[#0A84FF] hover:underline"
+          >
+            envie de novo
+          </button>
+          .
+        </div>
+        {backLink}
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell
+      icon={<KeyRound className="h-7 w-7" />}
+      title="Recuperar senha"
+      subtitle="Digite o seu e-mail cadastrado e enviaremos um link para você criar uma nova senha."
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          label="E-mail"
+          type="email"
+          placeholder="seu@email.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={loading}
+          autoFocus
+        />
+
+        <Button type="submit" variant="primary" className="w-full" isLoading={loading}>
+          Enviar link de recuperação
+        </Button>
+      </form>
+      {backLink}
+    </AuthShell>
   );
 };
