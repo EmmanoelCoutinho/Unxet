@@ -2,11 +2,10 @@ import React, { FormEvent, useEffect, useState } from 'react';
 // 1. Importamos o Link do react-router-dom
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import type { Location } from 'react-router-dom';
-import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
+import { AuthShell } from '../components/AuthShell';
 import { useAuth } from '../contexts/AuthContext';
-import logo from '../assets/logo-unxet.png';
 import { toast } from 'react-toastify';
 import { translateAuthError } from '../lib/authErrors';
 import { LegalConsent, StatusNotice } from '../components/LegalLinks';
@@ -42,19 +41,10 @@ export const Login: React.FC = () => {
   } , [authUser, location.state, navigate]);
 
   return (
-    <div className="min-h-screen w-full bg-white flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-5 sm:p-8">
-        <div className="text-center mb-8">
-          <img
-            src={logo}
-            alt="Unxet"
-            className="mx-auto w-56 mb-2 object-contain"
-          />
-          <p className="text-gray-900 text-lg">Central de Mensagens</p>
-        </div>
-        
-        <h2 className="text-2xl font-semibold text-gray-900 mb-6">Entrar</h2>
-        
+    <AuthShell
+      title="Entrar"
+      subtitle="Acesse a sua Central de Mensagens."
+    >
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             label="E-mail"
@@ -97,7 +87,6 @@ export const Login: React.FC = () => {
 
         <LegalConsent action="Ao entrar" className="mt-4" />
         <StatusNotice className="mt-2" />
-      </Card>
-    </div>
+    </AuthShell>
   );
 };
