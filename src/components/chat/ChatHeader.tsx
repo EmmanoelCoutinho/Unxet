@@ -101,7 +101,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const isMobile = useIsMobile();
   const confirm = useConfirm();
 
-  const initials = useMemo(() => {
+  const initialsText = useMemo(() => {
     const name = (conversation.contactName ?? "").trim();
     if (!name) return "--";
     return name
@@ -112,9 +112,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       .toUpperCase()
       .slice(0, 2);
   }, [conversation.contactName]);
+  // Grupo sem foto: ícone de pessoas no lugar das iniciais
+  const initials = conversation.isGroup ? (
+    <UsersIcon className="h-5 w-5" aria-hidden="true" />
+  ) : (
+    initialsText
+  );
 
   const avatar = conversation.contactAvatar;
   const formattedIdentifier = useMemo(() => {
+    if (conversation.isGroup) return "Grupo";
     const rawValue = (conversation.contactNumber ?? "").trim();
     if (!rawValue) return "";
 
@@ -140,7 +147,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     }
 
     return identifier;
-  }, [conversation.contactNumber]);
+  }, [conversation.contactNumber, conversation.isGroup]);
 
   const handleAccept = async () => {
     if (!onAccept || acceptDisabled || isAccepting) return;

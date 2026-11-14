@@ -304,7 +304,7 @@ serve(async (req)=>{
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     // "connecting" fica de fora: é o fluxo do QR Code, controlado pelo webhook.
     // Número removido (archived_at) não tem mais instância na Evolution.
-    const { data: connections, error } = await supabase.from("channel_connections").select("id, session_name, status, evolution_api_url, evolution_api_key").eq("provider", "evolution").in("status", [
+    const { data: connections, error } = await supabase.from("channel_connections").select("id, session_name, status, evolution_api_url, evolution_api_key, groups_enabled").eq("provider", "evolution").in("status", [
       "connected",
       "disconnected"
     ]).not("session_name", "is", null).is("archived_at", null);
@@ -326,9 +326,11 @@ serve(async (req)=>{
       const result = await fetchInstanceState(apiUrl, apiKey, connection.session_name);
       if (!result) return;
       // Corrige instâncias antigas ou alteradas no Evolution Manager
-      // (ignorar grupos, sem histórico). Normalmente é só uma leitura.
+      // (grupos conforme a opção do número, sem histórico). Normalmente é só uma leitura.
       if (result.exists) {
-        const settings = await ensureInstanceSettings(apiUrl, apiKey, connection.session_name);
+        const settings = await ensureInstanceSettings(apiUrl, apiKey, connection.session_name, {
+          groupsEnabled: connection.groups_enabled === true
+        });
         if (settings === "updated") settingsUpdated.push(connection.id);
       }
       if (connection.status === "connected" && (result.state === "open" || result.state === "connected")) {

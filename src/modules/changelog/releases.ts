@@ -75,6 +75,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "new",
+    text: "Grupos do WhatsApp: cada número de QR Code pode receber as mensagens dos grupos (Configurações > Integrações > \"Receber mensagens de grupos\", desligado por padrão). Cada grupo vira uma conversa, com o nome de quem escreveu em cada mensagem, e você responde direto no grupo. Bot, IA e pesquisa de satisfação não atuam em grupos.",
+    adminOnly: true,
+  },
+  {
     kind: "improved",
     text: "Pesquisa de satisfação: a nota agora é sempre de 0 a 10 e não tem mais prazo para resposta. Se o cliente responder dias depois, a nota é registrada sem reabrir a conversa; notas com vírgula (como 9,5) são arredondadas. Avaliações antigas continuam nos relatórios, convertidas para 0 a 10.",
     adminOnly: true,

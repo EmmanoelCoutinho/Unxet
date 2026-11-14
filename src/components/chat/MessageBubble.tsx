@@ -24,6 +24,8 @@ interface MessageBubbleProps {
   message: UiMessage;
   contactAvatar?: string;
   contactName?: string;
+  /** Conversa de grupo: a mensagem do cliente mostra quem escreveu */
+  isGroup?: boolean;
 
   /**
    * Opcional: usado para permitir "Reenviar" quando a mensagem é local e falhou.
@@ -195,6 +197,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onReact,
   onQuotedClick,
   contactName,
+  isGroup,
 }) => {
   const payload = message.payload ?? {};
   const isClient = message.author === "cliente";
@@ -486,7 +489,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const agentReaction = message.deletedAt ? undefined : message.agentReaction;
   const hasReactions = !!clientReaction || !!agentReaction;
   const reactionTitle = [
-    clientReaction ? `${contactName?.trim() || "Cliente"}: ${clientReaction}` : null,
+    clientReaction
+      ? `${(isGroup ? "Participante" : contactName?.trim()) || "Cliente"}: ${clientReaction}`
+      : null,
     agentReaction ? `Empresa: ${agentReaction}` : null,
   ]
     .filter(Boolean)
@@ -495,8 +500,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const quoted = message.deletedAt ? undefined : message.replyTo;
   const quotedOnDark = !isClient && !onlyAudio && !onlyDocument;
 
-  // Quem respondeu (o cliente recebe o nome na 1ª linha da mensagem)
-  const senderName = !isClient ? message.senderName?.trim() : undefined;
+  // Quem respondeu (o cliente recebe o nome na 1ª linha da mensagem). No
+  // grupo, também quem escreveu do lado do cliente.
+  const senderName =
+    !isClient || isGroup
+      ? message.senderName?.trim() || (isClient ? "Participante" : undefined)
+      : undefined;
   const senderTint = senderName
     ? senderColor(message.senderUserId ?? senderName)
     : undefined;
@@ -521,7 +530,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         <div className="flex min-w-0 flex-col">
           {senderName && (
             <span
-              className="mb-0.5 self-end truncate px-1 text-xs font-semibold"
+              className={`mb-0.5 truncate px-1 text-xs font-semibold ${isClient ? "self-start" : "self-end"}`}
               style={{ color: senderTint }}
             >
               {senderName}

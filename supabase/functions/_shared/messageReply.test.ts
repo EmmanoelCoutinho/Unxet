@@ -37,6 +37,12 @@ describe("buildReplyPreview", () => {
     ).toEqual({ author: "atendente", type: "audio", text: "🎤 Áudio", senderName: "Ana" });
   });
 
+  it("no grupo, guarda o nome de quem escreveu", () => {
+    expect(
+      buildReplyPreview({ direction: "inbound", type: "text", text: "oi", sender_name: "Maria" }),
+    ).toEqual({ author: "cliente", type: "text", text: "oi", senderName: "Maria" });
+  });
+
   it("corta textos longos", () => {
     expect(buildReplyPreview({ direction: "inbound", text: "a".repeat(500) }).text).toHaveLength(200);
   });

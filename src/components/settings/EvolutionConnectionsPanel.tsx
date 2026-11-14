@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { LogOutIcon, PlusIcon, QrCodeIcon, Trash2Icon } from "lucide-react";
 import { Button } from "../ui/Button";
+import { Toggle } from "../ui/Toggle";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { WhatsAppQrCode } from "./WhatsAppQrCode";
 import { supabase } from "../../lib/supabaseClient";
@@ -17,6 +18,8 @@ export type EvolutionConnection = {
   connected_name?: string | null;
   display_name?: string | null;
   default_department_id?: string | null;
+  // Recebe as mensagens dos grupos do WhatsApp deste número
+  groups_enabled?: boolean | null;
   last_connection_at?: string | null;
   last_disconnection_at?: string | null;
 };
@@ -122,6 +125,7 @@ const EvolutionConnectionItem: React.FC<ItemProps> = ({
     async (patch: {
       display_name?: string;
       default_department_id?: string | null;
+      groups_enabled?: boolean;
     }) => {
       onError(null);
       setBusy("save");
@@ -273,6 +277,20 @@ const EvolutionConnectionItem: React.FC<ItemProps> = ({
           </select>
         </div>
       ) : null}
+
+      <div className="mt-3">
+        <Toggle
+          label="Receber mensagens de grupos"
+          helper={
+            connection.groups_enabled
+              ? "Cada grupo vira uma conversa na fila, com o nome de quem escreveu em cada mensagem. Bot, IA e pesquisa de satisfação não atuam em grupos. Pode levar até 5 minutos para começar."
+              : "Desligado: mensagens de grupos ficam só no celular."
+          }
+          checked={connection.groups_enabled === true}
+          onChange={(enabled) => saveFields({ groups_enabled: enabled })}
+          disabled={busy !== null}
+        />
+      </div>
 
       {!isConnected && connection.qr_code ? (
         <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-5 text-center">

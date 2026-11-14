@@ -59,6 +59,7 @@ import { useWhatsappConnections } from "../../hooks/useWhatsappConnections";
 import { useFloatingChats } from "../../modules/floatingChats/FloatingChatsContext";
 import { useConversationList } from "../../contexts/ConversationsContext";
 import { WindowControls, type WindowControlsProps } from "./WindowControls";
+import { CONVERSATION_GROUP_SELECT, conversationGroupOf, groupConversationFields } from "../../utils/whatsappGroup";
 
 type UiTag = { id: string; name: string; color: string };
 
@@ -173,8 +174,8 @@ function replyPreviewOf(message: Message): MessageReplyPreview {
     author: message.author,
     type: message.type,
     text: (message.text ?? "").trim().slice(0, 200),
-    senderName:
-      message.author === "atendente" ? message.senderName : undefined,
+    // atendente; ou, no grupo, quem escreveu
+    senderName: message.senderName,
   };
 }
 
@@ -611,6 +612,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         assigned_user_id,
         in_bot_flow,
         contacts:contact_id (*),
+        ${CONVERSATION_GROUP_SELECT},
         departments:department_id (name),
         last_inbound_at,
         sla_breached_at,
@@ -719,6 +721,10 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           contactRow?.name ?? contactRow?.phone ?? "Contato sem nome",
         contactNumber: contactRow?.phone ?? "",
         contactAvatar: contactAvatar ?? undefined,
+        // Grupo: nome e foto do grupo no lugar do contato
+        ...(conversationGroupOf(data)
+          ? groupConversationFields(conversationGroupOf(data)!)
+          : {}),
         lastMessage: last?.text ?? "",
         lastMessageType: (last as any)?.type ?? "text",
         lastTimestamp:
@@ -1820,6 +1826,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
                   <MessageBubble
                     message={item.message}
                     contactName={conversation?.contactName ?? ""}
+                    isGroup={conversation?.isGroup === true}
                     onRetry={handleRetryLocalMessage}
                     onRetryTranscript={handleRetryAudioTranscript}
                     onDeleteMessage={

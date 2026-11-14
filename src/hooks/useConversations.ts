@@ -11,6 +11,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { useClinic } from "../contexts/ClinicContext";
 import { DELETED_MESSAGE_TEXT } from "./useMessages";
+import { CONVERSATION_GROUP_SELECT, conversationGroupOf, groupConversationFields } from "../utils/whatsappGroup";
 import {
   conversationConnectionLabel,
   isConnectionRemoved,
@@ -263,6 +264,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
           sla_breached_at,
           first_unanswered_inbound_at,
           contacts:contact_id (*),
+          ${CONVERSATION_GROUP_SELECT},
           messages (
             id,
             text,
@@ -406,6 +408,10 @@ export function useConversations(options: UseConversationsOptions = {}) {
                 contactRow?.name ?? contactRow?.phone ?? "Contato sem nome",
               contactNumber: contactRow?.phone ?? "",
               contactAvatar: contactAvatar ?? undefined,
+              // Grupo: nome e foto do grupo no lugar do contato
+              ...(conversationGroupOf(row)
+                ? groupConversationFields(conversationGroupOf(row)!)
+                : {}),
 
               lastMessage: preview.text,
               lastMessageType: preview.type,

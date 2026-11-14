@@ -58,7 +58,8 @@ export function buildReplyPreview(target: {
   const author = target.direction === "inbound" ? "cliente" : "atendente";
   const preview: ReplyPreview = { author, type, text };
   const senderName = String(target.sender_name ?? "").trim();
-  if (author === "atendente" && senderName) preview.senderName = senderName;
+  // Atendente; ou, no grupo, quem escreveu (só a recebida de grupo tem nome)
+  if (senderName) preview.senderName = senderName;
   return preview;
 }
 
@@ -139,6 +140,8 @@ export function evolutionQuoted(target: ReplyTarget, remoteJid: string) {
       id: target.meta_message_id,
       remoteJid: key.remoteJid ?? remoteJid,
       fromMe: target.direction !== "inbound",
+      // Grupo: o WhatsApp precisa saber de quem é a mensagem citada/reagida
+      ...(typeof key.participant === "string" && key.participant ? { participant: key.participant } : {}),
     },
     message: { conversation: String(target.text ?? "") },
   };

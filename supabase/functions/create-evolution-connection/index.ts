@@ -230,9 +230,11 @@ serve(async (req)=>{
       console.log("Instance already exists");
     }
     await setInstanceWebhook(evolutionApiUrl, evolutionApiKey, sessionName);
-    // Ignorar grupos e não puxar histórico: menos webhooks à toa. Se falhar,
+    // Grupos conforme a opção do número e sem histórico: menos webhooks à toa. Se falhar,
     // a conexão segue e o evolution-connection-sync tenta de novo.
-    await ensureInstanceSettings(evolutionApiUrl, evolutionApiKey, sessionName);
+    await ensureInstanceSettings(evolutionApiUrl, evolutionApiKey, sessionName, {
+      groupsEnabled: connection.groups_enabled === true
+    });
     // =========================================================
     // 3. Verificar estado da conexão
     // =========================================================

@@ -28,6 +28,8 @@ const json = (status: number, body: Record<string, unknown>) =>
   });
 
 const toRemoteJid = (phone: string | null | undefined) => {
+  // Conversa de grupo: o destino já é o JID do grupo
+  if (typeof phone === "string" && phone.endsWith("@g.us")) return phone;
   const digits = String(phone ?? "").replace(/\D/g, "");
   return digits ? `${digits}@s.whatsapp.net` : null;
 };

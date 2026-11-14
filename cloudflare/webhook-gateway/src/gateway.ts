@@ -119,10 +119,13 @@ const EVOLUTION_USED_EVENTS = new Set([
 /** "MESSAGES_UPSERT" e "messages-upsert" -> "messages.upsert" */
 const normalizeEvent = (event: string) => event.toLowerCase().replace(/[_-]/g, ".");
 
-/** Grupos, Status do WhatsApp, canais e listas de transmissão (o evolution-in ignora). */
+/** Status do WhatsApp, canais e listas de transmissão (o evolution-in ignora). */
 const isIgnoredJid = (jid: unknown) =>
-  typeof jid === "string" &&
-  (jid.endsWith("@g.us") || jid.endsWith("@broadcast") || jid.endsWith("@newsletter"));
+  typeof jid === "string" && (jid.endsWith("@broadcast") || jid.endsWith("@newsletter"));
+
+// Grupos passam: quem decide é a opção do número (groups_enabled), aplicada
+// na própria Evolution (groupsIgnore) e conferida no evolution-in.
+const isGroupJid = (jid: unknown) => typeof jid === "string" && jid.endsWith("@g.us");
 
 // Status que o evolution-in não grava (só usa entregue e lido). Códigos da
 // Evolution v1: 0 ERROR, 1 PENDING, 2 SERVER_ACK. Status ausente ou
@@ -149,8 +152,11 @@ export const evolutionSkipReason = (body: Uint8Array): string | null => {
   if (!EVOLUTION_USED_EVENTS.has(event)) return `event:${event}`;
 
   if (event === "messages.upsert") {
-    const jid = (payload.data as { key?: { remoteJid?: unknown } } | undefined)?.key?.remoteJid;
-    return isIgnoredJid(jid) ? "jid" : null;
+    const key = (payload.data as { key?: { remoteJid?: unknown; fromMe?: unknown } } | undefined)?.key;
+    if (isIgnoredJid(key?.remoteJid)) return "jid";
+    // Enviada pelo celular da empresa num grupo: o evolution-in não grava
+    if (isGroupJid(key?.remoteJid) && key?.fromMe === true) return "group_from_me";
+    return null;
   }
 
   if (event === "messages.update") {
