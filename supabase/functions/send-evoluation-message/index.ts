@@ -8,6 +8,7 @@ import { clinicIsSuspended } from "../_shared/plan.ts";
 import { parseSharedContact, sharedContactText, toEvolutionContact } from "../_shared/contactCard.ts";
 import { loadAgentSender, signText } from "../_shared/agentSignature.ts";
 import { isConversationParticipant } from "../_shared/conversationParticipants.ts";
+import { evolutionQuoted, loadReplyTarget, replyColumns } from "../_shared/messageReply.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -315,6 +316,11 @@ serve(async (req)=>{
     const outboundText = sender.sign ? signText(text ?? "", sender.name, {
       bold: true
     }) : text ?? "";
+    // Resposta citando uma mensagem da conversa (menu da setinha no balão)
+    const replyTarget = await loadReplyTarget(adminSupabase, conversation.id, body.replyToMessageId);
+    const quotedFields = replyTarget ? {
+      quoted: evolutionQuoted(replyTarget, `${number}@s.whatsapp.net`)
+    } : {};
     if (sharedContact) {
       console.log("[EVOLUTION_SEND_CONTACT]", JSON.stringify({
         number,
@@ -328,6 +334,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
+          ...quotedFields,
           contact: [
             toEvolutionContact(sharedContact)
           ]
@@ -357,6 +364,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
+          ...quotedFields,
           audio: providerMediaUrl,
           encoding: true
         })
@@ -385,6 +393,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
+          ...quotedFields,
           mediatype: "image",
           media: providerMediaUrl,
           caption: outboundText
@@ -415,6 +424,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
+          ...quotedFields,
           mediatype: "document",
           media: providerMediaUrl,
           caption: outboundText,
@@ -445,6 +455,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
+          ...quotedFields,
           text: outboundText
         })
       });
@@ -482,7 +493,8 @@ serve(async (req)=>{
       sent_at: now,
       created_at: now,
       sender_user_id: user.id,
-      sender_name: sender.name
+      sender_name: sender.name,
+      ...replyColumns(replyTarget)
     };
     // A mensagem já saiu para o cliente: devolver erro aqui faria o atendente
     // reenviar e o cliente receber em dobro. Tenta gravar de novo e, se não

@@ -88,6 +88,15 @@ export const isSlaBreached = (row: {
     new Date(row.first_unanswered_inbound_at).getTime()
   );
 };
+export type MessageReplyPreview = {
+  /** Mensagem citada; ausente quando ela não está mais no Unxet */
+  id?: string;
+  author: "cliente" | "atendente";
+  type?: string;
+  text: string;
+  senderName?: string;
+};
+
 export type Message = {
   id: string;
   conversationId: string;
@@ -111,6 +120,11 @@ export type Message = {
   // Atendente que enviou pelo app (o cliente recebe o nome na 1ª linha)
   senderUserId?: string;
   senderName?: string;
+  // Mensagem citada (resposta pelo menu da setinha ou do cliente no WhatsApp)
+  replyTo?: MessageReplyPreview;
+  // Reações (uma do cliente e uma da empresa, como no WhatsApp)
+  clientReaction?: string;
+  agentReaction?: string;
 
   localStatus?: MessageSendStatus;
   localError?: string | null;
@@ -122,6 +136,7 @@ export type Message = {
     filename?: string;
     fileSize?: number;
     contact?: { name: string; phone: string };
+    replyToMessageId?: string;
   };
 };
 

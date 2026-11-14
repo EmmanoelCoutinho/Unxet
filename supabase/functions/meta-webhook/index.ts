@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyMetaSignature } from "../_shared/security.ts";
 import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { metaContactsText } from "../_shared/contactCard.ts";
+import { applyReaction, metaReaction } from "../_shared/messageReply.ts";
 import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 import { describeRejection, mapMetaTemplateStatus } from "../_shared/metaTemplates.ts";
 // ---------------------------------------------------------------------------
@@ -199,6 +200,23 @@ serve(async (req)=>{
     }
     const profileName = contactMeta.profile?.name ?? "Cliente";
     // -----------------------------------------------------------------------
+    // REAÇÃO: grava o emoji do cliente na mensagem reagida (não vira mensagem)
+    // -----------------------------------------------------------------------
+    const reaction = metaReaction(message);
+    if (message.type === "reaction") {
+      if (reaction) {
+        const applied = await applyReaction(supabase, {
+          targetProviderId: reaction.targetId,
+          emoji: reaction.emoji,
+          side: "client"
+        });
+        console.log("[REACTION]", reaction.targetId, applied);
+      }
+      return new Response("Reaction processed", {
+        status: 200
+      });
+    }
+    // -----------------------------------------------------------------------
     // IDEMPOTÊNCIA
     // -----------------------------------------------------------------------
     const { data: existingMessage, error: existingMsgErr } = await supabase.from("messages").select("id").eq("meta_message_id", providerMessageId).maybeSingle();
@@ -317,6 +335,8 @@ serve(async (req)=>{
       timestamp: timestamp.toISOString(),
       messageType,
       text,
+      // Cliente respondeu citando uma mensagem
+      replyToProviderId: message.context?.id ?? null,
       ...mediaId ? {
         media: {
           mediaId,

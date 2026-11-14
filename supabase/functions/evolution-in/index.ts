@@ -23,6 +23,7 @@ import { isNonChatJid } from "../_shared/evolutionSettings.ts";
 import { findContactByPhone } from "../_shared/startConversation.ts";
 import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 import { createCheckThrottle, imageHash, isCurrentProfilePic, profilePicFolder, profilePicPath } from "../_shared/profilePicture.ts";
+import { applyReaction, evolutionQuotedId, evolutionReaction } from "../_shared/messageReply.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -310,8 +311,22 @@ serve(async (req)=>{
       participant,
       rawWaId: waId
     });
-    // ── Ignora reações ────────────────────────────────────────────────────
-    if (body?.data?.message?.reactionMessage) {
+    // ── Reações: gravam o emoji na mensagem reagida ───────────────────────
+    // (fromMe: reação da empresa, feita pelo celular ou eco da enviada pelo Unxet)
+    const reaction = evolutionReaction(body?.data);
+    if (reaction || body?.data?.message?.reactionMessage) {
+      if (reaction && !isRecovered) {
+        const applied = await applyReaction(createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY), {
+          targetProviderId: reaction.targetId,
+          emoji: reaction.emoji,
+          side: isFromMe ? "agent" : "client"
+        });
+        console.log("[REACTION]", JSON.stringify({
+          targetId: reaction.targetId,
+          fromMe: isFromMe,
+          applied
+        }));
+      }
       return new Response(JSON.stringify({
         ignored: true,
         reason: "reaction"
@@ -691,6 +706,8 @@ serve(async (req)=>{
       timestamp,
       messageType,
       text,
+      // Cliente respondeu citando uma mensagem
+      replyToProviderId: evolutionQuotedId(body?.data),
       ...media ? {
         media
       } : {},

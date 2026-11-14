@@ -27,6 +27,26 @@ type DbMessage = {
   read_at?: string | null;
   sender_user_id?: string | null;
   sender_name?: string | null;
+  reply_to_message_id?: string | null;
+  reply_preview?: any;
+  client_reaction?: string | null;
+  agent_reaction?: string | null;
+};
+
+// Citação gravada na resposta (reply_preview) + id da original
+const mapReplyPreview = (row: DbMessage): UiMessage["replyTo"] => {
+  const preview = safeParsePayload(row.reply_preview);
+  if (!preview || typeof preview !== "object" || !("text" in preview)) {
+    return undefined;
+  }
+  return {
+    id: row.reply_to_message_id ?? undefined,
+    author: preview.author === "cliente" ? "cliente" : "atendente",
+    type: typeof preview.type === "string" ? preview.type : undefined,
+    text: String(preview.text ?? ""),
+    senderName:
+      typeof preview.senderName === "string" ? preview.senderName : undefined,
+  };
 };
 
 const safeParsePayload = (raw: any) => {
@@ -177,6 +197,9 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
     createdAt: row.sent_at ?? row.created_at ?? new Date().toISOString(),
     senderUserId: row.sender_user_id ?? undefined,
     senderName: row.sender_name ?? undefined,
+    replyTo: isDeleted ? undefined : mapReplyPreview(row),
+    clientReaction: row.client_reaction ?? undefined,
+    agentReaction: row.agent_reaction ?? undefined,
   };
 };
 
@@ -208,7 +231,11 @@ const MESSAGE_COLUMNS = `
   delivered_at,
   read_at,
   sender_user_id,
-  sender_name
+  sender_name,
+  reply_to_message_id,
+  reply_preview,
+  client_reaction,
+  agent_reaction
 `;
 
 const oldestPersistedTime = (list: UiMessage[]) => {

@@ -20,6 +20,7 @@ import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 import { queueInboundPush } from "../_shared/push.ts";
 import { timingSafeEqual } from "../_shared/security.ts";
 import { findContactByPhone } from "../_shared/startConversation.ts";
+import { findByProviderId, replyColumns } from "../_shared/messageReply.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
 // ---------------------------------------------------------------------------
 // Env
@@ -292,7 +293,9 @@ serve(async (req)=>{
       text,
       payload: rawPayload,
       sent_at: timestampIso,
-      is_automated: false
+      is_automated: false,
+      // Cliente respondeu citando uma mensagem desta conversa
+      ...replyColumns(await findByProviderId(supabase, conversation.id, payload.replyToProviderId))
     };
     if (imageUrl) {
       messageInsert.image_url = imageUrl;
