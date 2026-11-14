@@ -75,6 +75,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "improved",
+    text: "Conversas: o texto formatado do WhatsApp agora aparece formatado no chat. *Negrito*, _itálico_, ~tachado~ e ```monoespaçado``` deixam de mostrar os símbolos.",
+  },
+  {
     kind: "new",
     text: "Ver contato: nos três pontinhos da conversa, a opção \"Ver contato\" abre a Carteira de Clientes já no cliente, com dados e notas.",
   },

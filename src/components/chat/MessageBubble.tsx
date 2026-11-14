@@ -13,6 +13,7 @@ import {
 import type { Message as UiMessage } from "../../types";
 import { AudioTranscriptStatus } from "./AudioTranscriptStatus";
 import { AudioPlayer } from "./AudioPlayer";
+import { WhatsappText } from "./WhatsappText";
 import { useMediaUrl } from "../../lib/mediaUrls";
 
 interface MessageBubbleProps {
@@ -570,7 +571,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               {displayText && mediaType !== "audio" && !onlyAudio ? (
                 <div className="text-sm whitespace-pre-wrap break-words">
                   <span>
-                    {visibleText}
+                    <WhatsappText text={visibleText} />
                     {shouldTruncate && !isExpanded ? "..." : ""}
                   </span>
                   {shouldTruncate && (
