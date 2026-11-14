@@ -45,8 +45,8 @@ const fetchDepartmentRatings = async (clinicId: string) => {
     .select("satisfaction_survey_scale_min, satisfaction_survey_scale_max")
     .eq("clinic_id", clinicId)
     .maybeSingle();
-  const scaleMin = Number(settings?.satisfaction_survey_scale_min ?? 1);
-  const scaleMax = Number(settings?.satisfaction_survey_scale_max ?? 5);
+  const scaleMin = Number(settings?.satisfaction_survey_scale_min ?? 0);
+  const scaleMax = Number(settings?.satisfaction_survey_scale_max ?? 10);
 
   // A API devolve no máximo 1000 linhas por chamada
   for (let from = 0; ; from += RATINGS_PAGE_SIZE) {

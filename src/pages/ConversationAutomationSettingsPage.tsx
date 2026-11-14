@@ -23,9 +23,6 @@ type ConversationAutomationSettingsRow = {
   satisfaction_survey_enabled: boolean;
   satisfaction_survey_message: string;
   satisfaction_survey_thanks_message: string | null;
-  satisfaction_survey_window_minutes: number;
-  satisfaction_survey_scale_min?: number | null;
-  satisfaction_survey_scale_max?: number | null;
   sign_agent_messages?: boolean;
   created_at: string;
   updated_at: string;
@@ -42,9 +39,6 @@ type AutomationFormValues = {
   surveyEnabled: boolean;
   surveyMessage: string;
   surveyThanksMessage: string;
-  surveyWindowHours: string;
-  surveyScaleMin: string;
-  surveyScaleMax: string;
   signAgentMessages: boolean;
 };
 
@@ -53,34 +47,30 @@ type AutomationFormErrors = {
   autoCloseAfterMinutes?: string;
   slaFirstResponseAfterMinutes?: string;
   surveyMessage?: string;
-  surveyWindowHours?: string;
-  surveyScale?: string;
 };
 
-// Limites do banco: 5 minutos a 7 dias
-const SURVEY_MAX_WINDOW_HOURS = 168;
+// A nota da pesquisa é sempre de 0 a 10 (não é configurável)
+const SURVEY_SCALE_MIN = 0;
+const SURVEY_SCALE_MAX = 10;
 
-// Escala da nota: de 0 a 10 no máximo (mínima menor que a máxima)
-const SURVEY_SCALE_PRESETS = [
-  { min: 1, max: 5 },
-  { min: 1, max: 10 },
-  { min: 0, max: 10 },
-];
+const DEFAULT_SURVEY_MESSAGE = `Como você avalia o nosso atendimento? Responda com uma nota de ${SURVEY_SCALE_MIN} a ${SURVEY_SCALE_MAX}, sendo ${SURVEY_SCALE_MIN} muito insatisfeito e ${SURVEY_SCALE_MAX} muito satisfeito.`;
 
-const defaultSurveyMessage = (min: number, max: number) =>
-  `Como você avalia o nosso atendimento? Responda com uma nota de ${min} a ${max}, sendo ${min} muito insatisfeito e ${max} muito satisfeito.`;
-
-const parseScaleValue = (value: string) =>
-  /^\d{1,2}$/.test(value.trim()) ? Number(value.trim()) : null;
-
-const surveyScaleError = (minValue: string, maxValue: string) => {
-  const min = parseScaleValue(minValue);
-  const max = parseScaleValue(maxValue);
-  if (min === null || max === null || min < 0 || max > 10) {
-    return "Use notas de 0 a 10.";
+/** Escala que o texto pede ("nota de 1 a 5"), ou null se não cita nenhuma. */
+const scaleInMessage = (message: string) => {
+  const text = message.toLowerCase();
+  for (const range of text.matchAll(/(?<![\d:,.h])(\d{1,2})\s*(?:a|até|ate|ao|-|–)\s*(\d{1,2})(?![\d:h])/g)) {
+    const min = Number(range[1]);
+    const max = Number(range[2]);
+    if (min >= 0 && max <= 10 && min < max) return { min, max };
   }
-  if (min >= max) return "A nota mínima precisa ser menor que a máxima.";
   return null;
+};
+
+/** Texto que pede outra escala: o cliente responderia pelo que lê. */
+const surveyMessageScaleError = (message: string) => {
+  const scale = scaleInMessage(message);
+  if (!scale || (scale.min === SURVEY_SCALE_MIN && scale.max === SURVEY_SCALE_MAX)) return null;
+  return `A nota da pesquisa é de ${SURVEY_SCALE_MIN} a ${SURVEY_SCALE_MAX}, mas a mensagem pede de ${scale.min} a ${scale.max}. Ajuste o texto.`;
 };
 
 const DEFAULT_SETTINGS: AutomationFormValues = {
@@ -92,11 +82,8 @@ const DEFAULT_SETTINGS: AutomationFormValues = {
   slaFirstResponseEnabled: false,
   slaFirstResponseAfterMinutes: "5",
   surveyEnabled: false,
-  surveyMessage: defaultSurveyMessage(1, 5),
+  surveyMessage: DEFAULT_SURVEY_MESSAGE,
   surveyThanksMessage: "Obrigado pela sua avaliação!",
-  surveyWindowHours: "24",
-  surveyScaleMin: "1",
-  surveyScaleMax: "5",
   signAgentMessages: true,
 };
 
@@ -132,11 +119,6 @@ const mapRowToForm = (
     surveyMessage:
       row.satisfaction_survey_message ?? DEFAULT_SETTINGS.surveyMessage,
     surveyThanksMessage: row.satisfaction_survey_thanks_message ?? "",
-    surveyWindowHours: row.satisfaction_survey_window_minutes
-      ? Math.max(1, Math.round(row.satisfaction_survey_window_minutes / 60)).toString()
-      : DEFAULT_SETTINGS.surveyWindowHours,
-    surveyScaleMin: String(row.satisfaction_survey_scale_min ?? 1),
-    surveyScaleMax: String(row.satisfaction_survey_scale_max ?? 5),
     signAgentMessages: row.sign_agent_messages !== false,
   };
 };
@@ -282,15 +264,10 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
 
     if (!values.surveyMessage.trim()) {
       nextErrors.surveyMessage = "Informe a mensagem da pesquisa.";
+    } else if (values.surveyEnabled) {
+      const scaleError = surveyMessageScaleError(values.surveyMessage);
+      if (scaleError) nextErrors.surveyMessage = scaleError;
     }
-
-    const surveyHours = parsePositiveInteger(values.surveyWindowHours);
-    if (!surveyHours || surveyHours > SURVEY_MAX_WINDOW_HOURS) {
-      nextErrors.surveyWindowHours = `Informe de 1 a ${SURVEY_MAX_WINDOW_HOURS} horas.`;
-    }
-
-    const scaleError = surveyScaleError(values.surveyScaleMin, values.surveyScaleMax);
-    if (scaleError) nextErrors.surveyScale = scaleError;
 
     setFormErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -368,10 +345,8 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
         satisfaction_survey_message: values.surveyMessage.trim(),
         satisfaction_survey_thanks_message:
           values.surveyThanksMessage.trim() || null,
-        satisfaction_survey_window_minutes:
-          (parsePositiveInteger(values.surveyWindowHours) ?? 24) * 60,
-        satisfaction_survey_scale_min: parseScaleValue(values.surveyScaleMin) ?? 1,
-        satisfaction_survey_scale_max: parseScaleValue(values.surveyScaleMax) ?? 5,
+        satisfaction_survey_scale_min: SURVEY_SCALE_MIN,
+        satisfaction_survey_scale_max: SURVEY_SCALE_MAX,
         sign_agent_messages: values.signAgentMessages,
         updated_at: new Date().toISOString(),
       };
@@ -403,53 +378,17 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
     await persistSettings(formValues, true);
   };
 
-  // Ao trocar a escala, a mensagem padrão acompanha; texto personalizado
-  // fica como está (com um aviso se não citar a nota máxima).
-  const handleSurveyScaleChange = (minValue: string, maxValue: string) => {
-    setFormValues((prev) => {
-      const oldMin = parseScaleValue(prev.surveyScaleMin);
-      const oldMax = parseScaleValue(prev.surveyScaleMax);
-      const newMin = parseScaleValue(minValue);
-      const newMax = parseScaleValue(maxValue);
-      const usesDefaultMessage =
-        oldMin !== null &&
-        oldMax !== null &&
-        prev.surveyMessage.trim() === defaultSurveyMessage(oldMin, oldMax);
-      return {
-        ...prev,
-        surveyScaleMin: minValue,
-        surveyScaleMax: maxValue,
-        surveyMessage:
-          usesDefaultMessage && newMin !== null && newMax !== null && newMin < newMax
-            ? defaultSurveyMessage(newMin, newMax)
-            : prev.surveyMessage,
-      };
-    });
-    setFormErrors((prev) => ({ ...prev, surveyScale: undefined }));
-  };
+  // Aviso enquanto digita (ao salvar vira erro)
+  const surveyMessageOtherScale = formValues.surveyEnabled
+    ? surveyMessageScaleError(formValues.surveyMessage)
+    : null;
 
   const surveyMessageMissesScale =
     formValues.surveyEnabled &&
-    !surveyScaleError(formValues.surveyScaleMin, formValues.surveyScaleMax) &&
+    !surveyMessageOtherScale &&
     !(formValues.surveyMessage.match(/\d+/g) ?? ([] as string[])).includes(
-      String(Number(formValues.surveyScaleMax)),
+      String(SURVEY_SCALE_MAX),
     );
-
-  // Escala que o texto pede ("nota de 1 a 10"): é a que vale para o cliente
-  const surveyMessageScale = (() => {
-    const text = formValues.surveyMessage.toLowerCase();
-    for (const range of text.matchAll(/(?<![\d:,.h])(\d{1,2})\s*(?:a|até|ate|ao|-|–)\s*(\d{1,2})(?![\d:h])/g)) {
-      const min = Number(range[1]);
-      const max = Number(range[2]);
-      if (min >= 0 && max <= 10 && min < max) return { min, max };
-    }
-    return null;
-  })();
-  const surveyMessageOtherScale =
-    formValues.surveyEnabled &&
-    surveyMessageScale !== null &&
-    (String(surveyMessageScale.min) !== formValues.surveyScaleMin.trim() ||
-      String(surveyMessageScale.max) !== formValues.surveyScaleMax.trim());
 
   const handleToggleChange = async (patch: Partial<AutomationFormValues>) => {
     if (saving) return;
@@ -622,8 +561,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
                     Ao finalizar um atendimento, o cliente recebe a pergunta e
-                    responde com uma nota na escala que você escolher (por
-                    exemplo, de 1 a 5 ou de 0 a 10). A nota é registrada sem
+                    responde com uma nota de 0 a 10. A nota é registrada sem
                     reabrir a conversa e aparece nos relatórios.
                   </p>
                 </div>
@@ -634,73 +572,6 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
                   }
                   label="Pesquisa de satisfação"
                 />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-slate-700">
-                  Escala da nota
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {SURVEY_SCALE_PRESETS.map((preset) => {
-                    const active =
-                      formValues.surveyScaleMin === String(preset.min) &&
-                      formValues.surveyScaleMax === String(preset.max);
-                    return (
-                      <button
-                        key={`${preset.min}-${preset.max}`}
-                        type="button"
-                        disabled={!formValues.surveyEnabled}
-                        onClick={() =>
-                          handleSurveyScaleChange(String(preset.min), String(preset.max))
-                        }
-                        className={`rounded-full border px-3 py-1 text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                          active
-                            ? "border-blue-600 bg-blue-50 font-medium text-blue-700"
-                            : "border-slate-300 text-slate-600 hover:bg-slate-50"
-                        }`}
-                      >
-                        {preset.min} a {preset.max}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="grid max-w-xs grid-cols-2 gap-3">
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={9}
-                    step={1}
-                    label="Nota mínima"
-                    value={formValues.surveyScaleMin}
-                    onChange={(event) =>
-                      handleSurveyScaleChange(event.target.value, formValues.surveyScaleMax)
-                    }
-                    disabled={!formValues.surveyEnabled}
-                  />
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={10}
-                    step={1}
-                    label="Nota máxima"
-                    value={formValues.surveyScaleMax}
-                    onChange={(event) =>
-                      handleSurveyScaleChange(formValues.surveyScaleMin, event.target.value)
-                    }
-                    disabled={!formValues.surveyEnabled}
-                  />
-                </div>
-                {formErrors.surveyScale ? (
-                  <p className="text-xs text-red-600">{formErrors.surveyScale}</p>
-                ) : (
-                  <p className="text-xs text-slate-500">
-                    Notas fora da escala não contam como resposta. Nos
-                    relatórios, avaliações feitas com outra escala são
-                    convertidas para a escala atual.
-                  </p>
-                )}
               </div>
 
               <Textarea
@@ -716,21 +587,16 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
                 disabled={!formValues.surveyEnabled}
                 error={formErrors.surveyMessage}
               />
-              {surveyMessageOtherScale && surveyMessageScale && !formErrors.surveyMessage ? (
+              {surveyMessageOtherScale && !formErrors.surveyMessage ? (
                 <p className="-mt-3 text-xs text-amber-600">
-                  A mensagem pede nota de {surveyMessageScale.min} a{" "}
-                  {surveyMessageScale.max}, diferente da escala escolhida (
-                  {formValues.surveyScaleMin} a {formValues.surveyScaleMax}). O
-                  cliente responde pelo que lê, então a nota será registrada de{" "}
-                  {surveyMessageScale.min} a {surveyMessageScale.max}. Ajuste a
-                  escala ou o texto para ficarem iguais.
+                  {surveyMessageOtherScale}
                 </p>
               ) : (
                 surveyMessageMissesScale &&
                 !formErrors.surveyMessage && (
                   <p className="-mt-3 text-xs text-amber-600">
-                    Confira se a mensagem explica a escala de{" "}
-                    {formValues.surveyScaleMin} a {formValues.surveyScaleMax}.
+                    Confira se a mensagem explica que a nota é de{" "}
+                    {SURVEY_SCALE_MIN} a {SURVEY_SCALE_MAX}.
                   </p>
                 )
               )}
@@ -749,31 +615,14 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
                 placeholder="Deixe em branco para não enviar agradecimento."
               />
 
-              <div className="max-w-xs">
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={SURVEY_MAX_WINDOW_HOURS}
-                  step={1}
-                  label="Prazo para resposta (horas)"
-                  value={formValues.surveyWindowHours}
-                  onChange={(event) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      surveyWindowHours: event.target.value,
-                    }))
-                  }
-                  disabled={!formValues.surveyEnabled}
-                  error={formErrors.surveyWindowHours}
-                />
-              </div>
-
               <p className="text-xs text-slate-500">
                 A pesquisa é enviada quando um atendente finaliza a conversa
-                (não no fechamento automático). No WhatsApp oficial, o envio
-                depende da janela de 24 horas desde a última mensagem do
-                cliente.
+                (não no fechamento automático). Não há prazo: a nota vale
+                mesmo dias depois, e notas fracionadas (como 9,5) são
+                arredondadas. Se o cliente mandar outra mensagem que não seja
+                nota, a conversa reabre normalmente. No WhatsApp oficial, o
+                envio depende da janela de 24 horas desde a última mensagem
+                do cliente.
               </p>
             </div>
           </Card>
