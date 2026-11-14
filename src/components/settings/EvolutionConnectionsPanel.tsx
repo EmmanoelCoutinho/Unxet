@@ -442,7 +442,7 @@ export const EvolutionConnectionsPanel: React.FC<Props> = ({
             Aparece no atendimento para a equipe saber por qual número o cliente
             falou.
           </p>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-2 flex flex-col gap-2">
             <input
               id="new-evolution-connection-name"
               value={newName}
