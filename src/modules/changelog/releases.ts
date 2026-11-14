@@ -75,6 +75,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "new",
+    text: "Dados da empresa: em Configurações, o administrador cadastra e edita nome, razão social, CNPJ ou CPF, telefone, e-mail, site e endereço da empresa. O nome da empresa agora aparece no topo do app para toda a equipe.",
+    adminOnly: true,
+  },
+  {
     kind: "improved",
     text: "Pesquisa de satisfação: a nota agora é sempre de 0 a 10 e não tem mais prazo para resposta. Se o cliente responder dias depois, a nota é registrada sem reabrir a conversa; notas com vírgula (como 9,5) são arredondadas. Avaliações antigas continuam nos relatórios, convertidas para 0 a 10.",
     adminOnly: true,
