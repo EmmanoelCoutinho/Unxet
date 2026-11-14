@@ -94,6 +94,49 @@ const statusBadge = (status: string) => {
   );
 };
 
+/**
+ * Chave "Receber mensagens de grupos" de um número de QR Code. Usada no
+ * painel de vários números e no card do número único.
+ */
+export const EvolutionGroupsToggle: React.FC<{
+  connection: Pick<EvolutionConnection, "id" | "groups_enabled">;
+  onChanged: () => void | Promise<void>;
+  onError: (message: string | null) => void;
+  disabled?: boolean;
+}> = ({ connection, onChanged, onError, disabled }) => {
+  const [saving, setSaving] = useState(false);
+  const enabled = connection.groups_enabled === true;
+
+  const save = async (next: boolean) => {
+    onError(null);
+    setSaving(true);
+    const { error } = await supabase
+      .from("channel_connections")
+      .update({ groups_enabled: next, updated_at: new Date().toISOString() })
+      .eq("id", connection.id);
+    setSaving(false);
+    if (error) {
+      onError("Não foi possível salvar a opção de grupos.");
+      return;
+    }
+    await onChanged();
+  };
+
+  return (
+    <Toggle
+      label="Receber mensagens de grupos"
+      helper={
+        enabled
+          ? "Cada grupo vira uma conversa na fila, com o nome de quem escreveu em cada mensagem. Bot, IA e pesquisa de satisfação não atuam em grupos. Pode levar até 5 minutos para começar."
+          : "Desligado: mensagens de grupos ficam só no celular."
+      }
+      checked={enabled}
+      onChange={save}
+      disabled={disabled || saving}
+    />
+  );
+};
+
 type ItemProps = Omit<Props, "connections" | "clinicId" | "maxNumbers"> & {
   connection: EvolutionConnection;
 };
@@ -125,7 +168,6 @@ const EvolutionConnectionItem: React.FC<ItemProps> = ({
     async (patch: {
       display_name?: string;
       default_department_id?: string | null;
-      groups_enabled?: boolean;
     }) => {
       onError(null);
       setBusy("save");
@@ -279,15 +321,10 @@ const EvolutionConnectionItem: React.FC<ItemProps> = ({
       ) : null}
 
       <div className="mt-3">
-        <Toggle
-          label="Receber mensagens de grupos"
-          helper={
-            connection.groups_enabled
-              ? "Cada grupo vira uma conversa na fila, com o nome de quem escreveu em cada mensagem. Bot, IA e pesquisa de satisfação não atuam em grupos. Pode levar até 5 minutos para começar."
-              : "Desligado: mensagens de grupos ficam só no celular."
-          }
-          checked={connection.groups_enabled === true}
-          onChange={(enabled) => saveFields({ groups_enabled: enabled })}
+        <EvolutionGroupsToggle
+          connection={connection}
+          onChanged={onChanged}
+          onError={onError}
           disabled={busy !== null}
         />
       </div>
