@@ -587,12 +587,11 @@ async function findOrCreateConversation(params) {
         whatsappNumberId,
         channelConnectionId
       });
-      // Outro processo criou primeiro.
-      // Rebusca e reutiliza.
+      // Outro processo criou primeiro (mensagens do mesmo cliente chegando juntas).
+      // Rebusca a conversa ativa que ele criou e reutiliza — nunca uma encerrada.
       const refetchBaseQuery = supabase.from("conversations").select("*").eq("clinic_id", clinicId).eq("contact_id", contactId).eq("channel", CHANNEL_WHATSAPP).eq("channel_connection_id", channelConnectionId).in("status", [
         STATUS_OPEN,
-        STATUS_PENDING,
-        STATUS_CLOSED
+        STATUS_PENDING
       ]).order("last_message_at", {
         ascending: false
       }).limit(1);
