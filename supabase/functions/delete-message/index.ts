@@ -81,17 +81,23 @@ serve(async (req) => {
 
     const conversation = message.conversations;
 
-    // Autorização: admin (ou cargo que atende todos os setores) ou responsável pela conversa
+    // Autorização: administrador; ou cargo com a permissão messages.delete e
+    // acesso à conversa (responsável, adicionado que enviou a mensagem ou
+    // cargo que atende todos os setores)
     const membership = await getClinicMembership(admin, user.id, conversation.clinic_id);
+    const isAdmin = membership?.role === "admin";
     const allowed = !!membership && (
-      membership.role === "admin" ||
-      conversation.assigned_user_id === user.id ||
-      // atendente adicionado à conversa apaga só o que ele mesmo enviou
-      (message.sender_user_id === user.id &&
-        await isConversationParticipant(admin, conversation.id, user.id)) ||
-      await hasClinicPermission(admin, user.id, conversation.clinic_id, "conversations.all")
+      isAdmin || (
+        await hasClinicPermission(admin, user.id, conversation.clinic_id, "messages.delete") && (
+          conversation.assigned_user_id === user.id ||
+          // atendente adicionado à conversa apaga só o que ele mesmo enviou
+          (message.sender_user_id === user.id &&
+            await isConversationParticipant(admin, conversation.id, user.id)) ||
+          await hasClinicPermission(admin, user.id, conversation.clinic_id, "conversations.all")
+        )
+      )
     );
-    if (!allowed) return json(403, { error: "Not allowed" });
+    if (!allowed) return json(403, { error: "Sem permissão para apagar mensagens." });
 
     if (message.direction !== "outbound") {
       return json(400, { error: "Only sent messages can be deleted" });

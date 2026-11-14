@@ -30,6 +30,9 @@ import type { SharedContact } from "../../lib/sharedContact";
 import { ShareContactModal } from "./ShareContactModal";
 import { AttachmentTray, type PendingAttachment } from "./AttachmentTray";
 import { FileLibraryPicker, type PickedFile } from "./FileLibraryPicker";
+import { QuotedMessage } from "./QuotedMessage";
+import { CloseButton } from "../ui/CloseButton";
+import type { MessageReplyPreview } from "../../types";
 
 const MAX_AUDIO_FILE_BYTES = 16 * 1024 * 1024;
 // Limite de documento do WhatsApp
@@ -68,6 +71,10 @@ interface MessageInputProps {
     isSendingAudio: boolean;
     recordSeconds: number;
   }) => void;
+  // Respondendo a uma mensagem (menu da setinha no balão)
+  replyingTo?: MessageReplyPreview | null;
+  replyContactName?: string;
+  onCancelReply?: () => void;
 }
 
 type AllowedImageMime = "image/jpeg" | "image/png";
@@ -103,6 +110,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   quickMessagesLoading = false,
   onRecordingStateChange,
   compact = false,
+  replyingTo = null,
+  replyContactName,
+  onCancelReply,
 }) => {
   const [internalMessage, setInternalMessage] = useState("");
   // Classes de telas largas (sm:) ficam de fora na caixa flutuante
@@ -127,6 +137,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const hasAttachments = pendingAttachments.length > 0;
+
+  // Escolheu "Responder": o cursor vai para o campo
+  useEffect(() => {
+    if (replyingTo) textareaRef.current?.focus();
+  }, [replyingTo]);
 
   // Libera as prévias das imagens ao sair da conversa
   useEffect(
@@ -1171,6 +1186,17 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             : "o texto digitado vai em uma mensagem separada"
         }
       />
+
+      {replyingTo && !disabled && (
+        <div className="mb-2 flex items-start gap-2">
+          <QuotedMessage
+            preview={replyingTo}
+            contactName={replyContactName}
+            className="flex-1"
+          />
+          <CloseButton onClick={() => onCancelReply?.()} label="Cancelar resposta" />
+        </div>
+      )}
 
       {disabled && (
         <div className="mb-2 flex items-center gap-2 text-xs text-gray-500">

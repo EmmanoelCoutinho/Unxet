@@ -5,7 +5,9 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
+  Copy,
   DownloadIcon,
+  Reply,
   ExternalLinkIcon,
   FileTextIcon,
   Trash2,
@@ -14,6 +16,8 @@ import type { Message as UiMessage } from "../../types";
 import { AudioTranscriptStatus } from "./AudioTranscriptStatus";
 import { AudioPlayer } from "./AudioPlayer";
 import { WhatsappText } from "./WhatsappText";
+import { QuotedMessage } from "./QuotedMessage";
+import { toast } from "react-toastify";
 import { useMediaUrl } from "../../lib/mediaUrls";
 
 interface MessageBubbleProps {
@@ -33,7 +37,39 @@ interface MessageBubbleProps {
    * "system": a API não permite (Meta); a mensagem some apenas do Unxet.
    */
   deleteMode?: "everyone" | "system";
+  /** Responder citando (só WhatsApp e quem pode responder a conversa) */
+  onReply?: (message: UiMessage) => void;
+  /** Reagir com emoji; null remove a reação da empresa */
+  onReact?: (message: UiMessage, emoji: string | null) => void;
+  /** Clique na citação: vai até a mensagem original */
+  onQuotedClick?: (messageId: string) => void;
 }
+
+const MENU_ITEM_CLASS =
+  "flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm text-gray-700 outline-none data-[highlighted]:bg-gray-100";
+
+// Reações rápidas do menu (como no WhatsApp)
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
+const MIME_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "audio/ogg": "ogg",
+  "audio/mpeg": "mp3",
+  "audio/mp4": "m4a",
+  "audio/aac": "aac",
+  "video/mp4": "mp4",
+  "application/pdf": "pdf",
+};
+
+const downloadName = (message: UiMessage, filename?: string) => {
+  if (filename) return filename;
+  const mime = (message.mediaMimeType ?? "").split(";")[0].trim().toLowerCase();
+  const ext = MIME_EXTENSIONS[mime] ?? mime.split("/")[1] ?? "bin";
+  const kind = message.type ?? "arquivo";
+  return `${kind}-${message.id.slice(0, 8)}.${ext}`;
+};
 
 // Cor fixa por atendente (como nos grupos do WhatsApp), legível no claro e no escuro
 const SENDER_COLORS = [
@@ -155,6 +191,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onRetryTranscript,
   onDeleteMessage,
   deleteMode = "system",
+  onReply,
+  onReact,
+  onQuotedClick,
+  contactName,
 }) => {
   const payload = message.payload ?? {};
   const isClient = message.author === "cliente";
@@ -379,12 +419,81 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     if (longPressFired.current) event.preventDefault();
   };
 
+  const isPersisted =
+    !message.deletedAt && !message.id.startsWith("local-");
+
   const canDelete =
     !isClient &&
     !!onDeleteMessage &&
-    !message.deletedAt &&
-    !message.id.startsWith("local-") &&
+    isPersisted &&
     localStatus !== "sending";
+
+  // Itens do menu da setinha
+  const canCopy = !message.deletedAt && !!displayText.trim();
+  const canDownload = !message.deletedAt && !!mediaUrl;
+  const canReplyHere = !!onReply && isPersisted;
+  const canReactHere = !!onReact && isPersisted;
+  const hasMenu =
+    canCopy || canDownload || canReplyHere || canReactHere || canDelete;
+
+  const handleCopy = async () => {
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(displayText);
+      copied = true;
+    } catch {
+      // Sem permissão para a área de transferência: cópia pelo jeito antigo
+      const area = document.createElement("textarea");
+      area.value = displayText;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      try {
+        copied = document.execCommand("copy");
+      } catch {
+        copied = false;
+      }
+      area.remove();
+    }
+    if (copied) toast.success("Mensagem copiada.", { autoClose: 1500 });
+    else toast.error("Não foi possível copiar a mensagem.");
+  };
+
+  // O link assinado é de outro domínio: o atributo download não vale, então
+  // baixa o arquivo e salva com o nome certo
+  const handleDownload = async () => {
+    if (!mediaUrl) return;
+    try {
+      const resp = await fetch(mediaUrl);
+      if (!resp.ok) throw new Error(String(resp.status));
+      const blob = await resp.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = downloadName(message, documentFilename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch {
+      window.open(mediaUrl, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const clientReaction = message.deletedAt ? undefined : message.clientReaction;
+  const agentReaction = message.deletedAt ? undefined : message.agentReaction;
+  const hasReactions = !!clientReaction || !!agentReaction;
+  const reactionTitle = [
+    clientReaction ? `${contactName?.trim() || "Cliente"}: ${clientReaction}` : null,
+    agentReaction ? `Empresa: ${agentReaction}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const quoted = message.deletedAt ? undefined : message.replyTo;
+  const quotedOnDark = !isClient && !onlyAudio && !onlyDocument;
 
   // Quem respondeu (o cliente recebe o nome na 1ª linha da mensagem)
   const senderName = !isClient ? message.senderName?.trim() : undefined;
@@ -419,13 +528,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </span>
           )}
           <div
-            className={`group/bubble relative ${canDelete ? "[@media(hover:none)]:select-none" : ""}`}
-            onTouchStart={canDelete ? handleTouchStart : undefined}
-            onTouchMove={canDelete ? clearLongPress : undefined}
-            onTouchEnd={canDelete ? handleTouchEnd : undefined}
-            onTouchCancel={canDelete ? clearLongPress : undefined}
+            className={`group/bubble relative ${hasMenu ? "[@media(hover:none)]:select-none" : ""} ${hasReactions ? "mb-3" : ""}`}
+            onTouchStart={hasMenu ? handleTouchStart : undefined}
+            onTouchMove={hasMenu ? clearLongPress : undefined}
+            onTouchEnd={hasMenu ? handleTouchEnd : undefined}
+            onTouchCancel={hasMenu ? clearLongPress : undefined}
             onContextMenu={
-              canDelete
+              hasMenu
                 ? (event) => {
                     // No celular o toque longo abre o nosso menu, não o do sistema.
                     if (window.matchMedia("(hover: none)").matches) {
@@ -436,6 +545,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             }
           >
             <div className={bubbleClass}>
+              {quoted && (
+                <QuotedMessage
+                  preview={quoted}
+                  contactName={contactName}
+                  onDark={quotedOnDark}
+                  onClick={
+                    quoted.id && onQuotedClick
+                      ? () => onQuotedClick(quoted.id as string)
+                      : undefined
+                  }
+                  className={onlyAudio || onlyDocument ? "max-w-72" : ""}
+                />
+              )}
               {mediaLoading && (
                 <div
                   className="h-12 w-48 max-w-full animate-pulse rounded-lg bg-black/10"
@@ -591,7 +713,26 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               ) : null}
             </div>
 
-            {canDelete && (
+            {hasReactions && (
+              <span
+                title={reactionTitle}
+                className={`absolute -bottom-3 flex select-none items-center gap-0.5 rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-sm leading-none shadow-sm ${
+                  isClient ? "left-2" : "right-2"
+                }`}
+              >
+                {clientReaction && <span>{clientReaction}</span>}
+                {agentReaction && agentReaction !== clientReaction && (
+                  <span>{agentReaction}</span>
+                )}
+                {clientReaction && agentReaction && (
+                  <span className="ml-0.5 text-[10px] font-medium text-gray-500">
+                    2
+                  </span>
+                )}
+              </span>
+            )}
+
+            {hasMenu && (
               <DropdownMenu.Root
                 open={isMenuOpen}
                 onOpenChange={setIsMenuOpen}
@@ -604,9 +745,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     title="Opções da mensagem"
                     aria-label="Opções da mensagem"
                     className={`absolute flex items-center opacity-0 transition-opacity duration-150 focus-visible:opacity-100 [@media(hover:hover)]:group-hover/bubble:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:pointer-events-none ${
-                      onlyAudio || onlyDocument
+                      onlyAudio || onlyDocument || mediaType === "image"
                         ? "right-1 top-1 h-6 w-6 justify-center rounded-full bg-white/90 text-gray-600 shadow-sm"
-                        : "right-0 top-0 h-7 w-10 justify-end rounded-tr-lg bg-gradient-to-l from-[#0A84FF] from-60% to-transparent pr-1.5 text-white"
+                        : isClient
+                          ? "right-0 top-0 h-7 w-10 justify-end rounded-tr-lg bg-gradient-to-l from-gray-200 from-60% to-transparent pr-1.5 text-gray-600"
+                          : "right-0 top-0 h-7 w-10 justify-end rounded-tr-lg bg-gradient-to-l from-[#0A84FF] from-60% to-transparent pr-1.5 text-white"
                     }`}
                   >
                     <ChevronDown className="h-4 w-4" />
@@ -614,18 +757,80 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content
-                    align="end"
+                    align={isClient ? "start" : "end"}
                     sideOffset={4}
                     collisionPadding={8}
-                    className="z-[60] min-w-[180px] rounded-lg border border-gray-200 bg-white py-1.5 shadow-lg"
+                    className="z-[60] min-w-[200px] rounded-lg border border-gray-200 bg-white py-1.5 shadow-lg"
                   >
-                    <DropdownMenu.Item
-                      onSelect={() => setIsDeleteDialogOpen(true)}
-                      className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm text-gray-700 outline-none data-[highlighted]:bg-gray-100"
-                    >
-                      <Trash2 className="h-4 w-4 text-gray-500" />
-                      Apagar
-                    </DropdownMenu.Item>
+                    {canReactHere && (
+                      <>
+                        <div
+                          className="flex items-center justify-between gap-0.5 px-2 pb-1.5 pt-0.5"
+                          role="group"
+                          aria-label="Reagir"
+                        >
+                          {QUICK_REACTIONS.map((emoji) => {
+                            const selected = agentReaction === emoji;
+                            return (
+                              <DropdownMenu.Item
+                                key={emoji}
+                                onSelect={() =>
+                                  onReact?.(message, selected ? null : emoji)
+                                }
+                                title={selected ? "Remover reação" : `Reagir com ${emoji}`}
+                                className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-xl outline-none transition-transform data-[highlighted]:scale-110 data-[highlighted]:bg-gray-100 ${
+                                  selected ? "bg-blue-100" : ""
+                                }`}
+                              >
+                                {emoji}
+                              </DropdownMenu.Item>
+                            );
+                          })}
+                        </div>
+                        <DropdownMenu.Separator className="my-1 h-px bg-gray-200" />
+                      </>
+                    )}
+                    {canReplyHere && (
+                      <DropdownMenu.Item
+                        onSelect={() => onReply?.(message)}
+                        className={MENU_ITEM_CLASS}
+                      >
+                        <Reply className="h-4 w-4 text-gray-500" />
+                        Responder
+                      </DropdownMenu.Item>
+                    )}
+                    {canCopy && (
+                      <DropdownMenu.Item
+                        onSelect={() => void handleCopy()}
+                        className={MENU_ITEM_CLASS}
+                      >
+                        <Copy className="h-4 w-4 text-gray-500" />
+                        Copiar
+                      </DropdownMenu.Item>
+                    )}
+                    {canDownload && (
+                      <DropdownMenu.Item
+                        onSelect={() => void handleDownload()}
+                        className={MENU_ITEM_CLASS}
+                      >
+                        <DownloadIcon className="h-4 w-4 text-gray-500" />
+                        Baixar
+                      </DropdownMenu.Item>
+                    )}
+                    {canDelete && (
+                      <>
+                        {(canReplyHere || canCopy || canDownload) && (
+                          <DropdownMenu.Separator className="my-1 h-px bg-gray-200" />
+                        )}
+                        <DropdownMenu.Item
+                          onSelect={() => setIsDeleteDialogOpen(true)}
+                          className={MENU_ITEM_CLASS}
+                        >
+                          <Trash2 className="h-4 w-4 text-gray-500" />
+                          Apagar
+                        </DropdownMenu.Item>
+                      </>
+                    )}
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>

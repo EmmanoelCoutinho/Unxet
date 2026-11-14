@@ -7,6 +7,7 @@ import { BLOCKED_CONTACT_CODE, BLOCKED_CONTACT_ERROR, isContactBlocked } from ".
 import { parseSharedContact, sharedContactText, toMetaContact } from "../_shared/contactCard.ts";
 import { loadAgentSender, signText } from "../_shared/agentSignature.ts";
 import { isConversationParticipant } from "../_shared/conversationParticipants.ts";
+import { loadReplyTarget, replyColumns } from "../_shared/messageReply.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -605,6 +606,13 @@ serve(async (req)=>{
         body: outboundText || " "
       };
     }
+    // Resposta citando uma mensagem da conversa (menu da setinha no balão)
+    const replyTarget = await loadReplyTarget(supabaseAdmin, conversation.id, body.replyToMessageId);
+    if (replyTarget) {
+      metaPayload.context = {
+        message_id: replyTarget.meta_message_id
+      };
+    }
     console.log("➡️ Enviando OUTBOUND para Meta:", JSON.stringify(metaPayload));
     const metaResp = await fetch(url, {
       method: "POST",
@@ -642,7 +650,8 @@ serve(async (req)=>{
       sent_at: nowIso,
       is_automated: false,
       sender_user_id: userId,
-      sender_name: sender.name
+      sender_name: sender.name,
+      ...replyColumns(replyTarget)
     };
     if (outboundType === "image") {
       messageInsert.image_url = mediaUrl ?? null;

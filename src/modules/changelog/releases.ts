@@ -75,6 +75,15 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "new",
+    text: "Menu da mensagem: passe o mouse no balão (ou segure no celular) e clique na setinha para Responder citando a mensagem, Reagir com emoji, Copiar o texto ou Baixar o arquivo. As respostas citadas e as reações dos clientes também aparecem na conversa. Responder e Reagir valem para o WhatsApp.",
+  },
+  {
+    kind: "improved",
+    text: "Apagar mensagem agora é uma permissão dos cargos (\"Apagar mensagens\"). O administrador continua podendo apagar; para os demais, marque a permissão no cargo.",
+    adminOnly: true,
+  },
+  {
     kind: "improved",
     text: "Conversas: o texto formatado do WhatsApp agora aparece formatado no chat. *Negrito*, _itálico_, ~tachado~ e ```monoespaçado``` deixam de mostrar os símbolos.",
   },
