@@ -76,6 +76,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
+    text: "Ver contato: nos três pontinhos da conversa, a opção \"Ver contato\" abre a Carteira de Clientes já no cliente, com dados e notas.",
+  },
+  {
+    kind: "new",
     text: "WhatsApp por QR Code: o sistema agora percebe quando um número conectado para de receber mensagens num horário em que costuma receber. Ele reinicia a conexão sozinho e avisa no sino; se as mensagens não voltarem, avisa de novo para ler o QR Code em Integrações.",
     adminOnly: true,
   },

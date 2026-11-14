@@ -9,6 +9,7 @@ import { CustomTooltip } from "../ui/CustomTooltip";
 import {
   ArrowLeftIcon,
   BanIcon,
+  ContactRoundIcon,
   MessageCircleIcon,
   TagIcon,
   MoreVerticalIcon,
@@ -38,6 +39,8 @@ interface ChatHeaderProps {
   onManageParticipants?: () => void;
   // Arquivos enviados e recebidos com o cliente
   onOpenFiles?: () => void;
+  // Abre a Carteira de Clientes já no cliente da conversa
+  onViewContact?: () => void;
   // Bloquear / desbloquear o contato (só para quem tem a permissão)
   onBlockContact?: () => void;
   onUnblockContact?: () => void;
@@ -78,6 +81,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   participantNames = [],
   onManageParticipants,
   onOpenFiles,
+  onViewContact,
   onBlockContact,
   onUnblockContact,
   onAccept,
@@ -204,6 +208,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       ]
     : [];
 
+  const viewContactItem = onViewContact
+    ? [
+        {
+          label: "Ver contato",
+          icon: <ContactRoundIcon className="h-4 w-4" />,
+          onSelect: () => onViewContact(),
+        },
+      ]
+    : [];
+
   const blockItem = onUnblockContact
     ? [
         {
@@ -225,6 +239,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
   // No celular as ações secundárias vão para o menu "mais"
   const dropdownItems = [
+    ...viewContactItem,
     ...(isMobile ? participantsItem : []),
     ...(isMobile ? filesItem : []),
     ...(isMobile && onTransfer
@@ -262,6 +277,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   if (compact) {
     const [firstTag, ...otherTags] = visibleTags;
     const compactItems = [
+      ...viewContactItem,
       ...participantsItem,
       ...filesItem,
       ...(onTransfer

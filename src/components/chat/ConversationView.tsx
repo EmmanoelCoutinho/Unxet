@@ -1605,6 +1605,14 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
               : undefined
           }
           onOpenFiles={conversation.contactId ? () => setIsFilesOpen(true) : undefined}
+          onViewContact={
+            can("contacts.view") && conversation.contactId
+              ? () =>
+                  navigate(
+                    `/contacts?contato=${encodeURIComponent(conversation.contactId ?? "")}`,
+                  )
+              : undefined
+          }
           onBlockContact={
             canBlockContacts && conversation.contactId && !conversation.contactBlocked
               ? () => setIsBlockOpen(true)
