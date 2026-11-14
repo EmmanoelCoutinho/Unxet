@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   brazilianPhoneVariants,
+  findContactByPhone,
+  pickContactByPhone,
   isPlaceholderName,
   normalizeTypedPhone,
   parseWhatsappNumbersResponse,
@@ -31,6 +33,49 @@ describe("brazilianPhoneVariants", () => {
   it("fixo e estrangeiro ficam como estão", () => {
     expect(brazilianPhoneVariants("551133334444")).toEqual(["551133334444"]);
     expect(brazilianPhoneVariants("351912345678")).toEqual(["351912345678"]);
+  });
+});
+
+describe("pickContactByPhone", () => {
+  const comNove = { id: "a", phone: "5591991599439" };
+  const semNove = { id: "b", phone: "559191599439" };
+  it("prefere o telefone exatamente igual", () => {
+    expect(pickContactByPhone([comNove, semNove], "559191599439")).toBe(semNove);
+  });
+  it("sem o exato, usa o cadastro na outra forma do número", () => {
+    expect(pickContactByPhone([comNove], "559191599439")).toBe(comNove);
+  });
+  it("sem contato devolve null", () => {
+    expect(pickContactByPhone([], "559191599439")).toBeNull();
+    expect(pickContactByPhone(null, "559191599439")).toBeNull();
+  });
+});
+
+describe("findContactByPhone", () => {
+  const fakeSupabase = (rows: any[], error: any = null) => {
+    const calls: any = {};
+    const query: any = {
+      select: () => query,
+      eq: (column: string, value: string) => ((calls[column] = value), query),
+      in: (column: string, values: string[]) => ((calls[column] = values), query),
+      order: () => query,
+      limit: async () => ({ data: error ? null : rows, error }),
+    };
+    return { calls, from: () => query };
+  };
+
+  it("cliente salvo com o 9 que escreve pelo número sem o 9 é o mesmo contato", async () => {
+    const supabase = fakeSupabase([{ id: "a", phone: "5591991599439" }]);
+    const { contact, error } = await findContactByPhone(supabase, "clinica", "559191599439");
+    expect(error).toBeNull();
+    expect(contact?.id).toBe("a");
+    expect(supabase.calls.clinic_id).toBe("clinica");
+    expect(supabase.calls.phone).toEqual(["559191599439", "5591991599439"]);
+  });
+  it("erro na consulta não devolve contato", async () => {
+    const { contact, error } = await findContactByPhone(fakeSupabase([], { message: "x" }), "clinica", "559191599439");
+    expect(contact).toBeNull();
+    expect(error).toEqual({ message: "x" });
   });
 });
 

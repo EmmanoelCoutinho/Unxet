@@ -59,6 +59,10 @@ const EXTENSION_MIME: Record<string, { mime: string; kind: FileKind }> = {
   "3gp": { mime: "video/3gpp", kind: "video" },
   txt: { mime: "text/plain", kind: "document" },
   pdf: { mime: "application/pdf", kind: "document" },
+  xml: { mime: "application/xml", kind: "document" },
+  ofx: { mime: "application/x-ofx", kind: "document" },
+  csv: { mime: "text/csv", kind: "document" },
+  pfx: { mime: "application/x-pkcs12", kind: "document" },
   doc: { mime: "application/msword", kind: "document" },
   docx: {
     mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -82,7 +86,23 @@ export const LIBRARY_ACCEPT = Object.keys(EXTENSION_MIME)
   .join(",");
 
 export const LIBRARY_ACCEPTED_LABEL =
-  "imagens JPG ou PNG (até 5 MB), áudios MP3, M4A, AAC, AMR ou OGG (até 16 MB), vídeos MP4 e documentos PDF, TXT, Word, Excel ou PowerPoint (até 100 MB)";
+  "imagens JPG ou PNG (até 5 MB), áudios MP3, M4A, AAC, AMR ou OGG (até 16 MB), vídeos MP4 e documentos PDF, TXT, XML, OFX, CSV, PFX, Word, Excel ou PowerPoint (até 100 MB)";
+
+/**
+ * Content-Type gravado no Storage. XML, OFX e CSV ficam como texto puro: a API oficial
+ * do WhatsApp só baixa documentos de tipos que ela conhece (texto é um
+ * deles) e o navegador não interpreta o arquivo ao abrir o link. O cliente
+ * recebe o arquivo com o nome e a extensão .xml normalmente.
+ */
+const TEXT_DOCUMENT_MIMES = new Set(["application/xml", "text/xml", "application/x-ofx", "text/csv"]);
+
+/** Formatos em que o tipo informado pelo navegador varia ou vem vazio. */
+const FIXED_MIME_EXTENSIONS = new Set(["xml", "ofx", "csv", "pfx", "doc", "docx", "xls", "xlsx", "ppt", "pptx"]);
+
+export const storageContentType = (mime: string) => {
+  const base = mime.toLowerCase().split(";")[0].trim();
+  return TEXT_DOCUMENT_MIMES.has(base) ? "text/plain" : mime;
+};
 
 const extensionOf = (name: string) => {
   const dot = name.lastIndexOf(".");
@@ -108,7 +128,8 @@ export const classifyLibraryFile = (
     return { ok: false, reason: `Arquivo maior que ${formatBytes(limit)}.` };
   }
   if (file.size === 0) return { ok: false, reason: "O arquivo está vazio." };
-  return { ok: true, kind: known.kind, mimeType: file.type || known.mime, extension };
+  const mimeType = FIXED_MIME_EXTENSIONS.has(extension) ? known.mime : file.type || known.mime;
+  return { ok: true, kind: known.kind, mimeType, extension };
 };
 
 export const kindFromMime = (mime: string | null | undefined, fallback: FileKind = "document"): FileKind => {
@@ -220,7 +241,7 @@ export const uploadLibraryFile = async (params: {
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, params.file, {
     cacheControl: "3600",
     upsert: false,
-    contentType: check.mimeType,
+    contentType: storageContentType(check.mimeType),
   });
   if (uploadError) throw new Error("Não foi possível enviar o arquivo. Tente de novo.");
 

@@ -32,6 +32,32 @@ export const brazilianPhoneVariants = (phone: string): string[] => {
   return [...variants];
 };
 
+/**
+ * Entre os contatos achados pelas duas formas do número, fica o que tem o
+ * telefone exatamente igual; sem ele, o mais antigo (o da carteira).
+ */
+export const pickContactByPhone = (rows: any[] | null | undefined, phone: string) => {
+  const list = rows ?? [];
+  return list.find((row) => row?.phone === phone) ?? list[0] ?? null;
+};
+
+/**
+ * Contato da empresa por telefone, aceitando o celular brasileiro com e sem
+ * o 9. Sem isso, o cliente salvo com o 9 que responde pelo número antigo
+ * (sem o 9) virava um contato novo, com a conversa separada do histórico.
+ * Devolve { contact, error }.
+ */
+export async function findContactByPhone(supabase, clinicId: string, phone: string, columns = "*") {
+  const { data, error } = await supabase
+    .from("contacts")
+    .select(columns)
+    .eq("clinic_id", clinicId)
+    .in("phone", brazilianPhoneVariants(phone))
+    .order("created_at", { ascending: true })
+    .limit(10);
+  return { contact: error ? null : pickContactByPhone(data, phone), error };
+}
+
 /** Nome sem nenhuma letra (contato criado pelo WhatsApp sem nome de perfil). */
 export const isPlaceholderName = (name: unknown) => !/\p{L}/u.test(String(name ?? ""));
 

@@ -19,6 +19,7 @@ import { queueTranscription, runInBackground } from "../_shared/transcription.ts
 import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 import { queueInboundPush } from "../_shared/push.ts";
 import { timingSafeEqual } from "../_shared/security.ts";
+import { findContactByPhone } from "../_shared/startConversation.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
 // ---------------------------------------------------------------------------
 // Env
@@ -465,6 +466,12 @@ serve(async (req)=>{
   if (contentType.includes("officedocument.spreadsheetml")) return "xlsx";
   if (contentType.includes("officedocument.presentationml")) return "pptx";
   if (contentType.includes("plain")) return "txt";
+  if (contentType.includes("ms-excel")) return "xls";
+  if (contentType.includes("ms-powerpoint")) return "ppt";
+  if (contentType.includes("ofx")) return "ofx";
+  if (contentType.includes("csv")) return "csv";
+  if (contentType.includes("pkcs12")) return "pfx";
+  if (contentType.includes("xml")) return "xml";
   return "bin";
 }
 async function getAutomationSettings(supabase, clinicId) {
@@ -481,12 +488,14 @@ async function getAutomationSettings(supabase, clinicId) {
 }
 async function findOrCreateContact(params) {
   const { supabase, clinicId, waId, profileName, timestampIso } = params;
-  const { data: foundContacts, error: contactFindErr } = await supabase.from("contacts").select("*").eq("phone", waId).eq("clinic_id", clinicId).limit(1);
+  // Aceita o número com e sem o 9: o WhatsApp pode informar o número antigo
+  // de um cliente que está na carteira com o 9
+  const { contact: foundContact, error: contactFindErr } = await findContactByPhone(supabase, clinicId, waId);
   if (contactFindErr) {
     console.error("Erro ao buscar contato:", contactFindErr);
     throw new Error("Contact lookup error");
   }
-  let contact = foundContacts?.[0];
+  let contact = foundContact;
   if (!contact) {
     const { data: newContact, error: insertErr } = await supabase.from("contacts").insert({
       phone: waId,

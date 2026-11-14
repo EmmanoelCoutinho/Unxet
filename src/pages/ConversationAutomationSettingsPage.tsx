@@ -189,6 +189,7 @@ const AutomationCard = ({
   minutesError,
   showMinutesInput = true,
   minMinutes = 1,
+  locked = false,
 }: {
   title: string;
   description: string;
@@ -199,6 +200,8 @@ const AutomationCard = ({
   minutesError?: string;
   showMinutesInput?: boolean;
   minMinutes?: number;
+  /** Mostra o estado, mas não deixa mudar */
+  locked?: boolean;
 }) => {
   return (
     <Card className="p-4 sm:p-6">
@@ -211,6 +214,7 @@ const AutomationCard = ({
           <SettingsToggle
             checked={enabled}
             onChange={onEnabledChange}
+            disabled={locked}
             label={title}
           />
         </div>
@@ -598,13 +602,14 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
 
           <AutomationCard
             title="Reabrir conversa automaticamente"
-            description="Ligado: se o cliente enviar nova mensagem, a conversa encerrada volta para a fila de espera com todo o histórico. Desligado: a conversa encerrada é mantida e um novo atendimento é aberto."
+            description="Se o cliente enviar nova mensagem, a conversa encerrada volta para a fila de espera com todo o histórico. Depois de ligada, esta opção não pode ser desligada, para o atendimento anterior não se separar do novo."
             enabled={formValues.reopenOnInboundEnabled}
-            onEnabledChange={(value) =>
-              handleToggleChange({
-                reopenOnInboundEnabled: value,
-              })
-            }
+            // Desligar está travado; quem ainda está com ela desligada pode ligar
+            locked={formValues.reopenOnInboundEnabled}
+            onEnabledChange={(value) => {
+              if (!value) return;
+              handleToggleChange({ reopenOnInboundEnabled: true });
+            }}
             showMinutesInput={false}
           />
 

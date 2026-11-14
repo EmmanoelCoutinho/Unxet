@@ -20,6 +20,7 @@ import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { redactWebhookSecrets, stripWebhookEventSuffix } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 import { isNonChatJid } from "../_shared/evolutionSettings.ts";
+import { findContactByPhone } from "../_shared/startConversation.ts";
 import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 import { createCheckThrottle, imageHash, isCurrentProfilePic, profilePicFolder, profilePicPath } from "../_shared/profilePicture.ts";
 // ---------------------------------------------------------------------------
@@ -772,7 +773,7 @@ function sleep(ms) {
 }
 async function endBotSessionIfSentOutsideUnxet(params) {
   const { supabase, clinicId, channelConnectionId, waId, providerMessageId } = params;
-  const { data: contact, error: contactErr } = await supabase.from("contacts").select("id").eq("clinic_id", clinicId).eq("phone", waId).limit(1).maybeSingle();
+  const { contact, error: contactErr } = await findContactByPhone(supabase, clinicId, waId, "id, phone");
   if (contactErr || !contact) return;
   const { data: conversations, error: convErr } = await supabase.from("conversations").select("id").eq("clinic_id", clinicId).eq("contact_id", contact.id).eq("channel_connection_id", channelConnectionId);
   if (convErr || !conversations?.length) return;
@@ -849,7 +850,7 @@ async function fetchAndStoreProfilePic(params) {
   const { supabase, evolutionApiUrl, evolutionApiKey, instanceName, waId, clinicId } = params;
   if (!shouldCheckProfilePic(`${clinicId}:${waId}`)) return;
   // 1. Contato (criado pelo shared-in-config antes de chegar aqui)
-  const { data: existingContact } = await supabase.from("contacts").select("id, image_url").eq("phone", waId).eq("clinic_id", clinicId).maybeSingle();
+  const { contact: existingContact } = await findContactByPhone(supabase, clinicId, waId, "id, phone, image_url");
   if (!existingContact?.id) return;
   const folder = profilePicFolder(clinicId, waId);
   // 2. Busca URL da foto na Evolution API
