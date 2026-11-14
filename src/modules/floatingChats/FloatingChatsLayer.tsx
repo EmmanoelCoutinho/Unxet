@@ -216,7 +216,7 @@ export function FloatingChatsLayer() {
     conversationOf(box)?.contactName || box.title || "Conversa";
 
   return (
-    <div className="pointer-events-none fixed bottom-0 right-4 z-40 flex flex-row-reverse items-end gap-3">
+    <div className="pointer-events-none fixed bottom-0 right-4 z-[35] flex flex-row-reverse items-end gap-3">
       {visible.map((box) =>
         box.minimized ? (
           <MinimizedBar
