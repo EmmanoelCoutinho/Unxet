@@ -22,13 +22,16 @@ a gravação. Se algo falhar, a tela do momento do erro fica em `erro.png`.
 
 Os vídeos ficam no bucket público `tutorials` do Supabase Storage (migration
 `20261124000000_tutorials_bucket.sql`), não no repositório. Envie para o
-develop e para a produção, com a service role de cada um:
+develop e para a produção (na raiz do projeto, PowerShell ou bash):
 
 ```bash
-SUPABASE_URL=https://<ref>.supabase.co SUPABASE_SERVICE_ROLE_KEY=... node upload.mjs criar-atendente
+node scripts/tutorials/upload.mjs --project ketolvqnptmdczkzrqba criar-atendente
+node scripts/tutorials/upload.mjs --project karmtrldanuxqisgzlhk criar-atendente
 ```
 
-`--all` envia tudo que estiver em `out/`. Regravar com o mesmo id substitui o
+`--project` busca a service role pelo CLI do Supabase (precisa estar logado
+no CLI) e cria o bucket se ainda não existir. `--all` envia tudo que estiver
+em `out/`. Regravar com o mesmo id substitui o
 arquivo (o navegador pega o novo em até 1 hora).
 
 O app monta o link a partir do `VITE_SUPABASE_URL`. Rodando o app no banco
