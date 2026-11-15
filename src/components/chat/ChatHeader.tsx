@@ -569,7 +569,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2">
           {onSearch && (
             <CustomTooltip text="Buscar na conversa">
-              <Button variant="ghost" size="sm" onClick={onSearch}>
+              <Button variant="ghost" size="sm" onClick={onSearch} aria-label="Buscar na conversa">
                 <FiSearch className="h-5 w-5" />
               </Button>
             </CustomTooltip>
@@ -624,6 +624,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                     onClick={onTransfer}
                     disabled={transferDisabled}
                     aria-disabled={transferDisabled}
+                    aria-label="Transferir conversa"
                   >
                     <HiOutlineSwitchHorizontal className="h-5 w-5 text-blue-600" />
                   </Button>
@@ -641,6 +642,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                     onClick={handleAccept}
                     disabled={acceptIsDisabled || !onAccept}
                     aria-disabled={acceptIsDisabled || !onAccept}
+                    aria-label="Aceitar conversa"
                   >
                     <TbMessageCheck className="h-5 w-5 text-green-600" />
                   </Button>
@@ -656,6 +658,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                   onClick={handleClose}
                   disabled={closeIsDisabled || !onClose}
                   aria-disabled={closeIsDisabled || !onClose}
+                  aria-label="Finalizar conversa"
                 >
                   <TbMessageOff className="h-5 w-5 text-red-600" />
                 </Button>

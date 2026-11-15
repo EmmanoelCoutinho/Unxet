@@ -21,6 +21,7 @@ import { Card } from "../components/ui/Card";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { useConfirm } from "../components/ui/ConfirmDialog";
 import { FileThumb } from "../components/files/FileThumb";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import {
   LibraryFileFormModal,
   type LibraryFileFormValues,
@@ -284,6 +285,7 @@ export const FileLibraryPage: React.FC = () => {
                 Arquivos da Empresa para enviar pelo <span className="font-semibold">+</span> da
                 conversa, e tudo o que já foi enviado e recebido nas conversas.
               </p>
+              <TutorialButton tutorialId="banco-de-arquivos" className="mt-1" />
             </div>
           </div>
 

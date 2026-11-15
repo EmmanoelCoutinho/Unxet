@@ -100,6 +100,17 @@ export const TUTORIALS: Tutorial[] = [
     adminOnly: true,
   },
   {
+    id: "grupos-e-celular",
+    track: "primeiros-passos",
+    title: "Grupos e mensagens enviadas pelo celular",
+    description:
+      "Receba os grupos do WhatsApp e veja na conversa o que a equipe responde pelo celular.",
+    video: "grupos-e-celular.mp4",
+    duration: "1:16",
+    path: "/inbox/settings/integrations/meta",
+    adminOnly: true,
+  },
+  {
     id: "criar-departamentos",
     track: "primeiros-passos",
     title: "Criar departamentos",
@@ -141,6 +152,14 @@ export const TUTORIALS: Tutorial[] = [
     duration: "0:59",
     path: "/inbox/settings/automations/conversations",
     adminOnly: true,
+  },
+  {
+    id: "instalar-app",
+    track: "primeiros-passos",
+    title: "Instalar a Unxet no celular",
+    description: "Use a Unxet como aplicativo no Android e no iPhone e receba notificações.",
+    video: "instalar-app.mp4",
+    duration: "0:51",
   },
 
   // Atendimento no dia a dia
@@ -198,6 +217,15 @@ export const TUTORIALS: Tutorial[] = [
     video: "enviar-arquivos.mp4",
     duration: "0:46",
     path: "/inbox",
+  },
+  {
+    id: "banco-de-arquivos",
+    track: "atendimento",
+    title: "Usar o Banco de arquivos",
+    description: "Guarde os arquivos da empresa e envie na conversa com um clique.",
+    video: "banco-de-arquivos.mp4",
+    duration: "0:57",
+    path: "/inbox/files",
   },
   {
     id: "chat-interno",
@@ -295,6 +323,16 @@ export const TUTORIALS: Tutorial[] = [
     video: "relatorios.mp4",
     duration: "0:52",
     path: "/inbox/reports",
+    adminOnly: true,
+  },
+  {
+    id: "pesquisa-satisfacao",
+    track: "gestao",
+    title: "Pesquisa de satisfação",
+    description: "Ligue a pesquisa, veja a nota de 0 a 10 de cada cliente e acompanhe nos Relatórios.",
+    video: "pesquisa-satisfacao.mp4",
+    duration: "1:21",
+    path: "/inbox/settings/automations/conversations",
     adminOnly: true,
   },
 ];

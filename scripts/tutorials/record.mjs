@@ -38,24 +38,43 @@ if (!scenarioId) {
   process.exit(1);
 }
 
+// Variáveis do app local: .env.local ou, se não houver, .env.localtest.local
+// (o app roda com `vite --mode localtest`)
+const localEnv = () => {
+  for (const name of [".env.local", ".env.localtest.local"]) {
+    const file = path.join(root, name);
+    if (existsSync(file)) return { name, text: readFileSync(file, "utf8") };
+  }
+  return { name: ".env.local", text: "" };
+};
+
 const readPassword = () => {
   if (process.env.LOCAL_TEST_PASSWORD) return process.env.LOCAL_TEST_PASSWORD;
-  const envFile = path.join(root, ".env.local");
-  if (existsSync(envFile)) {
-    const match = readFileSync(envFile, "utf8").match(/^LOCAL_TEST_PASSWORD=(.*)$/m);
-    if (match) return match[1].trim();
-  }
+  const match = localEnv().text.match(/^LOCAL_TEST_PASSWORD=(.*)$/m);
+  if (match) return match[1].trim();
   throw new Error("Defina LOCAL_TEST_PASSWORD (senha do admin@teste.local local)");
 };
 
 // Garante que não está apontando para develop/produção
 const assertLocal = () => {
-  const envFile = path.join(root, ".env.local");
-  const env = existsSync(envFile) ? readFileSync(envFile, "utf8") : "";
-  const url = env.match(/^VITE_SUPABASE_URL=(.*)$/m)?.[1] ?? "";
+  const { name, text } = localEnv();
+  const url = text.match(/^VITE_SUPABASE_URL=(.*)$/m)?.[1] ?? "";
   if (!/127\.0\.0\.1|localhost/.test(url)) {
-    throw new Error("O .env.local precisa apontar para o Supabase local (127.0.0.1)");
+    throw new Error(`O ${name} precisa apontar para o Supabase local (127.0.0.1)`);
   }
+};
+
+/** Duração do vídeo gravado, em segundos (lida pelo ffmpeg) */
+const videoSeconds = (file) => {
+  let info = "";
+  try {
+    execFileSync(ffmpeg, ["-i", file], { stdio: "pipe" });
+  } catch (err) {
+    info = String(err.stderr ?? "");
+  }
+  const m = info.match(/Duration: (\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!m) throw new Error("Não consegui ler a duração do vídeo gravado");
+  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
 };
 
 const cleanup = (emails) => {
@@ -107,10 +126,10 @@ const record = async (scenario, db) => {
     recordVideo: { dir: videoDir, size: VIEWPORT },
   });
   const page = await context.newPage();
-  const startedAt = Date.now();
   const director = createDirector(page);
   await director.install();
 
+  let closedAt = Date.now();
   try {
     await scenario.run(page, director, db);
   } catch (err) {
@@ -118,12 +137,19 @@ const record = async (scenario, db) => {
     console.error("Falhou; a tela no momento do erro está em scripts/tutorials/erro.png");
     throw err;
   } finally {
+    closedAt = Date.now();
     await context.close();
     await browser.close();
   }
-  const seconds = (Date.now() - startedAt) / 1000;
 
   const recorded = await page.video().path();
+  // Corta o começo (página carregando) até a abertura cobrir a tela. O vídeo
+  // termina quando o navegador fecha, então a conta é feita a partir do fim.
+  const total = videoSeconds(recorded);
+  const openingAt = director.openingShownAt();
+  const start = openingAt ? Math.max(0, total - (closedAt - openingAt) / 1000) : 0;
+  const seconds = total - start;
+
   const outDir = path.join(here, "out");
   mkdirSync(outDir, { recursive: true });
   const target = path.join(outDir, `${scenario.meta.id}.mp4`);
@@ -133,7 +159,7 @@ const record = async (scenario, db) => {
     ffmpeg,
     [
       "-y", "-loglevel", "error",
-      "-i", recorded,
+      "-ss", start.toFixed(2), "-i", recorded,
       "-i", music,
       "-map", "0:v", "-map", "1:a",
       "-c:v", "libx264", "-preset", "slow", "-crf", "23", "-pix_fmt", "yuv420p",
