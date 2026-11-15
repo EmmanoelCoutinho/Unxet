@@ -1,11 +1,26 @@
 
 // Tutoriais em vídeo mostrados na tela "Tutoriais".
 //
-// Os vídeos são gravados pelo script scripts/tutorials/record.mjs e ficam em
-// public/tutorials/<id>.mp4. Tutorial sem `video` aparece como "Em breve".
+// Os vídeos são gravados pelo script scripts/tutorials/record.mjs e enviados
+// por scripts/tutorials/upload.mjs para o bucket público `tutorials` do
+// Supabase Storage. Tutorial sem `video` aparece como "Em breve".
 // `adminOnly`: só administradores veem (o atendente não tem acesso à tela).
 
 import { AI_ASSISTANT_ENABLED } from "../../lib/aiAssistantFlag";
+
+/**
+ * Onde ficam os vídeos. Padrão: bucket `tutorials` do próprio Supabase do
+ * ambiente. VITE_TUTORIALS_URL troca a origem (ex.: rodar o app no banco
+ * local, que não tem os vídeos, e assistir os do develop).
+ */
+const TUTORIALS_BASE_URL = String(
+  import.meta.env.VITE_TUTORIALS_URL ||
+    `${String(import.meta.env.VITE_SUPABASE_URL ?? "").replace(/\/+$/, "")}/storage/v1/object/public/tutorials`,
+).replace(/\/+$/, "");
+
+/** Link do vídeo; `#t=1` faz o navegador mostrar um quadro do vídeo antes do play */
+export const tutorialVideoUrl = (tutorial: Tutorial): string | undefined =>
+  tutorial.video ? `${TUTORIALS_BASE_URL}/${tutorial.video}#t=1` : undefined;
 
 export type TutorialTrackId =
   | "primeiros-passos"
@@ -25,7 +40,7 @@ export interface Tutorial {
   track: TutorialTrackId;
   title: string;
   description: string;
-  /** Caminho do vídeo em public/ (ex.: /tutorials/criar-atendente.mp4) */
+  /** Arquivo no bucket `tutorials` do Storage (ex.: criar-atendente.mp4) */
   video?: string;
   /** Duração aproximada, ex.: "1:20" */
   duration?: string;
@@ -69,7 +84,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "primeiros-passos",
     title: "Conectar o WhatsApp por QR Code",
     description: "Ligue o número da empresa lendo o QR Code no celular.",
-    video: "/tutorials/conectar-whatsapp-qr.mp4#t=1",
+    video: "conectar-whatsapp-qr.mp4",
     duration: "0:44",
     path: "/inbox/settings/integrations/meta",
     adminOnly: true,
@@ -79,7 +94,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "primeiros-passos",
     title: "Conectar o WhatsApp oficial (Meta)",
     description: "Use a API oficial do WhatsApp com a sua conta da Meta.",
-    video: "/tutorials/conectar-whatsapp-oficial.mp4#t=1",
+    video: "conectar-whatsapp-oficial.mp4",
     duration: "0:50",
     path: "/inbox/settings/integrations/meta",
     adminOnly: true,
@@ -89,7 +104,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "primeiros-passos",
     title: "Criar departamentos",
     description: "Separe os atendimentos por setor, como Vendas e Suporte.",
-    video: "/tutorials/criar-departamentos.mp4#t=1",
+    video: "criar-departamentos.mp4",
     duration: "1:03",
     path: "/inbox/departments",
     adminOnly: true,
@@ -101,7 +116,7 @@ export const TUTORIALS: Tutorial[] = [
     description:
       "Convide uma pessoa da equipe, escolha o cargo e o setor dela.",
     // #t=1 pula a tela de carregamento do primeiro segundo
-    video: "/tutorials/criar-atendente.mp4#t=1",
+    video: "criar-atendente.mp4",
     duration: "0:48",
     path: "/inbox/attendants",
     adminOnly: true,
@@ -110,7 +125,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "primeiros-passos",
     title: "Criar cargos e permissões",
     description: "Crie cargos como Supervisor e escolha o que cada um pode ver e fazer.",
-    video: "/tutorials/criar-cargos.mp4#t=1",
+    video: "criar-cargos.mp4",
     duration: "1:03",
     path: "/inbox/attendants",
     adminOnly: true,
@@ -122,7 +137,7 @@ export const TUTORIALS: Tutorial[] = [
     title: "Automações de conversa",
     description:
       "Meta de 1ª resposta, volta para a fila, encerramento automático e pesquisa de satisfação.",
-    video: "/tutorials/automacoes-conversa.mp4#t=1",
+    video: "automacoes-conversa.mp4",
     duration: "0:59",
     path: "/inbox/settings/automations/conversations",
     adminOnly: true,
@@ -135,7 +150,7 @@ export const TUTORIALS: Tutorial[] = [
     title: "Um atendimento do início ao fim",
     description:
       "Pegue o cliente da fila, responda, marque com etiqueta e finalize: o caminho de cada conversa.",
-    video: "/tutorials/dia-a-dia-atendente.mp4#t=1",
+    video: "dia-a-dia-atendente.mp4",
     duration: "0:53",
     path: "/inbox",
   },
@@ -144,7 +159,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "atendimento",
     title: "Conhecer a tela de atendimentos",
     description: "Filtros, abas e o status de cada conversa.",
-    video: "/tutorials/conhecer-atendimentos.mp4#t=1",
+    video: "conhecer-atendimentos.mp4",
     duration: "0:52",
     path: "/inbox",
   },
@@ -153,7 +168,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "atendimento",
     title: "Transferir uma conversa",
     description: "Passe o cliente para outro setor, com todo o histórico.",
-    video: "/tutorials/transferir-conversa.mp4#t=1",
+    video: "transferir-conversa.mp4",
     duration: "0:32",
     path: "/inbox",
   },
@@ -162,7 +177,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "atendimento",
     title: "Usar mensagens rápidas",
     description: "Respostas prontas com poucos cliques.",
-    video: "/tutorials/usar-mensagens-rapidas.mp4#t=1",
+    video: "usar-mensagens-rapidas.mp4",
     duration: "0:51",
     path: "/inbox/quick-messages",
   },
@@ -171,7 +186,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "atendimento",
     title: "Usar etiquetas",
     description: "Marque as conversas para encontrá-las depois.",
-    video: "/tutorials/usar-etiquetas.mp4#t=1",
+    video: "usar-etiquetas.mp4",
     duration: "0:55",
     path: "/inbox/tags",
   },
@@ -180,7 +195,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "atendimento",
     title: "Enviar áudio, imagem e arquivo",
     description: "Mande mais do que texto para o cliente.",
-    video: "/tutorials/enviar-arquivos.mp4#t=1",
+    video: "enviar-arquivos.mp4",
     duration: "0:46",
     path: "/inbox",
   },
@@ -189,7 +204,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "atendimento",
     title: "Conversar com a equipe",
     description: "Use o chat interno sem sair da Unxet.",
-    video: "/tutorials/chat-interno.mp4#t=1",
+    video: "chat-interno.mp4",
     duration: "0:37",
     path: "/inbox/team",
   },
@@ -200,7 +215,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "clientes-vendas",
     title: "Carteira de clientes",
     description: "Cadastre, busque e anote informações dos clientes.",
-    video: "/tutorials/carteira-clientes.mp4#t=1",
+    video: "carteira-clientes.mp4",
     duration: "1:29",
     path: "/contacts",
     adminOnly: true,
@@ -210,7 +225,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "clientes-vendas",
     title: "Funil de vendas",
     description: "Crie negócios, mova entre etapas e agende tarefas.",
-    video: "/tutorials/funil-vendas.mp4#t=1",
+    video: "funil-vendas.mp4",
     duration: "1:28",
     path: "/inbox/leads",
   },
@@ -221,7 +236,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "automacao",
     title: "Criar um bot com menu",
     description: "Monte um menu de opções para os clientes.",
-    video: "/tutorials/criar-bot.mp4#t=1",
+    video: "criar-bot.mp4",
     duration: "1:38",
     path: "/inbox/bots",
     adminOnly: true,
@@ -234,7 +249,7 @@ export const TUTORIALS: Tutorial[] = [
           track: "automacao" as const,
           title: "Configurar o assistente com IA",
           description: "Ensine o assistente a responder pela empresa.",
-          video: "/tutorials/assistente-ia.mp4#t=1",
+          video: "assistente-ia.mp4",
           duration: "1:21",
           path: "/inbox/ai-assistant",
           adminOnly: true,
@@ -246,7 +261,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "automacao",
     title: "Criar uma campanha",
     description: "Envie uma mensagem para vários clientes de uma vez.",
-    video: "/tutorials/criar-campanha.mp4#t=1",
+    video: "criar-campanha.mp4",
     duration: "1:22",
     path: "/inbox/campaigns",
   },  {
@@ -254,7 +269,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "automacao",
     title: "Usar modelos da Meta",
     description: "No WhatsApp oficial: crie o modelo, aguarde a aprovação e use na campanha.",
-    video: "/tutorials/modelos-meta.mp4#t=1",
+    video: "modelos-meta.mp4",
     duration: "1:41",
     path: "/inbox/campaigns/templates",
     adminOnly: true,
@@ -267,7 +282,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "gestao",
     title: "Ler o Painel",
     description: "Veja o que está acontecendo agora no atendimento.",
-    video: "/tutorials/painel.mp4#t=1",
+    video: "painel.mp4",
     duration: "0:53",
     path: "/inbox",
     adminOnly: true,
@@ -277,7 +292,7 @@ export const TUTORIALS: Tutorial[] = [
     track: "gestao",
     title: "Gerar e exportar relatórios",
     description: "Resultados por período, em PDF ou planilha.",
-    video: "/tutorials/relatorios.mp4#t=1",
+    video: "relatorios.mp4",
     duration: "0:52",
     path: "/inbox/reports",
     adminOnly: true,

@@ -32,5 +32,6 @@ supabase/.branches
 
 # Gravação dos tutoriais (temporário)
 scripts/tutorials/.videos
+scripts/tutorials/out
 scripts/tutorials/erro.png
 scripts/tutorials/trilha-previa.wav
