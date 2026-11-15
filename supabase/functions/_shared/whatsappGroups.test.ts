@@ -7,6 +7,7 @@ import {
   groupSender,
   isGroupJid,
   mentionedJids,
+  participantPhones,
   replaceMentions,
   parseGroupInfo,
 } from "./whatsappGroups";
@@ -100,28 +101,76 @@ describe("parseGroupInfo", () => {
 });
 
 describe("mentionedJids", () => {
-  it("lê as pessoas marcadas no texto e na legenda, sem repetir", () => {
+  it("Evolution v2: lê o contextInfo fora da mensagem (data.contextInfo)", () => {
     expect(
       mentionedJids({
-        extendedTextMessage: {
-          text: "@27307469193361 é legal",
-          contextInfo: { mentionedJid: ["27307469193361@lid", "27307469193361@lid"] },
+        message: { conversation: "@27307469193361" },
+        contextInfo: { mentionedJid: ["27307469193361@lid"] },
+      }),
+    ).toEqual(["27307469193361@lid"]);
+  });
+
+  it("lê de dentro da mensagem (texto e legenda), sem repetir", () => {
+    expect(
+      mentionedJids({
+        message: {
+          extendedTextMessage: {
+            text: "@27307469193361 é legal",
+            contextInfo: { mentionedJid: ["27307469193361@lid", "27307469193361@lid"] },
+          },
         },
       }),
     ).toEqual(["27307469193361@lid"]);
     expect(
       mentionedJids({
-        imageMessage: { contextInfo: { mentionedJid: ["5511999998888@s.whatsapp.net", 42] } },
-        documentWithCaptionMessage: {
-          message: { documentMessage: { contextInfo: { mentionedJid: ["1@lid"] } } },
+        message: {
+          imageMessage: { contextInfo: { mentionedJid: ["5511999998888@s.whatsapp.net", 42] } },
+          documentWithCaptionMessage: {
+            message: { documentMessage: { contextInfo: { mentionedJid: ["1@lid"] } } },
+          },
         },
       }),
     ).toEqual(["5511999998888@s.whatsapp.net", "1@lid"]);
   });
 
+  it("sem a lista, usa os @id do texto (14+ dígitos é LID)", () => {
+    expect(mentionedJids({ message: { conversation: "x" } }, "@27307469193361 e @5511999998888")).toEqual([
+      "27307469193361@lid",
+      "5511999998888@s.whatsapp.net",
+    ]);
+  });
+
+  it("não repete o id que já veio na lista e ignora números curtos", () => {
+    expect(
+      mentionedJids({ contextInfo: { mentionedJid: ["27307469193361@lid"] } }, "@27307469193361 custa @50"),
+    ).toEqual(["27307469193361@lid"]);
+  });
+
   it("sem menção devolve lista vazia", () => {
-    expect(mentionedJids({ conversation: "oi" })).toEqual([]);
+    expect(mentionedJids({ message: { conversation: "oi" } }, "oi")).toEqual([]);
     expect(mentionedJids(undefined)).toEqual([]);
+  });
+});
+
+describe("participantPhones", () => {
+  it("liga o LID ao telefone de cada participante", () => {
+    const map = participantPhones({
+      participants: [
+        { id: "27307469193361@lid", phoneNumber: "559184601156@s.whatsapp.net", admin: "admin" },
+        { id: "111@lid" },
+        { id: "5511999998888@s.whatsapp.net" },
+      ],
+    });
+    expect(map.get("27307469193361@lid")).toBe("559184601156");
+    expect(map.has("111@lid")).toBe(false);
+    expect(map.get("5511999998888@s.whatsapp.net")).toBe("5511999998888");
+  });
+
+  it("aceita a lista direto e resposta vazia", () => {
+    expect(participantPhones([{ id: "1@lid", jid: "5511988887777@s.whatsapp.net" }]).get("1@lid")).toBe(
+      "5511988887777",
+    );
+    expect(participantPhones(null).size).toBe(0);
   });
 });
 
