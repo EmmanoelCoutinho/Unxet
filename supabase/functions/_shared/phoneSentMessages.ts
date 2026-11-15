@@ -13,6 +13,7 @@
 import { findContactByPhone } from "./startConversation.ts";
 import { findByProviderId, replyColumns } from "./messageReply.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "./connectionDepartment.ts";
+import { safeStorageContentType } from "./storageContentType.ts";
 // (sem transcription.ts aqui: ele lê Deno.env e o módulo é testado no Vitest;
 // quem chama cria a transcrição do áudio com o storagePath devolvido)
 
@@ -216,7 +217,7 @@ export async function savePhoneSentMessage(
       storagePath = `${clinicId}/${waId}/phone-sent/${messageFolder}/${fileName}`;
       const { error: uploadErr } = await supabase.storage
         .from(MEDIA_BUCKET)
-        .upload(storagePath, bytes, { contentType: mimeType ?? "application/octet-stream", upsert: true });
+        .upload(storagePath, bytes, { contentType: safeStorageContentType(mimeType), upsert: true });
       if (uploadErr) {
         console.error("[PHONE_MESSAGE_UPLOAD_ERROR]", uploadErr);
         storagePath = null;

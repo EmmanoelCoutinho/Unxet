@@ -8,6 +8,7 @@
 // Funções puras no topo (testadas no Vitest); as que usam banco/rede abaixo.
 
 import { imageHash, isCurrentProfilePic, profilePicPath } from "./profilePicture.ts";
+import { safeStorageContentType } from "./storageContentType.ts";
 
 /** Telefone real: 10 a 13 dígitos (55 + DDD + número). LID tem 14-15. */
 const PHONE_DIGITS = /^\d{10,13}$/;
@@ -190,7 +191,7 @@ async function storeGroupPicture(supabase, clinicId: string, jid: string, pictur
     const contentType = imgResp.headers.get("content-type") ?? "image/jpeg";
     const path = profilePicPath(clinicId, groupPicKey(jid), await imageHash(data), contentType);
     if (isCurrentProfilePic(currentUrl, path)) return currentUrl;
-    const { error } = await supabase.storage.from(PROFILE_PIC_BUCKET).upload(path, data, { contentType, upsert: true });
+    const { error } = await supabase.storage.from(PROFILE_PIC_BUCKET).upload(path, data, { contentType: safeStorageContentType(contentType), upsert: true });
     if (error) {
       console.warn("[GROUP_PICTURE_UPLOAD_FAILED]", jid, error.message);
       return currentUrl;

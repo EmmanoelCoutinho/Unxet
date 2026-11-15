@@ -201,6 +201,11 @@ export const FileLibraryPage: React.FC = () => {
       if (form.mode === "upload" && values.file) {
         library.upsertLocal(await uploadLibraryFile({ clinicId, file: values.file, ...fields }));
         toast.success("Arquivo adicionado ao Banco de arquivos.");
+        if (values.file.name.toLowerCase().endsWith(".pfx")) {
+          toast.warning(
+            "Atenção: o PFX contém a chave privada do certificado digital e fica disponível para toda a equipe no Banco de arquivos.",
+          );
+        }
       } else if (form.mode === "edit") {
         library.upsertLocal(await updateLibraryFile({ clinicId, id: form.file.id, ...fields }));
         toast.success("Arquivo atualizado.");

@@ -25,7 +25,7 @@ import {
 } from "../../lib/quickMessageSlash";
 import type { QuickMessage } from "../../services/quickMessages";
 import { compressImageFile } from "../../lib/imageUtils";
-import { storageContentType } from "../../services/fileLibrary";
+import { storageContentType, storageFile } from "../../services/fileLibrary";
 import type { SharedContact } from "../../lib/sharedContact";
 import { ShareContactModal } from "./ShareContactModal";
 import { AttachmentTray, type PendingAttachment } from "./AttachmentTray";
@@ -705,20 +705,21 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
     const filePath = `${clinicId}/${folder}/${fileName}`;
 
+    const contentType = storageContentType(
+      options?.contentType ||
+        file.type ||
+        (kind === "image"
+          ? "image/jpeg"
+          : kind === "audio"
+            ? "audio/mpeg"
+            : "application/octet-stream"),
+    );
     const { error: uploadError } = await supabase.storage
       .from("whatsapp-media")
-      .upload(filePath, file, {
+      .upload(filePath, storageFile(file, contentType), {
         cacheControl: "3600",
         upsert: false,
-        contentType: storageContentType(
-          options?.contentType ||
-            file.type ||
-            (kind === "image"
-              ? "image/jpeg"
-              : kind === "audio"
-                ? "audio/mpeg"
-                : "application/octet-stream"),
-        ),
+        contentType,
       });
 
     if (uploadError) {
@@ -971,6 +972,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
 
       rejected += 1;
+    }
+
+    // O PFX leva a chave privada do certificado: quem recebe assina em nome da empresa
+    if (accepted.some((item) => item.extension === "pfx")) {
+      toast.warning(
+        "Atenção: o arquivo PFX contém a chave privada do certificado digital. Envie só para quem deve ter acesso a ele e passe a senha por outro canal.",
+      );
     }
 
     if (rejected > 0) {

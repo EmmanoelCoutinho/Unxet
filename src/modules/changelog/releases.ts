@@ -75,6 +75,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "improved",
+    text: "Mais segurança nos arquivos: documentos recebidos que poderiam conter código (como HTML ou SVG) abrem só como texto ou são baixados, e o envio de certificado PFX mostra um aviso sobre a chave privada.",
+  },
+  {
     kind: "new",
     text: "Tutoriais novos: Instalar a Unxet no celular (Android e iPhone, com notificações), Usar o Banco de arquivos, Pesquisa de satisfação e Grupos e mensagens enviadas pelo celular. Veja em Tutoriais, no menu lateral.",
   },
