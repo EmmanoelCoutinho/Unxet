@@ -61,6 +61,47 @@ export function evolutionRecipient(conversation: {
   return { number: phone, remoteJid: `${phone}@s.whatsapp.net`, isGroup: false };
 }
 
+// Campos de uma mensagem da Evolution/Baileys que trazem contextInfo
+const MENTION_HOLDERS = [
+  "extendedTextMessage",
+  "imageMessage",
+  "videoMessage",
+  "documentMessage",
+  "audioMessage",
+  "pttMessage",
+];
+
+/**
+ * Pessoas marcadas (@) na mensagem: o texto traz "@<id>" e o contextInfo
+ * traz os JIDs (telefone ou LID). Sem repetição.
+ */
+export function mentionedJids(message: any): string[] {
+  const found = new Set<string>();
+  const docWithCaption = message?.documentWithCaptionMessage?.message?.documentMessage;
+  const holders = [...MENTION_HOLDERS.map((k) => message?.[k]), docWithCaption];
+  for (const holder of holders) {
+    const list = holder?.contextInfo?.mentionedJid;
+    if (!Array.isArray(list)) continue;
+    for (const jid of list) {
+      if (typeof jid === "string" && jid.includes("@")) found.add(jid);
+    }
+  }
+  return [...found];
+}
+
+/** "@27307469193361" no texto vira "@Nome" para cada JID com nome conhecido. */
+export function replaceMentions(text: string, names: Map<string, string>): string {
+  if (!text || names.size === 0) return text;
+  let result = text;
+  for (const [jid, name] of names) {
+    const id = jid.split("@")[0];
+    if (!id || !name) continue;
+    // Não troca dentro de um número maior (@123 não pode pegar @1234)
+    result = result.replace(new RegExp(`@${id.replace(/[^0-9A-Za-z]/g, "")}(?![0-9])`, "g"), `@${name}`);
+  }
+  return result;
+}
+
 /** Pasta das fotos do grupo no Storage (separada das fotos de contatos). */
 export const groupPicKey = (jid: string) => `group-${jid.split("@")[0].replace(/[^0-9-]/g, "")}`;
 
