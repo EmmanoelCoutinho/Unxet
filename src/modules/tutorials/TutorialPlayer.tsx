@@ -6,6 +6,7 @@ import {
   TUTORIALS,
   markTutorialWatched,
   readWatchedTutorials,
+  tutorialVideoUrl,
   type Tutorial,
 } from "./tutorials";
 
@@ -60,7 +61,7 @@ export const TutorialPlayer: React.FC<PlayerProps> = ({
               </div>
               <video
                 key={tutorial.id}
-                src={tutorial.video}
+                src={tutorialVideoUrl(tutorial)}
                 controls
                 autoPlay
                 playsInline

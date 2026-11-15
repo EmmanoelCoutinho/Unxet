@@ -6,7 +6,7 @@
 // - Entra com admin@teste.local (ou meta.login) usando LOCAL_TEST_PASSWORD (do .env.local
 //   na raiz do projeto ou da variável de ambiente). Só o banco local.
 // - O login acontece fora do vídeo; a gravação começa já dentro do sistema.
-// - Junta a trilha padrão (music.mjs) e salva em public/tutorials/<id>.mp4
+// - Junta a trilha padrão (music.mjs) e salva em scripts/tutorials/out/<id>.mp4
 //   (H.264 + AAC, toca em qualquer navegador, inclusive no iPhone).
 // - O roteiro pode exportar prepare()/restore() para arrumar o banco local
 //   antes e desfazer depois (restore roda mesmo se a gravação falhar), e
@@ -124,7 +124,7 @@ const record = async (scenario, db) => {
   const seconds = (Date.now() - startedAt) / 1000;
 
   const recorded = await page.video().path();
-  const outDir = path.join(root, "public", "tutorials");
+  const outDir = path.join(here, "out");
   mkdirSync(outDir, { recursive: true });
   const target = path.join(outDir, `${scenario.meta.id}.mp4`);
   const music = path.join(videoDir, "trilha.wav");

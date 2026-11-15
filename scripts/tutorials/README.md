@@ -15,8 +15,26 @@ npm install
 node record.mjs criar-atendente --url http://localhost:5173
 ```
 
-O vídeo vai para `public/tutorials/<id>.mp4`. Use `--headed` para assistir
+O vídeo vai para `out/<id>.mp4` (fora do git). Use `--headed` para assistir
 a gravação. Se algo falhar, a tela do momento do erro fica em `erro.png`.
+
+## Publicar
+
+Os vídeos ficam no bucket público `tutorials` do Supabase Storage (migration
+`20261124000000_tutorials_bucket.sql`), não no repositório. Envie para o
+develop e para a produção, com a service role de cada um:
+
+```bash
+SUPABASE_URL=https://<ref>.supabase.co SUPABASE_SERVICE_ROLE_KEY=... node upload.mjs criar-atendente
+```
+
+`--all` envia tudo que estiver em `out/`. Regravar com o mesmo id substitui o
+arquivo (o navegador pega o novo em até 1 hora).
+
+O app monta o link a partir do `VITE_SUPABASE_URL`. Rodando o app no banco
+local (que não tem os vídeos), use
+`VITE_TUTORIALS_URL=https://ketolvqnptmdczkzrqba.supabase.co/storage/v1/object/public/tutorials`
+para assistir os do develop.
 
 ## WhatsApp por QR Code
 
@@ -58,4 +76,5 @@ sem direitos autorais de terceiros). Para ouvir: `node music.mjs 30` gera
    Para mudanças maiores no banco local, exporte `prepare(db)` e
    `restore(db, estado)` (restore roda mesmo se a gravação falhar).
    Exemplo: `scenarios/conectar-whatsapp-qr.mjs`.
-4. Grave e preencha `video` e `duration` no tutorial.
+4. Grave, publique (`upload.mjs`) e preencha `video` (`<id>.mp4`) e
+   `duration` no tutorial.
