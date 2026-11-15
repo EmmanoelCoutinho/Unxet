@@ -27,6 +27,7 @@ import { ensureWhatsappGroup, groupSender, isGroupJid, mentionedJids, participan
 import { findContactByPhone } from "../_shared/startConversation.ts";
 import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 import { createCheckThrottle, imageHash, isCurrentProfilePic, profilePicFolder, profilePicPath } from "../_shared/profilePicture.ts";
+import { safeStorageContentType } from "../_shared/storageContentType.ts";
 import { applyReaction, evolutionQuotedId, evolutionReaction } from "../_shared/messageReply.ts";
 import { savePhoneSentMessage, waitForKnownMessage } from "../_shared/phoneSentMessages.ts";
 import { queueTranscription } from "../_shared/transcription.ts";
@@ -1173,7 +1174,7 @@ async function fetchAndStoreProfilePic(params) {
   if (isCurrentProfilePic(existingContact.image_url, storagePath)) return;
   // 5. Upload no bucket (nome novo a cada foto nova, sem cache antigo)
   const { error: uploadError } = await supabase.storage.from(PROFILE_PIC_BUCKET).upload(storagePath, arrayBuffer, {
-    contentType,
+    contentType: safeStorageContentType(contentType),
     upsert: true
   });
   if (uploadError) {

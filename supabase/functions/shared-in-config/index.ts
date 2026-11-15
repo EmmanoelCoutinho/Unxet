@@ -23,6 +23,7 @@ import { findContactByPhone } from "../_shared/startConversation.ts";
 import { findByProviderId, replyColumns } from "../_shared/messageReply.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
 import { groupPicKey, linkContactToGroup } from "../_shared/whatsappGroups.ts";
+import { safeStorageContentType } from "../_shared/storageContentType.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -276,7 +277,7 @@ serve(async (req)=>{
           const ownerFolder = group ? groupPicKey(group.jid) : waId;
           const path = `${clinicId}/${ownerFolder}/${folder}/${messageFolder}/${fileName}`;
           const { error: uploadError } = await supabase.storage.from(WHATSAPP_MEDIA_BUCKET).upload(path, fileBytes, {
-            contentType: resolvedContentType,
+            contentType: safeStorageContentType(resolvedContentType),
             upsert: true
           });
           if (!uploadError) {
