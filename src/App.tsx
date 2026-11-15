@@ -71,6 +71,11 @@ const ConversationAutomationSettingsPage = lazy(() =>
     default: m.ConversationAutomationSettingsPage,
   })),
 );
+const CompanyProfilePage = lazy(() =>
+  import("./pages/CompanyProfilePage").then((m) => ({
+    default: m.CompanyProfilePage,
+  })),
+);
 const BotsSettingsPage = lazy(() =>
   import("./pages/BotsSettingsPage").then((m) => ({
     default: m.BotsSettingsPage,
@@ -319,6 +324,10 @@ function RoutedApp() {
             <Route
               path="settings/integrations/meta/callback"
               element={<AdminOnly><MetaCallbackPage /></AdminOnly>}
+            />
+            <Route
+              path="settings/company"
+              element={<AdminOnly><CompanyProfilePage /></AdminOnly>}
             />
             <Route
               path="settings/automations/conversations"

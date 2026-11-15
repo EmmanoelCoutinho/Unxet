@@ -75,6 +75,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "new",
+    text: "Dados da empresa: em Configurações, o administrador cadastra e edita nome, razão social, CNPJ ou CPF, telefone, e-mail, site e endereço da empresa. O nome da empresa agora aparece no topo do app para toda a equipe.",
+    adminOnly: true,
+  },
+  {
     kind: "improved",
     text: "Mais segurança nos arquivos: documentos recebidos que poderiam conter código (como HTML ou SVG) abrem só como texto ou são baixados, e o envio de certificado PFX mostra um aviso sobre a chave privada.",
   },
