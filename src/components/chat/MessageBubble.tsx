@@ -537,7 +537,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </span>
           )}
           <div
-            className={`group/bubble relative ${hasMenu ? "[@media(hover:none)]:select-none" : ""} ${hasReactions ? "mb-3" : ""}`}
+            className={`group/bubble relative max-w-full ${isClient ? "self-start" : "self-end"} ${hasMenu ? "[@media(hover:none)]:select-none" : ""} ${hasReactions ? "mb-3" : ""}`}
             onTouchStart={hasMenu ? handleTouchStart : undefined}
             onTouchMove={hasMenu ? clearLongPress : undefined}
             onTouchEnd={hasMenu ? handleTouchEnd : undefined}
