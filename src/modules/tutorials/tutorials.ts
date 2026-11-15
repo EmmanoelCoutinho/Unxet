@@ -159,7 +159,7 @@ export const TUTORIALS: Tutorial[] = [
     title: "Instalar a Unxet no celular",
     description: "Use a Unxet como aplicativo no Android e no iPhone e receba notificações.",
     video: "instalar-app.mp4",
-    duration: "0:52",
+    duration: "0:51",
   },
 
   // Atendimento no dia a dia
@@ -224,7 +224,7 @@ export const TUTORIALS: Tutorial[] = [
     title: "Usar o Banco de arquivos",
     description: "Guarde os arquivos da empresa e envie na conversa com um clique.",
     video: "banco-de-arquivos.mp4",
-    duration: "0:59",
+    duration: "0:57",
     path: "/inbox/files",
   },
   {
@@ -331,7 +331,7 @@ export const TUTORIALS: Tutorial[] = [
     title: "Pesquisa de satisfação",
     description: "Ligue a pesquisa, veja a nota de 0 a 10 de cada cliente e acompanhe nos Relatórios.",
     video: "pesquisa-satisfacao.mp4",
-    duration: "1:31",
+    duration: "1:21",
     path: "/inbox/settings/automations/conversations",
     adminOnly: true,
   },
