@@ -76,6 +76,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
+    text: "Tutoriais novos: Instalar a Unxet no celular (Android e iPhone, com notificações), Usar o Banco de arquivos, Pesquisa de satisfação e Grupos e mensagens enviadas pelo celular. Veja em Tutoriais, no menu lateral.",
+  },
+  {
+    kind: "new",
     text: "Grupos do WhatsApp: cada número de QR Code pode receber as mensagens dos grupos (Configurações > Integrações > \"Receber mensagens de grupos\", desligado por padrão). Cada grupo vira uma conversa, com o nome de quem escreveu em cada mensagem, e você responde direto no grupo. Bot, IA e pesquisa de satisfação não atuam em grupos.",
     adminOnly: true,
   },

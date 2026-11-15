@@ -6,8 +6,9 @@ desenhados na própria página. Nada de dado real aparece.
 
 ## Gravar
 
-1. Suba o Supabase local e o app apontando para ele (`.env.local` com
-   `VITE_SUPABASE_URL=http://127.0.0.1:54321` e `LOCAL_TEST_PASSWORD`).
+1. Suba o Supabase local e o app apontando para ele: `.env.local` (ou
+   `.env.localtest.local`, com o app em `vite --mode localtest`) com
+   `VITE_SUPABASE_URL=http://127.0.0.1:54321` e `LOCAL_TEST_PASSWORD`.
 2. Nesta pasta:
 
 ```bash
@@ -17,6 +18,9 @@ node record.mjs criar-atendente --url http://localhost:5173
 
 O vídeo vai para `out/<id>.mp4` (fora do git). Use `--headed` para assistir
 a gravação. Se algo falhar, a tela do momento do erro fica em `erro.png`.
+
+Para revisar sem assistir tudo, `node frames.mjs <id> [segundos] [início]`
+monta uma folha com quadros do vídeo em `out/<id>-quadros-<início>.jpg`.
 
 ## Publicar
 

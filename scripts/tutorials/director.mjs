@@ -4,6 +4,8 @@
 
 const OVERLAY_SCRIPT = () => {
   const install = () => {
+    // Só na página principal (o app dentro de um iframe não ganha outro cursor)
+    if (window.top !== window) return;
     if (document.getElementById("__tut-cursor")) return;
 
     const style = document.createElement("style");

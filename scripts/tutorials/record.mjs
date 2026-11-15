@@ -38,23 +38,29 @@ if (!scenarioId) {
   process.exit(1);
 }
 
+// Variáveis do app local: .env.local ou, se não houver, .env.localtest.local
+// (o app roda com `vite --mode localtest`)
+const localEnv = () => {
+  for (const name of [".env.local", ".env.localtest.local"]) {
+    const file = path.join(root, name);
+    if (existsSync(file)) return { name, text: readFileSync(file, "utf8") };
+  }
+  return { name: ".env.local", text: "" };
+};
+
 const readPassword = () => {
   if (process.env.LOCAL_TEST_PASSWORD) return process.env.LOCAL_TEST_PASSWORD;
-  const envFile = path.join(root, ".env.local");
-  if (existsSync(envFile)) {
-    const match = readFileSync(envFile, "utf8").match(/^LOCAL_TEST_PASSWORD=(.*)$/m);
-    if (match) return match[1].trim();
-  }
+  const match = localEnv().text.match(/^LOCAL_TEST_PASSWORD=(.*)$/m);
+  if (match) return match[1].trim();
   throw new Error("Defina LOCAL_TEST_PASSWORD (senha do admin@teste.local local)");
 };
 
 // Garante que não está apontando para develop/produção
 const assertLocal = () => {
-  const envFile = path.join(root, ".env.local");
-  const env = existsSync(envFile) ? readFileSync(envFile, "utf8") : "";
-  const url = env.match(/^VITE_SUPABASE_URL=(.*)$/m)?.[1] ?? "";
+  const { name, text } = localEnv();
+  const url = text.match(/^VITE_SUPABASE_URL=(.*)$/m)?.[1] ?? "";
   if (!/127\.0\.0\.1|localhost/.test(url)) {
-    throw new Error("O .env.local precisa apontar para o Supabase local (127.0.0.1)");
+    throw new Error(`O ${name} precisa apontar para o Supabase local (127.0.0.1)`);
   }
 };
 
