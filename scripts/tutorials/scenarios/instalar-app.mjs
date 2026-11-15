@@ -200,7 +200,14 @@ export async function run(page, d) {
   );
   await page.goto("/__tutorial-celular", { waitUntil: "load" });
   await page.evaluate(UI);
-  await page.frameLocator("#app").getByText(/^Abertas/).first().waitFor({ timeout: 20000 });
+  // Espera a lista de conversas carregar dentro do celular (não só o esqueleto)
+  const inside = page.frameLocator("#app");
+  await inside
+    .getByText(/^(Cliente Lancamento|Demo .+)$/)
+    .filter({ visible: true })
+    .first()
+    .waitFor({ timeout: 30000 });
+  await d.wait(800);
   const el = (id) => page.locator(`#${id}`);
   const ui = (fn, ...args) => page.evaluate(([f, a]) => window.tut[f](...a), [fn, args]);
 

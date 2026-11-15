@@ -110,6 +110,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function createDirector(page) {
   let mouse = { x: 640, y: 360 };
+  // Quando a abertura terminou de aparecer: o vídeo é cortado até aqui
+  let openingShownAt = null;
 
   const moveTo = async (locator) => {
     await locator.scrollIntoViewIfNeeded();
@@ -157,6 +159,8 @@ export function createDirector(page) {
 
   return {
     install: () => page.addInitScript(OVERLAY_SCRIPT),
+    /** Momento (Date.now) em que a abertura cobriu a tela, ou null */
+    openingShownAt: () => openingShownAt,
     wait: sleep,
 
     /** Tela de abertura ou de encerramento, sobre a página */
@@ -170,6 +174,8 @@ export function createDirector(page) {
         },
         [heading, subtitle],
       );
+      // A abertura leva 0,4 s para cobrir a tela (transição de opacidade)
+      if (openingShownAt === null) openingShownAt = Date.now() + 450;
       await sleep(ms);
       if (keep) return; // encerramento: fica até o fim do vídeo
       await page.evaluate(() =>

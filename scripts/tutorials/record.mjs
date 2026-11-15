@@ -64,6 +64,19 @@ const assertLocal = () => {
   }
 };
 
+/** Duração do vídeo gravado, em segundos (lida pelo ffmpeg) */
+const videoSeconds = (file) => {
+  let info = "";
+  try {
+    execFileSync(ffmpeg, ["-i", file], { stdio: "pipe" });
+  } catch (err) {
+    info = String(err.stderr ?? "");
+  }
+  const m = info.match(/Duration: (\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!m) throw new Error("Não consegui ler a duração do vídeo gravado");
+  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+};
+
 const cleanup = (emails) => {
   if (!emails?.length) return;
   sql(`delete from auth.users where email in (${emails.map(lit).join(",")});`);
@@ -113,10 +126,10 @@ const record = async (scenario, db) => {
     recordVideo: { dir: videoDir, size: VIEWPORT },
   });
   const page = await context.newPage();
-  const startedAt = Date.now();
   const director = createDirector(page);
   await director.install();
 
+  let closedAt = Date.now();
   try {
     await scenario.run(page, director, db);
   } catch (err) {
@@ -124,12 +137,19 @@ const record = async (scenario, db) => {
     console.error("Falhou; a tela no momento do erro está em scripts/tutorials/erro.png");
     throw err;
   } finally {
+    closedAt = Date.now();
     await context.close();
     await browser.close();
   }
-  const seconds = (Date.now() - startedAt) / 1000;
 
   const recorded = await page.video().path();
+  // Corta o começo (página carregando) até a abertura cobrir a tela. O vídeo
+  // termina quando o navegador fecha, então a conta é feita a partir do fim.
+  const total = videoSeconds(recorded);
+  const openingAt = director.openingShownAt();
+  const start = openingAt ? Math.max(0, total - (closedAt - openingAt) / 1000) : 0;
+  const seconds = total - start;
+
   const outDir = path.join(here, "out");
   mkdirSync(outDir, { recursive: true });
   const target = path.join(outDir, `${scenario.meta.id}.mp4`);
@@ -139,7 +159,7 @@ const record = async (scenario, db) => {
     ffmpeg,
     [
       "-y", "-loglevel", "error",
-      "-i", recorded,
+      "-ss", start.toFixed(2), "-i", recorded,
       "-i", music,
       "-map", "0:v", "-map", "1:a",
       "-c:v", "libx264", "-preset", "slow", "-crf", "23", "-pix_fmt", "yuv420p",
