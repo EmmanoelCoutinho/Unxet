@@ -466,3 +466,6 @@ verify_jwt = true
 
 [functions.admin-onboard-clinic]
 verify_jwt = true
+
+[functions.admin-delete-clinic]
+verify_jwt = true

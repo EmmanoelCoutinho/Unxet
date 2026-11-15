@@ -22,6 +22,8 @@ export type SubscriberRow = {
   grace_days: number;
   // Adicional "Vários números de WhatsApp": null = desligado
   whatsapp_numbers_addon: number | null;
+  // Atendentes extras além do limite do plano: null = nenhum
+  extra_attendants: number | null;
   blocked_at: string | null;
   blocked_reason: "overdue" | "manual" | null;
   notes: string | null;
@@ -120,10 +122,9 @@ export const getPlanAlerts = (
   const has = (feature: SubscriptionPlan["features"][number]) =>
     plan.features.includes(feature);
 
-  if (plan.max_attendants !== null && row.attendants > plan.max_attendants) {
-    alerts.push(
-      `${row.attendants} atendentes (limite ${plan.max_attendants})`,
-    );
+  const attendantLimit = attendantsLimit(row.extra_attendants, plan);
+  if (attendantLimit !== null && row.attendants > attendantLimit) {
+    alerts.push(`${row.attendants} atendentes (limite ${attendantLimit})`);
   }
   const whatsappLimit = whatsappNumbersLimit(row.whatsapp_numbers_addon, plan);
   if (whatsappLimit !== null && row.whatsapp > whatsappLimit) {
@@ -215,6 +216,39 @@ export const whatsappNumbersLimit = (
   addon: number | null | undefined,
   plan: SubscriptionPlan | undefined,
 ) => addon ?? plan?.max_whatsapp_numbers ?? null;
+
+// Atendentes extras: vagas somadas ao limite do plano (Essencial e
+// Profissional; o Empresarial é ilimitado)
+export const EXTRA_ATTENDANTS_MIN = 1;
+export const EXTRA_ATTENDANTS_MAX = 200;
+export const EXTRA_ATTENDANTS_DEFAULT = 1;
+
+// Valor do formulário → o que vai para o banco: null = sem extras.
+// Quantidade fora da faixa devolve undefined (inválido).
+export const parseExtraAttendants = (
+  enabled: boolean,
+  quantity: string,
+): number | null | undefined => {
+  if (!enabled) return null;
+  const value = Number(quantity);
+  if (
+    !Number.isInteger(value) ||
+    value < EXTRA_ATTENDANTS_MIN ||
+    value > EXTRA_ATTENDANTS_MAX
+  ) {
+    return undefined;
+  }
+  return value;
+};
+
+// Limite de atendentes: plano + extras (null = ilimitado)
+export const attendantsLimit = (
+  extra: number | null | undefined,
+  plan: Pick<SubscriptionPlan, "max_attendants"> | undefined,
+) => {
+  const max = plan?.max_attendants ?? null;
+  return max === null ? null : max + (extra ?? 0);
+};
 
 // Quanto do limite está em uso: "2/3", "12" (ilimitado)
 export const formatUsage = (used: number, max: number | null) =>

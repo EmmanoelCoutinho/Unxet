@@ -48,6 +48,8 @@ export type ClinicSubscription = {
   whatsapp_numbers_addon: number | null;
   // Adicional "Assistente com IA": respostas da IA por mês, null = desligado
   ai_replies_addon: number | null;
+  // Atendentes extras além do limite do plano: null = nenhum
+  extra_attendants: number | null;
 };
 
 // Recarrega o plano de tempos em tempos: suspensão e pagamento aparecem sem
@@ -172,8 +174,12 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     setClinic((clinicRow as Clinic) ?? null);
 
     // 3) plano: o banco trava o que importa, aqui é só o que aparece na tela
-    const [{ data: subscriptionRow }, { data: planRows }, { data: aiRow }] =
-      await Promise.all([
+    const [
+      { data: subscriptionRow },
+      { data: planRows },
+      { data: aiRow },
+      { data: extraRow },
+    ] = await Promise.all([
         supabase
           .from("clinic_subscriptions")
           .select(
@@ -186,6 +192,12 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
         supabase
           .from("clinic_subscriptions")
           .select("ai_replies_addon")
+          .eq("clinic_id", membershipRow.clinic_id)
+          .maybeSingle(),
+        // Idem para os atendentes extras: sem a coluna, vale o limite do plano
+        supabase
+          .from("clinic_subscriptions")
+          .select("extra_attendants")
           .eq("clinic_id", membershipRow.clinic_id)
           .maybeSingle(),
       ]);
@@ -207,6 +219,9 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
             ai_replies_addon:
               (aiRow as { ai_replies_addon?: number | null } | null)
                 ?.ai_replies_addon ?? null,
+            extra_attendants:
+              (extraRow as { extra_attendants?: number | null } | null)
+                ?.extra_attendants ?? null,
           }
         : null,
     );

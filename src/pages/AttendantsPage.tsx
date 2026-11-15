@@ -348,7 +348,11 @@ export const AttendantsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   // Toda pessoa da empresa (admin ou atendente, convite pendente incluso) ocupa vaga
-  const maxAttendants = subscription?.plan.max_attendants ?? null;
+  // Limite do plano + atendentes extras liberados pela Unxet
+  const planAttendants = subscription?.plan.max_attendants ?? null;
+  const extraAttendants = subscription?.extra_attendants ?? 0;
+  const maxAttendants =
+    planAttendants === null ? null : planAttendants + extraAttendants;
   const atAttendantLimit =
     maxAttendants !== null && clinicUsers.length >= maxAttendants;
   const [error, setError] = useState<string | null>(null);
@@ -949,9 +953,11 @@ export const AttendantsPage: React.FC = () => {
                   >
                     {maxAttendants === null
                       ? `${clinicUsers.length} ${clinicUsers.length === 1 ? "pessoa" : "pessoas"} · plano ${subscription.plan.name} (atendentes ilimitados)`
-                      : `${clinicUsers.length} de ${maxAttendants} atendentes do plano ${subscription.plan.name}`}
+                      : extraAttendants > 0
+                        ? `${clinicUsers.length} de ${maxAttendants} atendentes (plano ${subscription.plan.name} + ${extraAttendants} ${extraAttendants === 1 ? "extra" : "extras"})`
+                        : `${clinicUsers.length} de ${maxAttendants} atendentes do plano ${subscription.plan.name}`}
                     {atAttendantLimit &&
-                      ". Para convidar mais pessoas, fale com a Unxet sobre mudar de plano."}
+                      ". Para convidar mais pessoas, fale com a Unxet."}
                   </p>
                 )}
                 <TutorialButton tutorialId="criar-atendente" className="mt-1" />
