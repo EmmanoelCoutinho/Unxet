@@ -71,22 +71,57 @@ const MENTION_HOLDERS = [
   "pttMessage",
 ];
 
+/** Ids marcados no texto ("@27307469193361"): 8 dígitos ou mais. */
+const MENTION_TOKEN = /@(\d{8,})(?!\d)/g;
+
 /**
- * Pessoas marcadas (@) na mensagem: o texto traz "@<id>" e o contextInfo
- * traz os JIDs (telefone ou LID). Sem repetição.
+ * Pessoas marcadas (@) na mensagem, sem repetição. Recebe o "data" do
+ * webhook: a Evolution v2 manda o contextInfo fora da mensagem
+ * (data.contextInfo); versões antigas, dentro dela. Os JIDs são telefone ou
+ * LID. Se a lista não vier, usa os "@<id>" do texto (LID tem 14+ dígitos).
  */
-export function mentionedJids(message: any): string[] {
+export function mentionedJids(data: any, text = ""): string[] {
   const found = new Set<string>();
+  const message = data?.message ?? {};
   const docWithCaption = message?.documentWithCaptionMessage?.message?.documentMessage;
-  const holders = [...MENTION_HOLDERS.map((k) => message?.[k]), docWithCaption];
-  for (const holder of holders) {
-    const list = holder?.contextInfo?.mentionedJid;
+  const contexts = [
+    data?.contextInfo,
+    message?.messageContextInfo,
+    ...MENTION_HOLDERS.map((k) => message?.[k]?.contextInfo),
+    docWithCaption?.contextInfo,
+  ];
+  for (const ctx of contexts) {
+    const list = ctx?.mentionedJid;
     if (!Array.isArray(list)) continue;
     for (const jid of list) {
       if (typeof jid === "string" && jid.includes("@")) found.add(jid);
     }
   }
+  const knownIds = new Set([...found].map((jid) => jid.split("@")[0]));
+  for (const match of String(text ?? "").matchAll(MENTION_TOKEN)) {
+    const id = match[1];
+    if (knownIds.has(id)) continue;
+    knownIds.add(id);
+    found.add(id.length >= 14 ? `${id}@lid` : `${id}@s.whatsapp.net`);
+  }
   return [...found];
+}
+
+/**
+ * Participantes do /group/participants (v2.3+): LID -> telefone. Cada item
+ * traz "id" (LID ou telefone) e, quando o WhatsApp informa, "phoneNumber".
+ */
+export function participantPhones(raw: any): Map<string, string> {
+  const list = Array.isArray(raw) ? raw : Array.isArray(raw?.participants) ? raw.participants : [];
+  const map = new Map<string, string>();
+  for (const p of list) {
+    const id = typeof p?.id === "string" ? p.id : null;
+    if (!id) continue;
+    const phone = phoneFromJid(p?.phoneNumber) ?? phoneFromJid(p?.jid) ?? phoneFromJid(id);
+    if (phone) map.set(id, phone);
+    if (typeof p?.lid === "string" && phone) map.set(p.lid, phone);
+  }
+  return map;
 }
 
 /** "@27307469193361" no texto vira "@Nome" para cada JID com nome conhecido. */

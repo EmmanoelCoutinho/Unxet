@@ -21,7 +21,7 @@ import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { redactWebhookSecrets, stripWebhookEventSuffix } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 import { isNonChatJid } from "../_shared/evolutionSettings.ts";
-import { ensureWhatsappGroup, groupSender, isGroupJid, mentionedJids, replaceMentions } from "../_shared/whatsappGroups.ts";
+import { ensureWhatsappGroup, groupSender, isGroupJid, mentionedJids, participantPhones, replaceMentions } from "../_shared/whatsappGroups.ts";
 import { findContactByPhone } from "../_shared/startConversation.ts";
 import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 import { createCheckThrottle, imageHash, isCurrentProfilePic, profilePicFolder, profilePicPath } from "../_shared/profilePicture.ts";
@@ -758,7 +758,9 @@ serve(async (req)=>{
           connection,
           instanceName,
           groupId: group.id,
-          jids: mentionedJids(msgData)
+          groupJid,
+          // A v2 manda o contextInfo em data.contextInfo; o texto é o reserva
+          jids: mentionedJids(body?.data, text)
         });
         text = replaceMentions(text, names);
       } catch (err) {
@@ -951,14 +953,17 @@ const onlyDigits = (value)=>String(value ?? "").split("@")[0].split(":")[0].repl
  * o contato da carteira, o nome com que ela já escreveu no grupo e, por fim,
  * o contato guardado na Evolution. Quem não tiver nome fica como veio.
  */ async function resolveMentionNames(params) {
-  const { supabase, connection, instanceName, groupId, jids } = params;
+  const { supabase, connection, instanceName, groupId, groupJid, jids } = params;
   const names = new Map();
   if (!jids?.length) return names;
   const apiUrl = String(connection.evolution_api_url ?? "").replace(/\/$/, "");
   const apiKey = connection.evolution_api_key;
   const ownPhone = onlyDigits(connection.connected_phone);
+  // LID -> telefone pela lista de participantes do grupo (inclui o próprio
+  // número da empresa, que o /chat/whatsappNumbers não resolve)
+  const lidPhones = jids.some((jid)=>jid.endsWith("@lid")) && apiUrl && apiKey ? await fetchParticipantPhones(apiUrl, apiKey, instanceName, groupJid) : new Map();
   for (const jid of jids.slice(0, 10)){
-    let phone = jid.endsWith("@lid") ? "" : onlyDigits(jid);
+    let phone = jid.endsWith("@lid") ? lidPhones.get(jid) ?? "" : onlyDigits(jid);
     if (!/^\d{10,13}$/.test(phone)) phone = "";
     if (!phone && jid.endsWith("@lid") && apiUrl && apiKey) {
       phone = await resolveWaId({
@@ -1025,10 +1030,32 @@ const onlyDigits = (value)=>String(value ?? "").split("@")[0].split(":")[0].repl
     }
   }
   console.log("[GROUP_MENTIONS]", JSON.stringify({
-    total: jids.length,
-    named: names.size
+    jids,
+    participantsMapped: lidPhones.size,
+    named: [
+      ...names.keys()
+    ]
   }));
   return names;
+}
+async function fetchParticipantPhones(apiUrl, apiKey, instanceName, groupJid) {
+  try {
+    const resp = await fetch(`${apiUrl}/group/participants/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`, {
+      method: "GET",
+      headers: {
+        apikey: apiKey
+      },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!resp.ok) {
+      console.warn("[GROUP_PARTICIPANTS_FAILED]", resp.status, await resp.text().catch(()=>""));
+      return new Map();
+    }
+    return participantPhones(await resp.json());
+  } catch (err) {
+    console.warn("[GROUP_PARTICIPANTS_ERROR]", err instanceof Error ? err.message : String(err));
+    return new Map();
+  }
 }
 // ---------------------------------------------------------------------------
 // Profile pic: busca na Evolution API e faz upsert no bucket + contacts
