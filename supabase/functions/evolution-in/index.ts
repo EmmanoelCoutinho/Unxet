@@ -21,7 +21,7 @@ import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { redactWebhookSecrets, stripWebhookEventSuffix } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 import { isNonChatJid } from "../_shared/evolutionSettings.ts";
-import { ensureWhatsappGroup, groupSender, isGroupJid } from "../_shared/whatsappGroups.ts";
+import { ensureWhatsappGroup, groupSender, isGroupJid, mentionedJids, replaceMentions } from "../_shared/whatsappGroups.ts";
 import { findContactByPhone } from "../_shared/startConversation.ts";
 import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 import { createCheckThrottle, imageHash, isCurrentProfilePic, profilePicFolder, profilePicPath } from "../_shared/profilePicture.ts";
@@ -375,7 +375,7 @@ serve(async (req)=>{
         status: 400
       });
     }
-    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key, groups_enabled").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
+    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key, groups_enabled, connected_phone, connected_name").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
     // Erro do banco é temporário: 503 faz a fila de entrada tentar de novo.
     // Conexão inexistente (ex.: instância do outro ambiente) é 404 e é descartada.
     if (connectionError) {
@@ -750,6 +750,22 @@ serve(async (req)=>{
     } else if (needsMediaFetch && (!connection.evolution_api_url || !connection.evolution_api_key)) {
       console.warn("Mensagem de mídia recebida mas evolution_api_url/key não configurados na connection:", connection.id);
     }
+    // ── Menções (@) no grupo: "@27307469193361" vira "@Nome" ──────────────
+    if (group && text) {
+      try {
+        const names = await resolveMentionNames({
+          supabase,
+          connection,
+          instanceName,
+          groupId: group.id,
+          jids: mentionedJids(msgData)
+        });
+        text = replaceMentions(text, names);
+      } catch (err) {
+        // Sem nome a mensagem entra como veio
+        console.warn("[GROUP_MENTIONS_ERROR]", err);
+      }
+    }
     // ── Monta payload normalizado para o shared-in-config ─────────────────
     const sharedPayload = {
       provider: "evolution",
@@ -920,6 +936,99 @@ async function endBotSessionIfSentOutsideUnxet(params) {
       updated_at: now
     }).eq("id", session.conversation_id).eq("in_bot_flow", true);
   }
+}
+// ---------------------------------------------------------------------------
+// Menções (@) em grupos
+// ---------------------------------------------------------------------------
+const onlyDigits = (value)=>String(value ?? "").split("@")[0].split(":")[0].replace(/\D/g, "");
+/** Mesmo número, com ou sem o 9 (55 + DDD iguais e últimos 8 dígitos iguais). */ function samePhone(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return a.length >= 12 && b.length >= 12 && a.slice(0, 4) === b.slice(0, 4) && a.slice(-8) === b.slice(-8);
+}
+/**
+ * Nome de cada pessoa marcada no grupo. Ordem: o próprio número da empresa,
+ * o contato da carteira, o nome com que ela já escreveu no grupo e, por fim,
+ * o contato guardado na Evolution. Quem não tiver nome fica como veio.
+ */ async function resolveMentionNames(params) {
+  const { supabase, connection, instanceName, groupId, jids } = params;
+  const names = new Map();
+  if (!jids?.length) return names;
+  const apiUrl = String(connection.evolution_api_url ?? "").replace(/\/$/, "");
+  const apiKey = connection.evolution_api_key;
+  const ownPhone = onlyDigits(connection.connected_phone);
+  for (const jid of jids.slice(0, 10)){
+    let phone = jid.endsWith("@lid") ? "" : onlyDigits(jid);
+    if (!/^\d{10,13}$/.test(phone)) phone = "";
+    if (!phone && jid.endsWith("@lid") && apiUrl && apiKey) {
+      phone = await resolveWaId({
+        evolutionApiUrl: apiUrl,
+        evolutionApiKey: apiKey,
+        instanceName,
+        remoteJidRaw: jid,
+        remoteJidAlt: "",
+        currentWaId: ""
+      });
+    }
+    // 1. O próprio número da empresa
+    if (phone && samePhone(phone, ownPhone) && connection.connected_name) {
+      names.set(jid, connection.connected_name);
+      continue;
+    }
+    // 2. Contato da carteira
+    if (phone) {
+      const { contact } = await findContactByPhone(supabase, connection.clinic_id, phone, "id, name");
+      if (contact?.name) {
+        names.set(jid, contact.name);
+        continue;
+      }
+    }
+    // 3. Nome com que a pessoa já escreveu neste grupo
+    const senders = [
+      jid,
+      phone
+    ].filter(Boolean);
+    const { data: seen } = await supabase.from("messages").select("sender_name, conversations!inner(group_id)").eq("conversations.group_id", groupId).in("sender", senders).not("sender_name", "is", null).order("created_at", {
+      ascending: false
+    }).limit(1);
+    if (seen?.[0]?.sender_name) {
+      names.set(jid, seen[0].sender_name);
+      continue;
+    }
+    // 4. Contato guardado na Evolution (pushName)
+    if (apiUrl && apiKey) {
+      try {
+        const resp = await fetch(`${apiUrl}/chat/findContacts/${instanceName}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: apiKey
+          },
+          body: JSON.stringify({
+            where: {
+              remoteJid: jid
+            }
+          }),
+          signal: AbortSignal.timeout(5000)
+        });
+        if (resp.ok) {
+          const list = await resp.json();
+          const found = (Array.isArray(list) ? list : []).find((c)=>c?.remoteJid === jid || c?.id === jid);
+          const pushName = String(found?.pushName ?? "").trim();
+          if (pushName) names.set(jid, pushName);
+        } else {
+          await resp.body?.cancel?.();
+        }
+      } catch (err) {
+        console.warn("[MENTION_FIND_CONTACT_FAILED]", jid, err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+  console.log("[GROUP_MENTIONS]", JSON.stringify({
+    total: jids.length,
+    named: names.size
+  }));
+  return names;
 }
 // ---------------------------------------------------------------------------
 // Profile pic: busca na Evolution API e faz upsert no bucket + contacts

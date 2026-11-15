@@ -6,6 +6,8 @@ import {
   groupPicKey,
   groupSender,
   isGroupJid,
+  mentionedJids,
+  replaceMentions,
   parseGroupInfo,
 } from "./whatsappGroups";
 
@@ -94,6 +96,51 @@ describe("parseGroupInfo", () => {
     });
     expect(parseGroupInfo([{ subject: "Suporte" }])).toEqual({ name: "Suporte", pictureUrl: null });
     expect(parseGroupInfo(null)).toEqual({ name: null, pictureUrl: null });
+  });
+});
+
+describe("mentionedJids", () => {
+  it("lê as pessoas marcadas no texto e na legenda, sem repetir", () => {
+    expect(
+      mentionedJids({
+        extendedTextMessage: {
+          text: "@27307469193361 é legal",
+          contextInfo: { mentionedJid: ["27307469193361@lid", "27307469193361@lid"] },
+        },
+      }),
+    ).toEqual(["27307469193361@lid"]);
+    expect(
+      mentionedJids({
+        imageMessage: { contextInfo: { mentionedJid: ["5511999998888@s.whatsapp.net", 42] } },
+        documentWithCaptionMessage: {
+          message: { documentMessage: { contextInfo: { mentionedJid: ["1@lid"] } } },
+        },
+      }),
+    ).toEqual(["5511999998888@s.whatsapp.net", "1@lid"]);
+  });
+
+  it("sem menção devolve lista vazia", () => {
+    expect(mentionedJids({ conversation: "oi" })).toEqual([]);
+    expect(mentionedJids(undefined)).toEqual([]);
+  });
+});
+
+describe("replaceMentions", () => {
+  it("troca o id pelo nome", () => {
+    const names = new Map([["27307469193361@lid", "Emmanoel Coutinho"]]);
+    expect(replaceMentions("@27307469193361 é legal", names)).toBe("@Emmanoel Coutinho é legal");
+  });
+
+  it("troca todas as ocorrências e mantém quem não tem nome", () => {
+    const names = new Map([["5511999998888@s.whatsapp.net", "Ana"]]);
+    expect(replaceMentions("@5511999998888 e @123456 viram @5511999998888?", names)).toBe(
+      "@Ana e @123456 viram @Ana?",
+    );
+  });
+
+  it("não troca dentro de um número maior", () => {
+    const names = new Map([["123@lid", "Ana"]]);
+    expect(replaceMentions("@1234 e @123", names)).toBe("@1234 e @Ana");
   });
 });
 
