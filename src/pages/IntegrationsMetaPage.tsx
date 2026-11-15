@@ -21,6 +21,7 @@ import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import {
   EvolutionConnectionsPanel,
   EvolutionGroupsToggle,
+  EvolutionPhoneMessagesToggle,
   type DepartmentOption,
 } from "../components/settings/EvolutionConnectionsPanel";
 import { formatConnectionPhone } from "../lib/whatsappConnections";
@@ -58,6 +59,7 @@ type Connection = {
   display_name?: string | null;
   default_department_id?: string | null;
   groups_enabled?: boolean | null;
+  phone_messages_enabled?: boolean | null;
   archived_at?: string | null;
   // Por que o servidor desconectou o QR Code escaneado: 'plan_limit' (limite
   // de números da empresa) ou 'duplicate_number' (celular já conectado)
@@ -75,7 +77,7 @@ type Connection = {
 };
 
 const CONNECTION_COLUMNS =
-  "id,provider,channel,meta_waba_id,meta_phone_number_id,meta_page_id,meta_ig_user_id,qr_code,connected_phone,connected_name,session_name,display_name,default_department_id,groups_enabled,archived_at,disconnect_reason,last_connection_at,last_disconnection_at,status,created_at,updated_at";
+  "id,provider,channel,meta_waba_id,meta_phone_number_id,meta_page_id,meta_ig_user_id,qr_code,connected_phone,connected_name,session_name,display_name,default_department_id,groups_enabled,phone_messages_enabled,archived_at,disconnect_reason,last_connection_at,last_disconnection_at,status,created_at,updated_at";
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return null;
@@ -850,12 +852,20 @@ export const MetaIntegrationsPage: React.FC = () => {
                           ) : null}
                         </div>
                         {whatsappEvolution ? (
-                          <EvolutionGroupsToggle
-                            connection={whatsappEvolution}
-                            onChanged={fetchConnections}
-                            onError={setErrorMsg}
-                            disabled={disconnectLoading}
-                          />
+                          <>
+                            <EvolutionGroupsToggle
+                              connection={whatsappEvolution}
+                              onChanged={fetchConnections}
+                              onError={setErrorMsg}
+                              disabled={disconnectLoading}
+                            />
+                            <EvolutionPhoneMessagesToggle
+                              connection={whatsappEvolution}
+                              onChanged={fetchConnections}
+                              onError={setErrorMsg}
+                              disabled={disconnectLoading}
+                            />
+                          </>
                         ) : null}
                       </div>
                     ) : blockEvolutionByMeta ? (

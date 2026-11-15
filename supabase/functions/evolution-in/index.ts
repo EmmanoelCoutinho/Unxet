@@ -12,6 +12,8 @@
  *  7. Resolver LID para número real via Evolution API
  *  8. Gravar entrega/leitura das mensagens enviadas ("messages.update")
  *  9. Tirar o bot da conversa quando a equipe responde pelo celular (fromMe)
+ * 10. Gravar na conversa as mensagens enviadas pelo celular, quando o número
+ *     tem channel_connections.phone_messages_enabled
  *
  * Nenhuma lógica de negócio vive aqui.
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -26,6 +28,8 @@ import { findContactByPhone } from "../_shared/startConversation.ts";
 import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 import { createCheckThrottle, imageHash, isCurrentProfilePic, profilePicFolder, profilePicPath } from "../_shared/profilePicture.ts";
 import { applyReaction, evolutionQuotedId, evolutionReaction } from "../_shared/messageReply.ts";
+import { savePhoneSentMessage, waitForKnownMessage } from "../_shared/phoneSentMessages.ts";
+import { queueTranscription } from "../_shared/transcription.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -265,8 +269,9 @@ serve(async (req)=>{
       });
     }
     // ── Mensagem enviada pelo próprio número (fromMe) ─────────────────────
-    // Não entra como mensagem do cliente. Mais abaixo só serve para tirar o
-    // bot da conversa quando a equipe responde pelo celular.
+    // Não entra como mensagem do cliente. Mais abaixo tira o bot da conversa
+    // quando a equipe responde pelo celular e, com a opção do número, grava a
+    // mensagem na conversa como enviada (handleOwnMessage).
     const isFromMe = body?.data?.key?.fromMe === true;
     // ── Resolve origem da conversa ────────────────────────────────────────
     const remoteJidRaw = body?.data?.key?.remoteJid ?? "";
@@ -349,7 +354,7 @@ serve(async (req)=>{
       if (edit.originalId && edit.text) {
         const { error: editError } = await supabase.from("messages").update({
           text: edit.text
-        }).eq("meta_message_id", edit.originalId).eq("direction", "inbound");
+        }).eq("meta_message_id", edit.originalId).eq("direction", isFromMe ? "outbound" : "inbound");
         if (editError) console.error("[MESSAGE_EDIT_ERROR]", editError);
       }
       return new Response(JSON.stringify({
@@ -375,7 +380,7 @@ serve(async (req)=>{
         status: 400
       });
     }
-    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key, groups_enabled, connected_phone, connected_name").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
+    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key, groups_enabled, phone_messages_enabled, connected_phone, connected_name").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
     // Erro do banco é temporário: 503 faz a fila de entrada tentar de novo.
     // Conexão inexistente (ex.: instância do outro ambiente) é 404 e é descartada.
     if (connectionError) {
@@ -584,10 +589,11 @@ serve(async (req)=>{
       });
     }
     if (isFromMe) {
-      const ownMessageTask = endBotSessionIfSentOutsideUnxet({
+      const ownMessageTask = handleOwnMessage({
         supabase,
-        clinicId: connection.clinic_id,
-        channelConnectionId: connection.id,
+        connection,
+        instanceName,
+        body,
         waId,
         providerMessageId
       }).catch((err)=>{
@@ -624,132 +630,17 @@ serve(async (req)=>{
     const profileName = body?.data?.pushName ?? (group ? null : "Cliente");
     const timestampRaw = body?.data?.messageTimestamp;
     const timestamp = timestampRaw ? new Date(Number(timestampRaw) * 1000).toISOString() : new Date().toISOString();
-    // ── Detecta tipo de mensagem ──────────────────────────────────────────
-    const msgData = body?.data?.message ?? {};
-    let messageType = "text";
-    let text = "";
-    let media;
-    let interactive;
-    let needsMediaFetch = false;
-    let fallbackFilename;
-    let fallbackMimeType;
-    if (msgData.conversation || msgData.extendedTextMessage) {
-      messageType = "text";
-      text = msgData.conversation ?? msgData.extendedTextMessage?.text ?? "";
-    } else if (msgData.imageMessage) {
-      messageType = "image";
-      text = msgData.imageMessage.caption ?? "";
-      needsMediaFetch = true;
-    } else if (msgData.audioMessage || msgData.pttMessage) {
-      messageType = "audio";
-      needsMediaFetch = true;
-    } else if (msgData.documentMessage || msgData.documentWithCaptionMessage) {
-      messageType = "document";
-      const docMsg = msgData.documentMessage ?? msgData.documentWithCaptionMessage?.message?.documentMessage;
-      text = docMsg?.caption ?? "";
-      needsMediaFetch = true;
-    } else if (msgData.buttonsResponseMessage) {
-      messageType = "interactive";
-      interactive = {
-        kind: "button_reply",
-        selectedId: msgData.buttonsResponseMessage.selectedButtonId ?? null,
-        selectedTitle: msgData.buttonsResponseMessage.selectedDisplayText ?? null
-      };
-      text = interactive.selectedTitle ?? interactive.selectedId ?? "";
-    } else if (msgData.listResponseMessage) {
-      messageType = "interactive";
-      interactive = {
-        kind: "list_reply",
-        selectedId: msgData.listResponseMessage.singleSelectReply?.selectedRowId ?? null,
-        selectedTitle: msgData.listResponseMessage.title ?? null
-      };
-      text = interactive.selectedTitle ?? interactive.selectedId ?? "";
-    } else if (msgData.templateButtonReplyMessage) {
-      messageType = "interactive";
-      interactive = {
-        kind: "button_reply",
-        selectedId: String(msgData.templateButtonReplyMessage.selectedIndex ?? ""),
-        selectedTitle: msgData.templateButtonReplyMessage.selectedDisplayText ?? null
-      };
-      text = interactive.selectedTitle ?? interactive.selectedId ?? "";
-    } else if (msgData.videoMessage) {
-      // Vídeo chega como anexo (o chat exibe/baixa pelo tipo do arquivo)
-      messageType = "document";
-      text = msgData.videoMessage.caption ?? "";
-      needsMediaFetch = true;
-      fallbackFilename = `video-${providerMessageId}.mp4`;
-      fallbackMimeType = msgData.videoMessage.mimetype ?? "video/mp4";
-    } else if (msgData.locationMessage || msgData.liveLocationMessage) {
-      const loc = msgData.locationMessage ?? msgData.liveLocationMessage;
-      const place = [
-        loc.name,
-        loc.address
-      ].filter(Boolean).join(" - ");
-      const hasCoords = Number.isFinite(Number(loc.degreesLatitude)) && Number.isFinite(Number(loc.degreesLongitude));
-      text = [
-        "📍 Localização" + (place ? `: ${place}` : ""),
-        hasCoords ? `https://maps.google.com/?q=${loc.degreesLatitude},${loc.degreesLongitude}` : ""
-      ].filter(Boolean).join("\n");
-    } else if (msgData.contactMessage || msgData.contactsArrayMessage) {
-      const contacts = msgData.contactMessage ? [
-        msgData.contactMessage
-      ] : msgData.contactsArrayMessage?.contacts ?? [];
-      text = contacts.map((c)=>{
-        const phone = String(c?.vcard ?? "").match(/TEL[^:]*:([+\d\s().-]+)/i)?.[1]?.trim();
-        return `👤 Contato: ${c?.displayName ?? "sem nome"}` + (phone ? ` - ${phone}` : "");
-      }).join("\n") || "👤 Contato compartilhado";
-    } else if (msgData.pollCreationMessage || msgData.pollCreationMessageV2 || msgData.pollCreationMessageV3) {
-      const poll = msgData.pollCreationMessage ?? msgData.pollCreationMessageV2 ?? msgData.pollCreationMessageV3;
-      text = `📊 Enquete: ${poll?.name ?? ""}`.trim();
-    } else {
-      // Tipo que ainda não tratamos: o atendente precisa saber que chegou algo
-      console.warn("[UNSUPPORTED_MESSAGE_TYPE]", Object.keys(msgData));
-      text = "[Mensagem em um formato que o Unxet ainda não exibe. Peça ao cliente para reenviar como texto, foto ou documento.]";
-    }
-    // ── Busca mídia via Evolution API (base64) ────────────────────────────
-    if (needsMediaFetch && connection.evolution_api_url && connection.evolution_api_key) {
-      try {
-        const base64Resp = await fetch(`${connection.evolution_api_url.replace(/\/$/, "")}/chat/getBase64FromMediaMessage/${instanceName}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: connection.evolution_api_key
-          },
-          body: JSON.stringify({
-            message: {
-              key: body.data.key,
-              message: body.data.message
-            },
-            convertToMp4: false
-          })
-        });
-        if (base64Resp.ok) {
-          const base64Json = await base64Resp.json();
-          const base64Data = base64Json?.base64 ?? null;
-          const mimeType = base64Json?.mimeType ?? base64Json?.mimetype ?? msgData.imageMessage?.mimetype ?? msgData.audioMessage?.mimetype ?? msgData.pttMessage?.mimetype ?? msgData.documentMessage?.mimetype ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.mimetype ?? fallbackMimeType ?? "application/octet-stream";
-          console.log("[MEDIA_MIME_RESOLVED]", {
-            mimeType,
-            providerMessageId
-          });
-          if (base64Data) {
-            const filename = msgData.documentMessage?.fileName ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.fileName ?? fallbackFilename ?? undefined;
-            media = {
-              base64: base64Data,
-              mimeType,
-              filename
-            };
-          } else {
-            console.warn("getBase64FromMediaMessage retornou sem base64 para:", providerMessageId);
-          }
-        } else {
-          console.error("getBase64FromMediaMessage retornou erro:", base64Resp.status, await base64Resp.text());
-        }
-      } catch (err) {
-        console.error("Erro ao buscar mídia da Evolution:", err);
-      }
-    } else if (needsMediaFetch && (!connection.evolution_api_url || !connection.evolution_api_key)) {
-      console.warn("Mensagem de mídia recebida mas evolution_api_url/key não configurados na connection:", connection.id);
-    }
+    // ── Conteúdo (tipo, texto, mídia) ─────────────────────────────────────
+    const content = parseEvolutionContent(body?.data?.message ?? {}, providerMessageId);
+    const { messageType, interactive } = content;
+    let text = content.text;
+    const media = content.needsMediaFetch ? await fetchEvolutionMedia({
+      connection,
+      instanceName,
+      data: body.data,
+      fallbackFilename: content.fallbackFilename,
+      fallbackMimeType: content.fallbackMimeType
+    }) : undefined;
     // ── Menções (@) no grupo: "@27307469193361" vira "@Nome" ──────────────
     if (group && text) {
       try {
@@ -855,38 +746,66 @@ serve(async (req)=>{
   }
 });
 // ---------------------------------------------------------------------------
-// Equipe respondendo pelo celular
+// Mensagem enviada pelo próprio número (celular ou WhatsApp Web da empresa)
 // ---------------------------------------------------------------------------
 // Quem envia pelo Unxet (bot, atendente, agendamento) grava a mensagem com o
 // ID do WhatsApp logo depois de a Evolution confirmar o envio. Se depois de
-// alguns segundos esse ID não existe em messages, a mensagem saiu do celular
-// (ou do WhatsApp Web) da empresa: uma pessoa assumiu a conversa e o bot sai.
-const OWN_MESSAGE_CHECK_DELAYS_MS = [
-  0,
-  3000,
-  4000,
-  8000
-];
-function sleep(ms) {
-  return new Promise((resolve)=>setTimeout(resolve, ms));
-}
-async function endBotSessionIfSentOutsideUnxet(params) {
-  const { supabase, clinicId, channelConnectionId, waId, providerMessageId } = params;
-  const { contact, error: contactErr } = await findContactByPhone(supabase, clinicId, waId, "id, phone");
-  if (contactErr || !contact) return;
-  const { data: conversations, error: convErr } = await supabase.from("conversations").select("id").eq("clinic_id", clinicId).eq("contact_id", contact.id).eq("channel_connection_id", channelConnectionId);
-  if (convErr || !conversations?.length) return;
-  const { data: sessions, error: sessionsErr } = await supabase.from("conversation_bot_sessions").select("id, clinic_id, conversation_id, bot_id, current_node_id").in("conversation_id", conversations.map((c)=>c.id)).eq("channel_connection_id", channelConnectionId).eq("status", "active");
-  if (sessionsErr || !sessions?.length) return;
-  for (const delay of OWN_MESSAGE_CHECK_DELAYS_MS){
-    if (delay) await sleep(delay);
-    const { data: known, error: knownErr } = await supabase.from("messages").select("id").eq("meta_message_id", providerMessageId).limit(1).maybeSingle();
-    if (knownErr) {
-      console.error("[OWN_MESSAGE_LOOKUP_ERROR]", knownErr);
-      return;
-    }
-    if (known) return; // enviada pelo Unxet
+// alguns segundos esse ID não existe em messages, a mensagem saiu do celular:
+// uma pessoa assumiu a conversa e o bot sai. Com a opção do número
+// (phone_messages_enabled), a mensagem também é gravada na conversa.
+async function handleOwnMessage(params) {
+  const { supabase, connection, instanceName, body, waId, providerMessageId } = params;
+  const saveEnabled = connection.phone_messages_enabled === true;
+  const sessions = await findActiveBotSessions(supabase, connection.clinic_id, connection.id, waId);
+  // Nada a fazer: não precisa esperar
+  if (!sessions.length && !saveEnabled) return;
+  const known = await waitForKnownMessage(supabase, providerMessageId);
+  if (known !== false) return; // enviada pelo Unxet (ou banco fora: na dúvida, nada muda)
+  if (sessions.length) await endBotSessions(supabase, sessions, providerMessageId);
+  if (!saveEnabled) return;
+  const content = parseEvolutionContent(body?.data?.message ?? {}, providerMessageId, {
+    fromMe: true
+  });
+  const media = content.needsMediaFetch ? await fetchEvolutionMedia({
+    connection,
+    instanceName,
+    data: body.data,
+    fallbackFilename: content.fallbackFilename,
+    fallbackMimeType: content.fallbackMimeType
+  }) : undefined;
+  const timestampRaw = body?.data?.messageTimestamp;
+  const saved = await savePhoneSentMessage(supabase, {
+    clinicId: connection.clinic_id,
+    channelConnectionId: connection.id,
+    instanceName,
+    waId,
+    providerMessageId,
+    timestampIso: timestampRaw ? new Date(Number(timestampRaw) * 1000).toISOString() : new Date().toISOString(),
+    messageType: content.messageType,
+    text: content.text,
+    media: media ?? null,
+    replyToProviderId: evolutionQuotedId(body?.data),
+    rawPayload: body
+  });
+  // Áudio enviado pelo celular também ganha transcrição
+  if (saved.saved && content.messageType === "audio") {
+    const queued = await queueTranscription(supabase, {
+      messageId: saved.messageId,
+      storagePath: saved.storagePath
+    });
+    await queued?.done;
   }
+}
+async function findActiveBotSessions(supabase, clinicId, channelConnectionId, waId) {
+  const { contact, error: contactErr } = await findContactByPhone(supabase, clinicId, waId, "id, phone");
+  if (contactErr || !contact) return [];
+  const { data: conversations, error: convErr } = await supabase.from("conversations").select("id").eq("clinic_id", clinicId).eq("contact_id", contact.id).eq("channel_connection_id", channelConnectionId);
+  if (convErr || !conversations?.length) return [];
+  const { data: sessions, error: sessionsErr } = await supabase.from("conversation_bot_sessions").select("id, clinic_id, conversation_id, bot_id, current_node_id").in("conversation_id", conversations.map((c)=>c.id)).eq("channel_connection_id", channelConnectionId).eq("status", "active");
+  if (sessionsErr) return [];
+  return sessions ?? [];
+}
+async function endBotSessions(supabase, sessions, providerMessageId) {
   const now = new Date().toISOString();
   for (const session of sessions){
     const { data: ended, error: endErr } = await supabase.from("conversation_bot_sessions").update({
@@ -937,6 +856,150 @@ async function endBotSessionIfSentOutsideUnxet(params) {
       in_bot_flow: false,
       updated_at: now
     }).eq("id", session.conversation_id).eq("in_bot_flow", true);
+  }
+}
+// ---------------------------------------------------------------------------
+// Conteúdo da mensagem
+// ---------------------------------------------------------------------------
+/**
+ * Tipo, texto e se precisa baixar mídia. fromMe: mensagem enviada pelo
+ * celular da empresa (o aviso de formato não pede para o cliente reenviar).
+ */ function parseEvolutionContent(msgData, providerMessageId, { fromMe = false } = {}) {
+  let messageType = "text";
+  let text = "";
+  let interactive;
+  let needsMediaFetch = false;
+  let fallbackFilename;
+  let fallbackMimeType;
+  if (msgData.conversation || msgData.extendedTextMessage) {
+    messageType = "text";
+    text = msgData.conversation ?? msgData.extendedTextMessage?.text ?? "";
+  } else if (msgData.imageMessage) {
+    messageType = "image";
+    text = msgData.imageMessage.caption ?? "";
+    needsMediaFetch = true;
+  } else if (msgData.audioMessage || msgData.pttMessage) {
+    messageType = "audio";
+    needsMediaFetch = true;
+  } else if (msgData.documentMessage || msgData.documentWithCaptionMessage) {
+    messageType = "document";
+    const docMsg = msgData.documentMessage ?? msgData.documentWithCaptionMessage?.message?.documentMessage;
+    text = docMsg?.caption ?? "";
+    needsMediaFetch = true;
+  } else if (msgData.buttonsResponseMessage) {
+    messageType = "interactive";
+    interactive = {
+      kind: "button_reply",
+      selectedId: msgData.buttonsResponseMessage.selectedButtonId ?? null,
+      selectedTitle: msgData.buttonsResponseMessage.selectedDisplayText ?? null
+    };
+    text = interactive.selectedTitle ?? interactive.selectedId ?? "";
+  } else if (msgData.listResponseMessage) {
+    messageType = "interactive";
+    interactive = {
+      kind: "list_reply",
+      selectedId: msgData.listResponseMessage.singleSelectReply?.selectedRowId ?? null,
+      selectedTitle: msgData.listResponseMessage.title ?? null
+    };
+    text = interactive.selectedTitle ?? interactive.selectedId ?? "";
+  } else if (msgData.templateButtonReplyMessage) {
+    messageType = "interactive";
+    interactive = {
+      kind: "button_reply",
+      selectedId: String(msgData.templateButtonReplyMessage.selectedIndex ?? ""),
+      selectedTitle: msgData.templateButtonReplyMessage.selectedDisplayText ?? null
+    };
+    text = interactive.selectedTitle ?? interactive.selectedId ?? "";
+  } else if (msgData.videoMessage) {
+    // Vídeo chega como anexo (o chat exibe/baixa pelo tipo do arquivo)
+    messageType = "document";
+    text = msgData.videoMessage.caption ?? "";
+    needsMediaFetch = true;
+    fallbackFilename = `video-${providerMessageId}.mp4`;
+    fallbackMimeType = msgData.videoMessage.mimetype ?? "video/mp4";
+  } else if (msgData.locationMessage || msgData.liveLocationMessage) {
+    const loc = msgData.locationMessage ?? msgData.liveLocationMessage;
+    const place = [
+      loc.name,
+      loc.address
+    ].filter(Boolean).join(" - ");
+    const hasCoords = Number.isFinite(Number(loc.degreesLatitude)) && Number.isFinite(Number(loc.degreesLongitude));
+    text = [
+      "📍 Localização" + (place ? `: ${place}` : ""),
+      hasCoords ? `https://maps.google.com/?q=${loc.degreesLatitude},${loc.degreesLongitude}` : ""
+    ].filter(Boolean).join("\n");
+  } else if (msgData.contactMessage || msgData.contactsArrayMessage) {
+    const contacts = msgData.contactMessage ? [
+      msgData.contactMessage
+    ] : msgData.contactsArrayMessage?.contacts ?? [];
+    text = contacts.map((c)=>{
+      const phone = String(c?.vcard ?? "").match(/TEL[^:]*:([+\d\s().-]+)/i)?.[1]?.trim();
+      return `👤 Contato: ${c?.displayName ?? "sem nome"}` + (phone ? ` - ${phone}` : "");
+    }).join("\n") || "👤 Contato compartilhado";
+  } else if (msgData.pollCreationMessage || msgData.pollCreationMessageV2 || msgData.pollCreationMessageV3) {
+    const poll = msgData.pollCreationMessage ?? msgData.pollCreationMessageV2 ?? msgData.pollCreationMessageV3;
+    text = `📊 Enquete: ${poll?.name ?? ""}`.trim();
+  } else {
+    // Tipo que ainda não tratamos: o atendente precisa saber que chegou algo
+    console.warn("[UNSUPPORTED_MESSAGE_TYPE]", Object.keys(msgData));
+    text = fromMe ? "[Mensagem enviada pelo celular em um formato que o Unxet ainda não exibe. Veja no WhatsApp do celular.]" : "[Mensagem em um formato que o Unxet ainda não exibe. Peça ao cliente para reenviar como texto, foto ou documento.]";
+  }
+  return {
+    messageType,
+    text,
+    interactive,
+    needsMediaFetch,
+    fallbackFilename,
+    fallbackMimeType
+  };
+}
+/** Baixa a mídia da mensagem pela Evolution (base64). Sem credenciais ou com erro: undefined. */ async function fetchEvolutionMedia(params) {
+  const { connection, instanceName, data, fallbackFilename, fallbackMimeType } = params;
+  const msgData = data?.message ?? {};
+  const providerMessageId = data?.key?.id;
+  if (!connection.evolution_api_url || !connection.evolution_api_key) {
+    console.warn("Mensagem de mídia recebida mas evolution_api_url/key não configurados na connection:", connection.id);
+    return undefined;
+  }
+  try {
+    const base64Resp = await fetch(`${connection.evolution_api_url.replace(/\/$/, "")}/chat/getBase64FromMediaMessage/${instanceName}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: connection.evolution_api_key
+      },
+      body: JSON.stringify({
+        message: {
+          key: data.key,
+          message: data.message
+        },
+        convertToMp4: false
+      })
+    });
+    if (!base64Resp.ok) {
+      console.error("getBase64FromMediaMessage retornou erro:", base64Resp.status, await base64Resp.text());
+      return undefined;
+    }
+    const base64Json = await base64Resp.json();
+    const base64Data = base64Json?.base64 ?? null;
+    const mimeType = base64Json?.mimeType ?? base64Json?.mimetype ?? msgData.imageMessage?.mimetype ?? msgData.audioMessage?.mimetype ?? msgData.pttMessage?.mimetype ?? msgData.documentMessage?.mimetype ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.mimetype ?? fallbackMimeType ?? "application/octet-stream";
+    console.log("[MEDIA_MIME_RESOLVED]", {
+      mimeType,
+      providerMessageId
+    });
+    if (!base64Data) {
+      console.warn("getBase64FromMediaMessage retornou sem base64 para:", providerMessageId);
+      return undefined;
+    }
+    const filename = msgData.documentMessage?.fileName ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.fileName ?? fallbackFilename ?? undefined;
+    return {
+      base64: base64Data,
+      mimeType,
+      filename
+    };
+  } catch (err) {
+    console.error("Erro ao buscar mídia da Evolution:", err);
+    return undefined;
   }
 }
 // ---------------------------------------------------------------------------

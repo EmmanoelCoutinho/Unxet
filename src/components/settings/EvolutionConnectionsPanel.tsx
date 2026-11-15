@@ -20,6 +20,8 @@ export type EvolutionConnection = {
   default_department_id?: string | null;
   // Recebe as mensagens dos grupos do WhatsApp deste número
   groups_enabled?: boolean | null;
+  // Grava as mensagens enviadas pelo celular (ou WhatsApp Web) da empresa
+  phone_messages_enabled?: boolean | null;
   last_connection_at?: string | null;
   last_disconnection_at?: string | null;
 };
@@ -129,6 +131,52 @@ export const EvolutionGroupsToggle: React.FC<{
         enabled
           ? "Cada grupo vira uma conversa na fila, com o nome de quem escreveu em cada mensagem. Bot, IA e pesquisa de satisfação não atuam em grupos. Pode levar até 5 minutos para começar."
           : "Desligado: mensagens de grupos ficam só no celular."
+      }
+      checked={enabled}
+      onChange={save}
+      disabled={disabled || saving}
+    />
+  );
+};
+
+/**
+ * Chave "Mostrar mensagens enviadas pelo celular" de um número de QR Code.
+ * Usada no painel de vários números e no card do número único.
+ */
+export const EvolutionPhoneMessagesToggle: React.FC<{
+  connection: Pick<EvolutionConnection, "id" | "phone_messages_enabled">;
+  onChanged: () => void | Promise<void>;
+  onError: (message: string | null) => void;
+  disabled?: boolean;
+}> = ({ connection, onChanged, onError, disabled }) => {
+  const [saving, setSaving] = useState(false);
+  const enabled = connection.phone_messages_enabled === true;
+
+  const save = async (next: boolean) => {
+    onError(null);
+    setSaving(true);
+    const { error } = await supabase
+      .from("channel_connections")
+      .update({
+        phone_messages_enabled: next,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", connection.id);
+    setSaving(false);
+    if (error) {
+      onError("Não foi possível salvar a opção de mensagens do celular.");
+      return;
+    }
+    await onChanged();
+  };
+
+  return (
+    <Toggle
+      label="Mostrar mensagens enviadas pelo celular"
+      helper={
+        enabled
+          ? "O que a equipe responder direto no celular ou no WhatsApp Web aparece na conversa, marcado como \"Pelo celular\". Pode levar alguns segundos para aparecer."
+          : "Desligado: mensagens enviadas pelo celular ficam só no WhatsApp."
       }
       checked={enabled}
       onChange={save}
@@ -320,8 +368,14 @@ const EvolutionConnectionItem: React.FC<ItemProps> = ({
         </div>
       ) : null}
 
-      <div className="mt-3">
+      <div className="mt-3 space-y-3">
         <EvolutionGroupsToggle
+          connection={connection}
+          onChanged={onChanged}
+          onError={onError}
+          disabled={busy !== null}
+        />
+        <EvolutionPhoneMessagesToggle
           connection={connection}
           onChanged={onChanged}
           onError={onError}
