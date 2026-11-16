@@ -108,5 +108,7 @@ export const buildCountryPhone = (input: string, iso: string): string | null => 
   const local = onlyDigits(raw).replace(/^0+/, "");
   if (local.length < 4) return null;
   const full = `${findPhoneCountry(iso).dial}${local}`;
-  return full.length >= 8 && full.length <= 15 ? full : null;
+  // Mesmo tamanho que o resto do sistema aceita como telefone (acima disso,
+  // a fila de envio trata como identificador interno do WhatsApp)
+  return full.length >= 10 && full.length <= 13 ? full : null;
 };

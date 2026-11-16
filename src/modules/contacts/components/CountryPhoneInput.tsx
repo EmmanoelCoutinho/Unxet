@@ -16,7 +16,10 @@ export const CountryPhoneInput: React.FC<{
   onCountryChange: (iso: string) => void;
   value: string;
   onChange: (value: string) => void;
-}> = ({ id, country, onCountryChange, value, onChange }) => {
+  /** Classe do campo do número (cada tela tem o seu estilo de campo). */
+  fieldClassName?: string;
+  className?: string;
+}> = ({ id, country, onCountryChange, value, onChange, fieldClassName = FIELD_CLASS, className = "mt-1" }) => {
   const selected = findPhoneCountry(country);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -99,7 +102,7 @@ export const CountryPhoneInput: React.FC<{
   };
 
   return (
-    <div data-phone-field className="mt-1 flex gap-2">
+    <div data-phone-field className={`${className} flex gap-2`}>
       <button
         ref={triggerRef}
         type="button"
@@ -108,7 +111,7 @@ export const CountryPhoneInput: React.FC<{
         aria-expanded={open}
         aria-label={`País: ${selected.name} (+${selected.dial}). Trocar país`}
         title={selected.name}
-        className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition hover:bg-slate-50 focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+        className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition hover:bg-slate-50 focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
       >
         <span className="text-xs font-semibold text-slate-500">{selected.iso}</span>
         <span>+{selected.dial}</span>
@@ -123,7 +126,7 @@ export const CountryPhoneInput: React.FC<{
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={selected.iso === "BR" ? "(11) 98765-4321" : "Número"}
-        className={`${FIELD_CLASS} min-w-0 flex-1`}
+        className={`${fieldClassName} min-w-0 flex-1`}
       />
 
       {open && pos

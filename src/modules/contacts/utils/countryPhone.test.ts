@@ -22,7 +22,7 @@ describe("buildCountryPhone", () => {
 
   it("recusa número curto ou longo demais", () => {
     expect(buildCountryPhone("12", "FR")).toBeNull();
-    expect(buildCountryPhone("1234567890123456", "FR")).toBeNull();
+    expect(buildCountryPhone("12345678901234", "FR")).toBeNull();
   });
 });
 

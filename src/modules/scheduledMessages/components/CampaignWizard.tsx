@@ -51,13 +51,14 @@ import {
   formatDuration,
   formatPhone,
   formatScheduleDateTime,
-  normalizeTypedPhone,
   onlyDigits,
   previewMessageText,
   recipientLabel,
   toDateInputValue,
   toTimeInputValue,
 } from "../utils/schedule";
+import { CountryPhoneInput } from "../../contacts/components/CountryPhoneInput";
+import { buildCountryPhone, DEFAULT_COUNTRY } from "../../contacts/utils/countryPhone";
 import { renderTemplatePreview } from "../utils/templates";
 import { CAMPAIGNS_PATH } from "../paths";
 import { TemplatePicker } from "./TemplatePicker";
@@ -647,6 +648,7 @@ const AudienceStep: React.FC<{
   const [debounced, setDebounced] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualPhone, setManualPhone] = useState("");
+  const [manualCountry, setManualCountry] = useState(DEFAULT_COUNTRY);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const audience = useCampaignAudience();
 
@@ -716,9 +718,13 @@ const AudienceStep: React.FC<{
   };
 
   const addManual = () => {
-    const phone = normalizeTypedPhone(manualPhone);
+    const phone = buildCountryPhone(manualPhone, manualCountry);
     if (!phone) {
-      toast.error("Informe o número com DDD. Ex.: (11) 99999-8888");
+      toast.error(
+        manualCountry === DEFAULT_COUNTRY
+          ? "Informe o número com DDD. Ex.: (11) 99999-8888. Cliente de outro país? Troque o país ao lado do número."
+          : "Número inválido. Confira o número do cliente.",
+      );
       return;
     }
     if (add({ contactId: null, name: manualName.trim() || null, phone })) {
@@ -896,16 +902,16 @@ const AudienceStep: React.FC<{
             >
               <div>
                 <label htmlFor="manual-phone" className={LABEL}>
-                  WhatsApp com DDD
+                  {manualCountry === DEFAULT_COUNTRY ? "WhatsApp com DDD" : "WhatsApp"}
                 </label>
-                <input
+                <CountryPhoneInput
                   id="manual-phone"
-                  type="tel"
-                  inputMode="tel"
+                  country={manualCountry}
+                  onCountryChange={setManualCountry}
                   value={manualPhone}
-                  onChange={(event) => setManualPhone(event.target.value)}
-                  placeholder="(11) 99999-8888"
-                  className={`${FIELD} mt-1.5`}
+                  onChange={setManualPhone}
+                  fieldClassName={FIELD}
+                  className="mt-1.5"
                 />
               </div>
               <div>
