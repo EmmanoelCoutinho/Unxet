@@ -58,7 +58,9 @@ export const StartConversationModal: React.FC<{
         return;
       }
       if (!typedPhone) {
-        toast.error("Número inválido. Use DDD + número, por exemplo (11) 98765-4321.");
+        toast.error(
+          "Número inválido. Use DDD + número, por exemplo (11) 98765-4321. Para outro país, comece com + e o código do país.",
+        );
         return;
       }
     }
@@ -73,7 +75,8 @@ export const StartConversationModal: React.FC<{
         clinicId,
         contactId: contact?.id ?? null,
         name: contact ? null : name.trim(),
-        phone: typedPhone,
+        // Com o +, o servidor não confunde o código do país com DDD
+        phone: typedPhone ? `+${typedPhone}` : null,
         connectionId: start ? connectionId : null,
       },
     });
@@ -149,7 +152,7 @@ export const StartConversationModal: React.FC<{
                 className={`${FIELD_CLASS} mt-1`}
               />
               <p className="mt-1 text-xs text-slate-500">
-                DDD + número. Para outro país, comece com o código do país.
+                DDD + número. Para outro país, comece com + e o código do país (ex.: +33 7 45 51 36 37).
               </p>
             </div>
           </>

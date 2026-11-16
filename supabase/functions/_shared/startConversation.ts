@@ -6,12 +6,18 @@ export const onlyDigits = (value: unknown) => String(value ?? "").replace(/\D/g,
 
 /**
  * Número digitado -> dígitos com DDI, ou null se não parecer um telefone.
- * DDD + número (10 ou 11 dígitos) é tratado como Brasil e recebe o 55.
- * Mesma regra do normalizeTypedPhone da tela de Campanhas.
+ *  - Começou com + : já vem com o código do país (8 a 15 dígitos).
+ *  - DDD + número (10 dígitos, ou 11 com o 9 do celular) é Brasil e recebe o 55.
+ *  - 11 dígitos sem o 9 depois do DDD não é celular brasileiro: é número de
+ *    outro país com o código na frente (ex.: França 33 7 45 51 36 37).
+ *  - 12 ou 13 dígitos: já vem com o código do país.
  */
 export const normalizeTypedPhone = (input: unknown): string | null => {
-  const digits = onlyDigits(input).replace(/^0+/, "");
-  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+  const raw = String(input ?? "").trim();
+  const digits = onlyDigits(raw).replace(/^0+/, "");
+  if (raw.startsWith("+")) return digits.length >= 8 && digits.length <= 15 ? digits : null;
+  if (digits.length === 10) return `55${digits}`;
+  if (digits.length === 11) return digits[2] === "9" ? `55${digits}` : digits;
   if (digits.length === 12 || digits.length === 13) return digits;
   return null;
 };
@@ -70,8 +76,8 @@ export const parseWhatsappNumbersResponse = (json: unknown): string | false | nu
   if (!entry || typeof entry !== "object") return null;
   if (entry.exists === false) return false;
   const fromJid = onlyDigits(String(entry.jid ?? "").split("@")[0]);
-  if (/^\d{10,13}$/.test(fromJid)) return fromJid;
+  if (/^\d{8,15}$/.test(fromJid)) return fromJid;
   const fromNumber = onlyDigits(entry.number);
-  if (/^\d{10,13}$/.test(fromNumber)) return fromNumber;
+  if (/^\d{8,15}$/.test(fromNumber)) return fromNumber;
   return null;
 };
