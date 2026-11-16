@@ -20,7 +20,10 @@ import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 import { queueInboundPush } from "../_shared/push.ts";
 import { timingSafeEqual } from "../_shared/security.ts";
 import { findContactByPhone } from "../_shared/startConversation.ts";
+import { findByProviderId, replyColumns } from "../_shared/messageReply.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
+import { groupPicKey, linkContactToGroup } from "../_shared/whatsappGroups.ts";
+import { safeStorageContentType } from "../_shared/storageContentType.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -67,8 +70,15 @@ serve(async (req)=>{
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const payload = await req.json();
     const { provider, clinicId, channelConnectionId, waId, profileName, providerMessageId, timestamp: timestampIso, messageType, text, media, interactive, mediaFetchToken, rawPayload } = payload;
+    // Mensagem recuperada do histórico da Evolution (chegou enquanto o número
+    // esteve fora): entra com o horário original, sem acionar bot nem IA, e
+    // não pode fazer a conversa "voltar no tempo".
+    const isRecovered = payload.recovered === true;
+    // Mensagem de grupo (Evolution): a conversa é do grupo e waId, quando
+    // existe, é o telefone de quem escreveu. Sem bot, IA nem pesquisa.
+    const group = payload.group?.id ? payload.group : null;
     // ── Validação dos campos obrigatórios ─────────────────────────────────
-    if (!clinicId || !channelConnectionId || !waId || !providerMessageId) {
+    if (!clinicId || !channelConnectionId || !waId && !group || !providerMessageId) {
       console.error("Payload inválido — campos obrigatórios ausentes:", {
         clinicId,
         channelConnectionId,
@@ -119,17 +129,26 @@ serve(async (req)=>{
       });
     }
     // ── 4. findOrCreateContact ────────────────────────────────────────────
-    const contact = await findOrCreateContact({
+    // No grupo: o contato de quem escreveu, só se o número for conhecido
+    const contact = !group || waId ? await findOrCreateContact({
       supabase,
       clinicId,
       waId,
       profileName,
       timestampIso
-    });
+    }) : null;
+    if (group && contact) {
+      await linkContactToGroup(supabase, {
+        clinicId,
+        contactId: contact.id,
+        groupId: group.id,
+        at: timestampIso
+      });
+    }
     // ── 4b. Resposta da pesquisa de satisfação ────────────────────────────
     // Nota de 1 a 5 para uma pesquisa pendente: registra na conversa encerrada,
     // sem reabrir nem acionar o bot.
-    if (isTextMessage) {
+    if (isTextMessage && !group) {
       const surveyAnswer = await matchSurveyAnswer(supabase, {
         clinicId,
         contactId: contact.id,
@@ -181,7 +200,8 @@ serve(async (req)=>{
     const conversation = await findOrCreateConversation({
       supabase,
       clinicId,
-      contactId: contact.id,
+      contactId: group ? null : contact.id,
+      groupId: group?.id ?? null,
       channelConnectionId,
       whatsappNumberId,
       defaultDepartmentId,
@@ -254,9 +274,10 @@ serve(async (req)=>{
           // Uma pasta por mensagem: dois "comprovante.pdf" do mesmo contato
           // não podem cair no mesmo caminho (o upsert trocava o arquivo antigo)
           const messageFolder = String(providerMessageId).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120);
-          const path = `${clinicId}/${waId}/${folder}/${messageFolder}/${fileName}`;
+          const ownerFolder = group ? groupPicKey(group.jid) : waId;
+          const path = `${clinicId}/${ownerFolder}/${folder}/${messageFolder}/${fileName}`;
           const { error: uploadError } = await supabase.storage.from(WHATSAPP_MEDIA_BUCKET).upload(path, fileBytes, {
-            contentType: resolvedContentType,
+            contentType: safeStorageContentType(resolvedContentType),
             upsert: true
           });
           if (!uploadError) {
@@ -284,11 +305,18 @@ serve(async (req)=>{
       meta_message_id: providerMessageId,
       direction: DIRECTION_INBOUND,
       type: messageType,
-      sender: waId,
+      sender: waId || group?.participantJid || null,
       text,
       payload: rawPayload,
       sent_at: timestampIso,
-      is_automated: false
+      is_automated: false,
+      // Grupo: quem escreveu (nome do WhatsApp e, se conhecido, o contato)
+      ...group ? {
+        sender_name: profileName || contact?.name || null,
+        sender_contact_id: contact?.id ?? null
+      } : {},
+      // Cliente respondeu citando uma mensagem desta conversa
+      ...replyColumns(await findByProviderId(supabase, conversation.id, payload.replyToProviderId))
     };
     if (imageUrl) {
       messageInsert.image_url = imageUrl;
@@ -316,9 +344,11 @@ serve(async (req)=>{
     }
     // ── 9. Atualização da conversa ────────────────────────────────────────
     const shouldReopen = conversation.status === STATUS_CLOSED && automationSettings.reopen_on_inbound_enabled === true;
+    // Recuperada: pode ser mais antiga que a última mensagem da conversa
+    const latest = (current)=>isRecovered && current && new Date(current) > new Date(timestampIso) ? current : timestampIso;
     const conversationUpdates = {
-      last_message_at: timestampIso,
-      last_inbound_at: timestampIso,
+      last_message_at: latest(conversation.last_message_at),
+      last_inbound_at: latest(conversation.last_inbound_at),
       updated_at: new Date().toISOString()
     };
     if (!conversation.first_inbound_at) {
@@ -353,7 +383,8 @@ serve(async (req)=>{
     // isso faria o engine cancelar a sessão em curso e reiniciar o fluxo,
     // ignorando a opção selecionada pelo usuário.
     let botFailed = false;
-    try {
+    // Grupo não passa pelo bot nem pela IA (responderiam para todo mundo)
+    if (!isRecovered && !group) try {
       const reopenedFromClosed = wasClosed && !isInteractiveMessage;
       const botResp = await fetch(`${SUPABASE_URL}/functions/v1/bot-engine`, {
         method: "POST",
@@ -527,11 +558,13 @@ async function findOrCreateContact(params) {
   return contact;
 }
 async function findOrCreateConversation(params) {
-  const { supabase, clinicId, contactId, channelConnectionId, whatsappNumberId, defaultDepartmentId, timestampIso, reopenOnInbound } = params;
+  const { supabase, clinicId, contactId, groupId, channelConnectionId, whatsappNumberId, defaultDepartmentId, timestampIso, reopenOnInbound } = params;
+  // Conversa de grupo é achada pelo grupo; a de cliente, pelo contato
+  const owner = groupId ? ["group_id", groupId] : ["contact_id", contactId];
   // Busca conversa existente filtrando por channel_connection_id —
   // isso garante isolamento correto entre Meta e Evolution mesmo que
   // o mesmo número de telefone exista em ambos os providers.
-  const baseQuery = supabase.from("conversations").select("*").eq("clinic_id", clinicId).eq("contact_id", contactId).eq("channel", CHANNEL_WHATSAPP).eq("channel_connection_id", channelConnectionId).in("status", [
+  const baseQuery = supabase.from("conversations").select("*").eq("clinic_id", clinicId).eq(owner[0], owner[1]).eq("channel", CHANNEL_WHATSAPP).eq("channel_connection_id", channelConnectionId).in("status", [
     STATUS_OPEN,
     STATUS_PENDING,
     STATUS_CLOSED
@@ -556,6 +589,7 @@ async function findOrCreateConversation(params) {
   if (!conversation) {
     const newConvPayload = {
       contact_id: contactId,
+      group_id: groupId ?? null,
       clinic_id: clinicId,
       channel: CHANNEL_WHATSAPP,
       channel_connection_id: channelConnectionId,
@@ -581,12 +615,11 @@ async function findOrCreateConversation(params) {
         whatsappNumberId,
         channelConnectionId
       });
-      // Outro processo criou primeiro.
-      // Rebusca e reutiliza.
-      const refetchBaseQuery = supabase.from("conversations").select("*").eq("clinic_id", clinicId).eq("contact_id", contactId).eq("channel", CHANNEL_WHATSAPP).eq("channel_connection_id", channelConnectionId).in("status", [
+      // Outro processo criou primeiro (mensagens do mesmo cliente chegando juntas).
+      // Rebusca a conversa ativa que ele criou e reutiliza — nunca uma encerrada.
+      const refetchBaseQuery = supabase.from("conversations").select("*").eq("clinic_id", clinicId).eq(owner[0], owner[1]).eq("channel", CHANNEL_WHATSAPP).eq("channel_connection_id", channelConnectionId).in("status", [
         STATUS_OPEN,
-        STATUS_PENDING,
-        STATUS_CLOSED
+        STATUS_PENDING
       ]).order("last_message_at", {
         ascending: false
       }).limit(1);

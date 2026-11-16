@@ -2,7 +2,8 @@
  * evolution-in — Gateway da Evolution API (WhatsApp via QR Code)
  *
  * Responsabilidades:
- *  1. Filtrar apenas eventos "messages.upsert" do tipo inbound (não grupos, não reações)
+ *  1. Filtrar apenas eventos "messages.upsert" do tipo inbound (grupos só com
+ *     channel_connections.groups_enabled; reações gravam o emoji)
  *  2. Resolver clinicId + channelConnectionId via session_name
  *  3. Normalizar todos os tipos de mensagem (text, image, audio, document, interactive)
  *  4. Buscar mídia via Evolution API (base64) e repassar para o shared
@@ -11,6 +12,8 @@
  *  7. Resolver LID para número real via Evolution API
  *  8. Gravar entrega/leitura das mensagens enviadas ("messages.update")
  *  9. Tirar o bot da conversa quando a equipe responde pelo celular (fromMe)
+ * 10. Gravar na conversa as mensagens enviadas pelo celular, quando o número
+ *     tem channel_connections.phone_messages_enabled
  *
  * Nenhuma lógica de negócio vive aqui.
  */ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -20,9 +23,14 @@ import { applyMessageStatus } from "../_shared/messageStatus.ts";
 import { redactWebhookSecrets, stripWebhookEventSuffix } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 import { isNonChatJid } from "../_shared/evolutionSettings.ts";
+import { ensureWhatsappGroup, groupSender, isGroupJid, mentionedJids, participantPhones, replaceMentions } from "../_shared/whatsappGroups.ts";
 import { findContactByPhone } from "../_shared/startConversation.ts";
 import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
 import { createCheckThrottle, imageHash, isCurrentProfilePic, profilePicFolder, profilePicPath } from "../_shared/profilePicture.ts";
+import { safeStorageContentType } from "../_shared/storageContentType.ts";
+import { applyReaction, evolutionQuotedId, evolutionReaction } from "../_shared/messageReply.ts";
+import { savePhoneSentMessage, waitForKnownMessage } from "../_shared/phoneSentMessages.ts";
+import { queueTranscription } from "../_shared/transcription.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -236,6 +244,10 @@ serve(async (req)=>{
       console.warn("[SECURITY] evolution-in: EVOLUTION_WEBHOOK_SECRET não configurado — webhook aceita qualquer origem");
     }
     const body = await req.json();
+    // Mensagem recuperada do histórico da Evolution pelo evolution-connection-sync
+    // (_shared/inboundRecovery.ts). Só vale com o segredo interno: entra com o
+    // horário original e sem acionar bot nem respostas automáticas.
+    const isRecovered = req.headers.get("x-unxet-recovered") === "1" && !!INTERNAL_BOT_SECRET && timingSafeEqual(req.headers.get("x-internal-secret") ?? "", INTERNAL_BOT_SECRET);
     console.log("[EVOLUTION_WEBHOOK_FULL]", JSON.stringify(redactWebhookSecrets(body), null, 2));
     // ── Status de entrega/leitura das mensagens enviadas (ticks) ──────────
     if (body?.event === "messages.update" || body?.event === "MESSAGES_UPDATE") {
@@ -258,8 +270,9 @@ serve(async (req)=>{
       });
     }
     // ── Mensagem enviada pelo próprio número (fromMe) ─────────────────────
-    // Não entra como mensagem do cliente. Mais abaixo só serve para tirar o
-    // bot da conversa quando a equipe responde pelo celular.
+    // Não entra como mensagem do cliente. Mais abaixo tira o bot da conversa
+    // quando a equipe responde pelo celular e, com a opção do número, grava a
+    // mensagem na conversa como enviada (handleOwnMessage).
     const isFromMe = body?.data?.key?.fromMe === true;
     // ── Resolve origem da conversa ────────────────────────────────────────
     const remoteJidRaw = body?.data?.key?.remoteJid ?? "";
@@ -268,16 +281,9 @@ serve(async (req)=>{
     const remoteJidAlt = body?.data?.key?.remoteJidAlt ?? "";
     const participantPn = body?.data?.key?.participantPn ?? "";
     const participant = body?.data?.key?.participant ?? "";
-    // ── Ignora grupos ─────────────────────────────────────────────────────
-    if (remoteJidRaw.endsWith("@g.us")) {
-      console.log("Mensagem de grupo ignorada:", remoteJidRaw);
-      return new Response(JSON.stringify({
-        ignored: true,
-        reason: "group_message"
-      }), {
-        status: 200
-      });
-    }
+    // ── Grupo: só entra se o número tiver grupos ligados (conferido abaixo,
+    // depois de achar a conexão). O autor vem em key.participant. ─────────
+    const groupJid = isGroupJid(remoteJidRaw) ? remoteJidRaw : null;
     // ── Ignora Status do WhatsApp, canais e listas de transmissão ─────────
     if (isNonChatJid(remoteJidRaw)) {
       return new Response(JSON.stringify({
@@ -306,8 +312,22 @@ serve(async (req)=>{
       participant,
       rawWaId: waId
     });
-    // ── Ignora reações ────────────────────────────────────────────────────
-    if (body?.data?.message?.reactionMessage) {
+    // ── Reações: gravam o emoji na mensagem reagida ───────────────────────
+    // (fromMe: reação da empresa, feita pelo celular ou eco da enviada pelo Unxet)
+    const reaction = evolutionReaction(body?.data);
+    if (reaction || body?.data?.message?.reactionMessage) {
+      if (reaction && !isRecovered) {
+        const applied = await applyReaction(createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY), {
+          targetProviderId: reaction.targetId,
+          emoji: reaction.emoji,
+          side: isFromMe ? "agent" : "client"
+        });
+        console.log("[REACTION]", JSON.stringify({
+          targetId: reaction.targetId,
+          fromMe: isFromMe,
+          applied
+        }));
+      }
       return new Response(JSON.stringify({
         ignored: true,
         reason: "reaction"
@@ -335,7 +355,7 @@ serve(async (req)=>{
       if (edit.originalId && edit.text) {
         const { error: editError } = await supabase.from("messages").update({
           text: edit.text
-        }).eq("meta_message_id", edit.originalId).eq("direction", "inbound");
+        }).eq("meta_message_id", edit.originalId).eq("direction", isFromMe ? "outbound" : "inbound");
         if (editError) console.error("[MESSAGE_EDIT_ERROR]", editError);
       }
       return new Response(JSON.stringify({
@@ -361,7 +381,7 @@ serve(async (req)=>{
         status: 400
       });
     }
-    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
+    const { data: connection, error: connectionError } = await supabase.from("channel_connections").select("id, clinic_id, evolution_api_url, evolution_api_key, groups_enabled, phone_messages_enabled, connected_phone, connected_name").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
     // Erro do banco é temporário: 503 faz a fila de entrada tentar de novo.
     // Conexão inexistente (ex.: instância do outro ambiente) é 404 e é descartada.
     if (connectionError) {
@@ -473,9 +493,68 @@ serve(async (req)=>{
         status: 200
       });
     }
-    // ── Resolve LID → número real (se necessário) ─────────────────────────
-    // Feito APÓS buscar a connection pois precisamos das credenciais da Evolution
-    if (connection.evolution_api_url && connection.evolution_api_key) {
+    // ── Grupo ─────────────────────────────────────────────────────────────
+    let group = null;
+    if (groupJid) {
+      // Número sem grupos ligados (a Evolution já devia ter barrado)
+      if (connection.groups_enabled !== true) {
+        return new Response(JSON.stringify({
+          ignored: true,
+          reason: "group_message"
+        }), {
+          status: 200
+        });
+      }
+      // Enviada pelo celular da empresa no grupo: fica só no WhatsApp (v1)
+      if (isFromMe) {
+        return new Response(JSON.stringify({
+          ignored: true,
+          reason: "group_from_me"
+        }), {
+          status: 200
+        });
+      }
+      // Autor: telefone quando o WhatsApp informa; LID tenta resolver; sem
+      // número a mensagem entra assim mesmo, só com o nome de quem mandou.
+      const sender = groupSender(body?.data?.key);
+      let memberPhone = sender.phone;
+      if (!memberPhone && sender.lid && connection.evolution_api_url && connection.evolution_api_key) {
+        memberPhone = await resolveWaId({
+          evolutionApiUrl: connection.evolution_api_url,
+          evolutionApiKey: connection.evolution_api_key,
+          instanceName,
+          remoteJidRaw: sender.lid,
+          remoteJidAlt: "",
+          currentWaId: ""
+        }) || null;
+      }
+      waId = memberPhone ?? "";
+      try {
+        group = await ensureWhatsappGroup(supabase, {
+          clinicId: connection.clinic_id,
+          channelConnectionId: connection.id,
+          jid: groupJid,
+          evolution: connection.evolution_api_url && connection.evolution_api_key ? {
+            apiUrl: connection.evolution_api_url,
+            apiKey: connection.evolution_api_key,
+            instanceName
+          } : null
+        });
+      } catch (err) {
+        // Banco fora: 503 faz a fila de entrada tentar de novo
+        console.error("[GROUP_ENSURE_ERROR]", err);
+        return new Response("Database unavailable", {
+          status: 503
+        });
+      }
+      console.log("[GROUP_MESSAGE]", JSON.stringify({
+        groupId: group.id,
+        hasPhone: !!memberPhone,
+        hasLid: !!sender.lid
+      }));
+    } else if (connection.evolution_api_url && connection.evolution_api_key) {
+      // ── Resolve LID → número real (se necessário) ───────────────────────
+      // Feito APÓS buscar a connection pois precisamos das credenciais da Evolution
       waId = await resolveWaId({
         evolutionApiUrl: connection.evolution_api_url,
         evolutionApiKey: connection.evolution_api_key,
@@ -492,7 +571,7 @@ serve(async (req)=>{
     });
     // ── Descarta mensagem se o waId não pôde ser resolvido para telefone real
     // Isso evita salvar LIDs numéricos (ex: 123304753004612) como telefone
-    if (!waId || !/^\d{10,13}$/.test(waId)) {
+    if (!group && (!waId || !/^\d{10,13}$/.test(waId))) {
       console.warn("[DROPPED] waId não resolvido ou parece LID numérico, descartando mensagem:", {
         remoteJidRaw,
         waId
@@ -511,10 +590,11 @@ serve(async (req)=>{
       });
     }
     if (isFromMe) {
-      const ownMessageTask = endBotSessionIfSentOutsideUnxet({
+      const ownMessageTask = handleOwnMessage({
         supabase,
-        clinicId: connection.clinic_id,
-        channelConnectionId: connection.id,
+        connection,
+        instanceName,
+        body,
         waId,
         providerMessageId
       }).catch((err)=>{
@@ -535,7 +615,8 @@ serve(async (req)=>{
     }
     // ── Contato bloqueado: descarta antes de baixar mídia, criar conversa,
     // acionar bot ou IA (só conta a mensagem barrada) ──────────────────────
-    if (await registerBlockedInbound(supabase, connection.clinic_id, blockIdentifiers(waId))) {
+    // (no grupo o bloqueio não vale: ele é para a conversa particular)
+    if (!group && await registerBlockedInbound(supabase, connection.clinic_id, blockIdentifiers(waId))) {
       console.log("[BLOCKED_CONTACT] mensagem descartada:", {
         clinicId: connection.clinic_id,
         providerMessageId
@@ -547,134 +628,37 @@ serve(async (req)=>{
         status: 200
       });
     }
-    const profileName = body?.data?.pushName ?? "Cliente";
+    const profileName = body?.data?.pushName ?? (group ? null : "Cliente");
     const timestampRaw = body?.data?.messageTimestamp;
     const timestamp = timestampRaw ? new Date(Number(timestampRaw) * 1000).toISOString() : new Date().toISOString();
-    // ── Detecta tipo de mensagem ──────────────────────────────────────────
-    const msgData = body?.data?.message ?? {};
-    let messageType = "text";
-    let text = "";
-    let media;
-    let interactive;
-    let needsMediaFetch = false;
-    let fallbackFilename;
-    let fallbackMimeType;
-    if (msgData.conversation || msgData.extendedTextMessage) {
-      messageType = "text";
-      text = msgData.conversation ?? msgData.extendedTextMessage?.text ?? "";
-    } else if (msgData.imageMessage) {
-      messageType = "image";
-      text = msgData.imageMessage.caption ?? "";
-      needsMediaFetch = true;
-    } else if (msgData.audioMessage || msgData.pttMessage) {
-      messageType = "audio";
-      needsMediaFetch = true;
-    } else if (msgData.documentMessage || msgData.documentWithCaptionMessage) {
-      messageType = "document";
-      const docMsg = msgData.documentMessage ?? msgData.documentWithCaptionMessage?.message?.documentMessage;
-      text = docMsg?.caption ?? "";
-      needsMediaFetch = true;
-    } else if (msgData.buttonsResponseMessage) {
-      messageType = "interactive";
-      interactive = {
-        kind: "button_reply",
-        selectedId: msgData.buttonsResponseMessage.selectedButtonId ?? null,
-        selectedTitle: msgData.buttonsResponseMessage.selectedDisplayText ?? null
-      };
-      text = interactive.selectedTitle ?? interactive.selectedId ?? "";
-    } else if (msgData.listResponseMessage) {
-      messageType = "interactive";
-      interactive = {
-        kind: "list_reply",
-        selectedId: msgData.listResponseMessage.singleSelectReply?.selectedRowId ?? null,
-        selectedTitle: msgData.listResponseMessage.title ?? null
-      };
-      text = interactive.selectedTitle ?? interactive.selectedId ?? "";
-    } else if (msgData.templateButtonReplyMessage) {
-      messageType = "interactive";
-      interactive = {
-        kind: "button_reply",
-        selectedId: String(msgData.templateButtonReplyMessage.selectedIndex ?? ""),
-        selectedTitle: msgData.templateButtonReplyMessage.selectedDisplayText ?? null
-      };
-      text = interactive.selectedTitle ?? interactive.selectedId ?? "";
-    } else if (msgData.videoMessage) {
-      // Vídeo chega como anexo (o chat exibe/baixa pelo tipo do arquivo)
-      messageType = "document";
-      text = msgData.videoMessage.caption ?? "";
-      needsMediaFetch = true;
-      fallbackFilename = `video-${providerMessageId}.mp4`;
-      fallbackMimeType = msgData.videoMessage.mimetype ?? "video/mp4";
-    } else if (msgData.locationMessage || msgData.liveLocationMessage) {
-      const loc = msgData.locationMessage ?? msgData.liveLocationMessage;
-      const place = [
-        loc.name,
-        loc.address
-      ].filter(Boolean).join(" - ");
-      const hasCoords = Number.isFinite(Number(loc.degreesLatitude)) && Number.isFinite(Number(loc.degreesLongitude));
-      text = [
-        "📍 Localização" + (place ? `: ${place}` : ""),
-        hasCoords ? `https://maps.google.com/?q=${loc.degreesLatitude},${loc.degreesLongitude}` : ""
-      ].filter(Boolean).join("\n");
-    } else if (msgData.contactMessage || msgData.contactsArrayMessage) {
-      const contacts = msgData.contactMessage ? [
-        msgData.contactMessage
-      ] : msgData.contactsArrayMessage?.contacts ?? [];
-      text = contacts.map((c)=>{
-        const phone = String(c?.vcard ?? "").match(/TEL[^:]*:([+\d\s().-]+)/i)?.[1]?.trim();
-        return `👤 Contato: ${c?.displayName ?? "sem nome"}` + (phone ? ` - ${phone}` : "");
-      }).join("\n") || "👤 Contato compartilhado";
-    } else if (msgData.pollCreationMessage || msgData.pollCreationMessageV2 || msgData.pollCreationMessageV3) {
-      const poll = msgData.pollCreationMessage ?? msgData.pollCreationMessageV2 ?? msgData.pollCreationMessageV3;
-      text = `📊 Enquete: ${poll?.name ?? ""}`.trim();
-    } else {
-      // Tipo que ainda não tratamos: o atendente precisa saber que chegou algo
-      console.warn("[UNSUPPORTED_MESSAGE_TYPE]", Object.keys(msgData));
-      text = "[Mensagem em um formato que o Unxet ainda não exibe. Peça ao cliente para reenviar como texto, foto ou documento.]";
-    }
-    // ── Busca mídia via Evolution API (base64) ────────────────────────────
-    if (needsMediaFetch && connection.evolution_api_url && connection.evolution_api_key) {
+    // ── Conteúdo (tipo, texto, mídia) ─────────────────────────────────────
+    const content = parseEvolutionContent(body?.data?.message ?? {}, providerMessageId);
+    const { messageType, interactive } = content;
+    let text = content.text;
+    const media = content.needsMediaFetch ? await fetchEvolutionMedia({
+      connection,
+      instanceName,
+      data: body.data,
+      fallbackFilename: content.fallbackFilename,
+      fallbackMimeType: content.fallbackMimeType
+    }) : undefined;
+    // ── Menções (@) no grupo: "@27307469193361" vira "@Nome" ──────────────
+    if (group && text) {
       try {
-        const base64Resp = await fetch(`${connection.evolution_api_url.replace(/\/$/, "")}/chat/getBase64FromMediaMessage/${instanceName}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: connection.evolution_api_key
-          },
-          body: JSON.stringify({
-            message: {
-              key: body.data.key,
-              message: body.data.message
-            },
-            convertToMp4: false
-          })
+        const names = await resolveMentionNames({
+          supabase,
+          connection,
+          instanceName,
+          groupId: group.id,
+          groupJid,
+          // A v2 manda o contextInfo em data.contextInfo; o texto é o reserva
+          jids: mentionedJids(body?.data, text)
         });
-        if (base64Resp.ok) {
-          const base64Json = await base64Resp.json();
-          const base64Data = base64Json?.base64 ?? null;
-          const mimeType = base64Json?.mimeType ?? base64Json?.mimetype ?? msgData.imageMessage?.mimetype ?? msgData.audioMessage?.mimetype ?? msgData.pttMessage?.mimetype ?? msgData.documentMessage?.mimetype ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.mimetype ?? fallbackMimeType ?? "application/octet-stream";
-          console.log("[MEDIA_MIME_RESOLVED]", {
-            mimeType,
-            providerMessageId
-          });
-          if (base64Data) {
-            const filename = msgData.documentMessage?.fileName ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.fileName ?? fallbackFilename ?? undefined;
-            media = {
-              base64: base64Data,
-              mimeType,
-              filename
-            };
-          } else {
-            console.warn("getBase64FromMediaMessage retornou sem base64 para:", providerMessageId);
-          }
-        } else {
-          console.error("getBase64FromMediaMessage retornou erro:", base64Resp.status, await base64Resp.text());
-        }
+        text = replaceMentions(text, names);
       } catch (err) {
-        console.error("Erro ao buscar mídia da Evolution:", err);
+        // Sem nome a mensagem entra como veio
+        console.warn("[GROUP_MENTIONS_ERROR]", err);
       }
-    } else if (needsMediaFetch && (!connection.evolution_api_url || !connection.evolution_api_key)) {
-      console.warn("Mensagem de mídia recebida mas evolution_api_url/key não configurados na connection:", connection.id);
     }
     // ── Monta payload normalizado para o shared-in-config ─────────────────
     const sharedPayload = {
@@ -687,11 +671,24 @@ serve(async (req)=>{
       timestamp,
       messageType,
       text,
+      // Cliente respondeu citando uma mensagem
+      replyToProviderId: evolutionQuotedId(body?.data),
       ...media ? {
         media
       } : {},
       ...interactive ? {
         interactive
+      } : {},
+      ...isRecovered ? {
+        recovered: true
+      } : {},
+      // Grupo: a conversa é do grupo; waId (se houver) é de quem escreveu
+      ...group ? {
+        group: {
+          id: group.id,
+          jid: groupJid,
+          participantJid: body?.data?.key?.participant ?? null
+        }
       } : {},
       rawPayload: body
     };
@@ -718,7 +715,8 @@ serve(async (req)=>{
       });
     }
     // ── Foto de perfil (fire-and-forget assíncrono) ───────────────────────
-    if (connection.evolution_api_url && connection.evolution_api_key) {
+    // (no grupo, a de quem escreveu, se o número for conhecido)
+    if (waId && connection.evolution_api_url && connection.evolution_api_key) {
       const profilePicTask = fetchAndStoreProfilePic({
         supabase,
         evolutionApiUrl: connection.evolution_api_url,
@@ -749,38 +747,66 @@ serve(async (req)=>{
   }
 });
 // ---------------------------------------------------------------------------
-// Equipe respondendo pelo celular
+// Mensagem enviada pelo próprio número (celular ou WhatsApp Web da empresa)
 // ---------------------------------------------------------------------------
 // Quem envia pelo Unxet (bot, atendente, agendamento) grava a mensagem com o
 // ID do WhatsApp logo depois de a Evolution confirmar o envio. Se depois de
-// alguns segundos esse ID não existe em messages, a mensagem saiu do celular
-// (ou do WhatsApp Web) da empresa: uma pessoa assumiu a conversa e o bot sai.
-const OWN_MESSAGE_CHECK_DELAYS_MS = [
-  0,
-  3000,
-  4000,
-  8000
-];
-function sleep(ms) {
-  return new Promise((resolve)=>setTimeout(resolve, ms));
-}
-async function endBotSessionIfSentOutsideUnxet(params) {
-  const { supabase, clinicId, channelConnectionId, waId, providerMessageId } = params;
-  const { contact, error: contactErr } = await findContactByPhone(supabase, clinicId, waId, "id, phone");
-  if (contactErr || !contact) return;
-  const { data: conversations, error: convErr } = await supabase.from("conversations").select("id").eq("clinic_id", clinicId).eq("contact_id", contact.id).eq("channel_connection_id", channelConnectionId);
-  if (convErr || !conversations?.length) return;
-  const { data: sessions, error: sessionsErr } = await supabase.from("conversation_bot_sessions").select("id, clinic_id, conversation_id, bot_id, current_node_id").in("conversation_id", conversations.map((c)=>c.id)).eq("channel_connection_id", channelConnectionId).eq("status", "active");
-  if (sessionsErr || !sessions?.length) return;
-  for (const delay of OWN_MESSAGE_CHECK_DELAYS_MS){
-    if (delay) await sleep(delay);
-    const { data: known, error: knownErr } = await supabase.from("messages").select("id").eq("meta_message_id", providerMessageId).limit(1).maybeSingle();
-    if (knownErr) {
-      console.error("[OWN_MESSAGE_LOOKUP_ERROR]", knownErr);
-      return;
-    }
-    if (known) return; // enviada pelo Unxet
+// alguns segundos esse ID não existe em messages, a mensagem saiu do celular:
+// uma pessoa assumiu a conversa e o bot sai. Com a opção do número
+// (phone_messages_enabled), a mensagem também é gravada na conversa.
+async function handleOwnMessage(params) {
+  const { supabase, connection, instanceName, body, waId, providerMessageId } = params;
+  const saveEnabled = connection.phone_messages_enabled === true;
+  const sessions = await findActiveBotSessions(supabase, connection.clinic_id, connection.id, waId);
+  // Nada a fazer: não precisa esperar
+  if (!sessions.length && !saveEnabled) return;
+  const known = await waitForKnownMessage(supabase, providerMessageId);
+  if (known !== false) return; // enviada pelo Unxet (ou banco fora: na dúvida, nada muda)
+  if (sessions.length) await endBotSessions(supabase, sessions, providerMessageId);
+  if (!saveEnabled) return;
+  const content = parseEvolutionContent(body?.data?.message ?? {}, providerMessageId, {
+    fromMe: true
+  });
+  const media = content.needsMediaFetch ? await fetchEvolutionMedia({
+    connection,
+    instanceName,
+    data: body.data,
+    fallbackFilename: content.fallbackFilename,
+    fallbackMimeType: content.fallbackMimeType
+  }) : undefined;
+  const timestampRaw = body?.data?.messageTimestamp;
+  const saved = await savePhoneSentMessage(supabase, {
+    clinicId: connection.clinic_id,
+    channelConnectionId: connection.id,
+    instanceName,
+    waId,
+    providerMessageId,
+    timestampIso: timestampRaw ? new Date(Number(timestampRaw) * 1000).toISOString() : new Date().toISOString(),
+    messageType: content.messageType,
+    text: content.text,
+    media: media ?? null,
+    replyToProviderId: evolutionQuotedId(body?.data),
+    rawPayload: body
+  });
+  // Áudio enviado pelo celular também ganha transcrição
+  if (saved.saved && content.messageType === "audio") {
+    const queued = await queueTranscription(supabase, {
+      messageId: saved.messageId,
+      storagePath: saved.storagePath
+    });
+    await queued?.done;
   }
+}
+async function findActiveBotSessions(supabase, clinicId, channelConnectionId, waId) {
+  const { contact, error: contactErr } = await findContactByPhone(supabase, clinicId, waId, "id, phone");
+  if (contactErr || !contact) return [];
+  const { data: conversations, error: convErr } = await supabase.from("conversations").select("id").eq("clinic_id", clinicId).eq("contact_id", contact.id).eq("channel_connection_id", channelConnectionId);
+  if (convErr || !conversations?.length) return [];
+  const { data: sessions, error: sessionsErr } = await supabase.from("conversation_bot_sessions").select("id, clinic_id, conversation_id, bot_id, current_node_id").in("conversation_id", conversations.map((c)=>c.id)).eq("channel_connection_id", channelConnectionId).eq("status", "active");
+  if (sessionsErr) return [];
+  return sessions ?? [];
+}
+async function endBotSessions(supabase, sessions, providerMessageId) {
   const now = new Date().toISOString();
   for (const session of sessions){
     const { data: ended, error: endErr } = await supabase.from("conversation_bot_sessions").update({
@@ -831,6 +857,268 @@ async function endBotSessionIfSentOutsideUnxet(params) {
       in_bot_flow: false,
       updated_at: now
     }).eq("id", session.conversation_id).eq("in_bot_flow", true);
+  }
+}
+// ---------------------------------------------------------------------------
+// Conteúdo da mensagem
+// ---------------------------------------------------------------------------
+/**
+ * Tipo, texto e se precisa baixar mídia. fromMe: mensagem enviada pelo
+ * celular da empresa (o aviso de formato não pede para o cliente reenviar).
+ */ function parseEvolutionContent(msgData, providerMessageId, { fromMe = false } = {}) {
+  let messageType = "text";
+  let text = "";
+  let interactive;
+  let needsMediaFetch = false;
+  let fallbackFilename;
+  let fallbackMimeType;
+  if (msgData.conversation || msgData.extendedTextMessage) {
+    messageType = "text";
+    text = msgData.conversation ?? msgData.extendedTextMessage?.text ?? "";
+  } else if (msgData.imageMessage) {
+    messageType = "image";
+    text = msgData.imageMessage.caption ?? "";
+    needsMediaFetch = true;
+  } else if (msgData.audioMessage || msgData.pttMessage) {
+    messageType = "audio";
+    needsMediaFetch = true;
+  } else if (msgData.documentMessage || msgData.documentWithCaptionMessage) {
+    messageType = "document";
+    const docMsg = msgData.documentMessage ?? msgData.documentWithCaptionMessage?.message?.documentMessage;
+    text = docMsg?.caption ?? "";
+    needsMediaFetch = true;
+  } else if (msgData.buttonsResponseMessage) {
+    messageType = "interactive";
+    interactive = {
+      kind: "button_reply",
+      selectedId: msgData.buttonsResponseMessage.selectedButtonId ?? null,
+      selectedTitle: msgData.buttonsResponseMessage.selectedDisplayText ?? null
+    };
+    text = interactive.selectedTitle ?? interactive.selectedId ?? "";
+  } else if (msgData.listResponseMessage) {
+    messageType = "interactive";
+    interactive = {
+      kind: "list_reply",
+      selectedId: msgData.listResponseMessage.singleSelectReply?.selectedRowId ?? null,
+      selectedTitle: msgData.listResponseMessage.title ?? null
+    };
+    text = interactive.selectedTitle ?? interactive.selectedId ?? "";
+  } else if (msgData.templateButtonReplyMessage) {
+    messageType = "interactive";
+    interactive = {
+      kind: "button_reply",
+      selectedId: String(msgData.templateButtonReplyMessage.selectedIndex ?? ""),
+      selectedTitle: msgData.templateButtonReplyMessage.selectedDisplayText ?? null
+    };
+    text = interactive.selectedTitle ?? interactive.selectedId ?? "";
+  } else if (msgData.videoMessage) {
+    // Vídeo chega como anexo (o chat exibe/baixa pelo tipo do arquivo)
+    messageType = "document";
+    text = msgData.videoMessage.caption ?? "";
+    needsMediaFetch = true;
+    fallbackFilename = `video-${providerMessageId}.mp4`;
+    fallbackMimeType = msgData.videoMessage.mimetype ?? "video/mp4";
+  } else if (msgData.locationMessage || msgData.liveLocationMessage) {
+    const loc = msgData.locationMessage ?? msgData.liveLocationMessage;
+    const place = [
+      loc.name,
+      loc.address
+    ].filter(Boolean).join(" - ");
+    const hasCoords = Number.isFinite(Number(loc.degreesLatitude)) && Number.isFinite(Number(loc.degreesLongitude));
+    text = [
+      "📍 Localização" + (place ? `: ${place}` : ""),
+      hasCoords ? `https://maps.google.com/?q=${loc.degreesLatitude},${loc.degreesLongitude}` : ""
+    ].filter(Boolean).join("\n");
+  } else if (msgData.contactMessage || msgData.contactsArrayMessage) {
+    const contacts = msgData.contactMessage ? [
+      msgData.contactMessage
+    ] : msgData.contactsArrayMessage?.contacts ?? [];
+    text = contacts.map((c)=>{
+      const phone = String(c?.vcard ?? "").match(/TEL[^:]*:([+\d\s().-]+)/i)?.[1]?.trim();
+      return `👤 Contato: ${c?.displayName ?? "sem nome"}` + (phone ? ` - ${phone}` : "");
+    }).join("\n") || "👤 Contato compartilhado";
+  } else if (msgData.pollCreationMessage || msgData.pollCreationMessageV2 || msgData.pollCreationMessageV3) {
+    const poll = msgData.pollCreationMessage ?? msgData.pollCreationMessageV2 ?? msgData.pollCreationMessageV3;
+    text = `📊 Enquete: ${poll?.name ?? ""}`.trim();
+  } else {
+    // Tipo que ainda não tratamos: o atendente precisa saber que chegou algo
+    console.warn("[UNSUPPORTED_MESSAGE_TYPE]", Object.keys(msgData));
+    text = fromMe ? "[Mensagem enviada pelo celular em um formato que o Unxet ainda não exibe. Veja no WhatsApp do celular.]" : "[Mensagem em um formato que o Unxet ainda não exibe. Peça ao cliente para reenviar como texto, foto ou documento.]";
+  }
+  return {
+    messageType,
+    text,
+    interactive,
+    needsMediaFetch,
+    fallbackFilename,
+    fallbackMimeType
+  };
+}
+/** Baixa a mídia da mensagem pela Evolution (base64). Sem credenciais ou com erro: undefined. */ async function fetchEvolutionMedia(params) {
+  const { connection, instanceName, data, fallbackFilename, fallbackMimeType } = params;
+  const msgData = data?.message ?? {};
+  const providerMessageId = data?.key?.id;
+  if (!connection.evolution_api_url || !connection.evolution_api_key) {
+    console.warn("Mensagem de mídia recebida mas evolution_api_url/key não configurados na connection:", connection.id);
+    return undefined;
+  }
+  try {
+    const base64Resp = await fetch(`${connection.evolution_api_url.replace(/\/$/, "")}/chat/getBase64FromMediaMessage/${instanceName}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: connection.evolution_api_key
+      },
+      body: JSON.stringify({
+        message: {
+          key: data.key,
+          message: data.message
+        },
+        convertToMp4: false
+      })
+    });
+    if (!base64Resp.ok) {
+      console.error("getBase64FromMediaMessage retornou erro:", base64Resp.status, await base64Resp.text());
+      return undefined;
+    }
+    const base64Json = await base64Resp.json();
+    const base64Data = base64Json?.base64 ?? null;
+    const mimeType = base64Json?.mimeType ?? base64Json?.mimetype ?? msgData.imageMessage?.mimetype ?? msgData.audioMessage?.mimetype ?? msgData.pttMessage?.mimetype ?? msgData.documentMessage?.mimetype ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.mimetype ?? fallbackMimeType ?? "application/octet-stream";
+    console.log("[MEDIA_MIME_RESOLVED]", {
+      mimeType,
+      providerMessageId
+    });
+    if (!base64Data) {
+      console.warn("getBase64FromMediaMessage retornou sem base64 para:", providerMessageId);
+      return undefined;
+    }
+    const filename = msgData.documentMessage?.fileName ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.fileName ?? fallbackFilename ?? undefined;
+    return {
+      base64: base64Data,
+      mimeType,
+      filename
+    };
+  } catch (err) {
+    console.error("Erro ao buscar mídia da Evolution:", err);
+    return undefined;
+  }
+}
+// ---------------------------------------------------------------------------
+// Menções (@) em grupos
+// ---------------------------------------------------------------------------
+const onlyDigits = (value)=>String(value ?? "").split("@")[0].split(":")[0].replace(/\D/g, "");
+/** Mesmo número, com ou sem o 9 (55 + DDD iguais e últimos 8 dígitos iguais). */ function samePhone(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return a.length >= 12 && b.length >= 12 && a.slice(0, 4) === b.slice(0, 4) && a.slice(-8) === b.slice(-8);
+}
+/**
+ * Nome de cada pessoa marcada no grupo. Ordem: o próprio número da empresa,
+ * o contato da carteira, o nome com que ela já escreveu no grupo e, por fim,
+ * o contato guardado na Evolution. Quem não tiver nome fica como veio.
+ */ async function resolveMentionNames(params) {
+  const { supabase, connection, instanceName, groupId, groupJid, jids } = params;
+  const names = new Map();
+  if (!jids?.length) return names;
+  const apiUrl = String(connection.evolution_api_url ?? "").replace(/\/$/, "");
+  const apiKey = connection.evolution_api_key;
+  const ownPhone = onlyDigits(connection.connected_phone);
+  // LID -> telefone pela lista de participantes do grupo (inclui o próprio
+  // número da empresa, que o /chat/whatsappNumbers não resolve)
+  const lidPhones = jids.some((jid)=>jid.endsWith("@lid")) && apiUrl && apiKey ? await fetchParticipantPhones(apiUrl, apiKey, instanceName, groupJid) : new Map();
+  for (const jid of jids.slice(0, 10)){
+    let phone = jid.endsWith("@lid") ? lidPhones.get(jid) ?? "" : onlyDigits(jid);
+    if (!/^\d{10,13}$/.test(phone)) phone = "";
+    if (!phone && jid.endsWith("@lid") && apiUrl && apiKey) {
+      phone = await resolveWaId({
+        evolutionApiUrl: apiUrl,
+        evolutionApiKey: apiKey,
+        instanceName,
+        remoteJidRaw: jid,
+        remoteJidAlt: "",
+        currentWaId: ""
+      });
+    }
+    // 1. O próprio número da empresa
+    if (phone && samePhone(phone, ownPhone) && connection.connected_name) {
+      names.set(jid, connection.connected_name);
+      continue;
+    }
+    // 2. Contato da carteira
+    if (phone) {
+      const { contact } = await findContactByPhone(supabase, connection.clinic_id, phone, "id, name");
+      if (contact?.name) {
+        names.set(jid, contact.name);
+        continue;
+      }
+    }
+    // 3. Nome com que a pessoa já escreveu neste grupo
+    const senders = [
+      jid,
+      phone
+    ].filter(Boolean);
+    const { data: seen } = await supabase.from("messages").select("sender_name, conversations!inner(group_id)").eq("conversations.group_id", groupId).in("sender", senders).not("sender_name", "is", null).order("created_at", {
+      ascending: false
+    }).limit(1);
+    if (seen?.[0]?.sender_name) {
+      names.set(jid, seen[0].sender_name);
+      continue;
+    }
+    // 4. Contato guardado na Evolution (pushName)
+    if (apiUrl && apiKey) {
+      try {
+        const resp = await fetch(`${apiUrl}/chat/findContacts/${instanceName}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: apiKey
+          },
+          body: JSON.stringify({
+            where: {
+              remoteJid: jid
+            }
+          }),
+          signal: AbortSignal.timeout(5000)
+        });
+        if (resp.ok) {
+          const list = await resp.json();
+          const found = (Array.isArray(list) ? list : []).find((c)=>c?.remoteJid === jid || c?.id === jid);
+          const pushName = String(found?.pushName ?? "").trim();
+          if (pushName) names.set(jid, pushName);
+        } else {
+          await resp.body?.cancel?.();
+        }
+      } catch (err) {
+        console.warn("[MENTION_FIND_CONTACT_FAILED]", jid, err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+  console.log("[GROUP_MENTIONS]", JSON.stringify({
+    jids,
+    participantsMapped: lidPhones.size,
+    named: [
+      ...names.keys()
+    ]
+  }));
+  return names;
+}
+async function fetchParticipantPhones(apiUrl, apiKey, instanceName, groupJid) {
+  try {
+    const resp = await fetch(`${apiUrl}/group/participants/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`, {
+      method: "GET",
+      headers: {
+        apikey: apiKey
+      },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!resp.ok) {
+      console.warn("[GROUP_PARTICIPANTS_FAILED]", resp.status, await resp.text().catch(()=>""));
+      return new Map();
+    }
+    return participantPhones(await resp.json());
+  } catch (err) {
+    console.warn("[GROUP_PARTICIPANTS_ERROR]", err instanceof Error ? err.message : String(err));
+    return new Map();
   }
 }
 // ---------------------------------------------------------------------------
@@ -886,7 +1174,7 @@ async function fetchAndStoreProfilePic(params) {
   if (isCurrentProfilePic(existingContact.image_url, storagePath)) return;
   // 5. Upload no bucket (nome novo a cada foto nova, sem cache antigo)
   const { error: uploadError } = await supabase.storage.from(PROFILE_PIC_BUCKET).upload(storagePath, arrayBuffer, {
-    contentType,
+    contentType: safeStorageContentType(contentType),
     upsert: true
   });
   if (uploadError) {

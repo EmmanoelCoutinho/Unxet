@@ -216,6 +216,37 @@ export const listContacts = async (
   };
 };
 
+/** Um cliente só, para abrir a Carteira já nele (ex.: "Ver contato" da conversa). */
+export const getContact = async (
+  tenantId: string | null,
+  contactId: string | null,
+): Promise<Contact | null> => {
+  if (!tenantId || !contactId) return null;
+
+  const run = (withEmail: boolean) =>
+    supabase
+      .from("contacts")
+      .select(withEmail ? `${CONTACT_COLUMNS}, email` : CONTACT_COLUMNS)
+      .eq("clinic_id", tenantId)
+      .eq("id", contactId)
+      .maybeSingle();
+
+  let { data, error } = await run(true);
+  if (error?.code === "42703") {
+    ({ data, error } = await run(false));
+  }
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as unknown as DbContactRow;
+  const summaries = await loadConversationSummaries(tenantId, [row.id]);
+  const summary = summaries.get(row.id);
+  const userNames = await loadUserNames(
+    summary?.assigned_user_id ? [summary.assigned_user_id] : [],
+  );
+  return mapDbContact(row, summary, userNames);
+};
+
 export const getContactMetrics = async (
   tenantId: string | null,
 ): Promise<ContactMetrics> => {

@@ -204,8 +204,12 @@ describe("gateway: filtro da Evolution", () => {
     expect(skip(upsert("123456789@lid", true))).toBeNull();
   });
 
-  it("descarta grupos, Status, canais e listas de transmissão", () => {
-    expect(skip(upsert("1203630@g.us"))).toBe("jid");
+  it("deixa passar mensagens de grupo (a opção é por número), menos as enviadas pelo celular", () => {
+    expect(skip(upsert("1203630@g.us"))).toBeNull();
+    expect(skip(upsert("1203630@g.us", true))).toBe("group_from_me");
+  });
+
+  it("descarta Status, canais e listas de transmissão", () => {
     expect(skip(upsert("status@broadcast"))).toBe("jid");
     expect(skip(upsert("1203630@newsletter"))).toBe("jid");
   });

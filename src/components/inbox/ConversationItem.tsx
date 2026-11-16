@@ -5,6 +5,7 @@ import {
   FacebookIcon,
   ImageIcon,
   UserIcon,
+  UsersIcon,
   ClockIcon,
 } from "lucide-react";
 import { Conversation } from "../../types";
@@ -73,12 +74,17 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
     if (minutes > 0) return `há ${minutes} min`;
     return "agora";
   };
-  const initials = conversation.contactName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  // Grupo sem foto: ícone de pessoas no lugar das iniciais
+  const initials = conversation.isGroup ? (
+    <UsersIcon className="h-5 w-5" aria-hidden="true" />
+  ) : (
+    conversation.contactName
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2)
+  );
   const renderLastMessage = () => {
     if (conversation.lastMessageType === "image") {
       return (
@@ -128,8 +134,14 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1">
-            <h3 className="font-medium text-gray-900 truncate">
-              {conversation.contactName}
+            <h3 className="flex min-w-0 items-center gap-1 font-medium text-gray-900">
+              {conversation.isGroup && (
+                <UsersIcon
+                  className="h-3.5 w-3.5 flex-shrink-0 text-gray-500"
+                  aria-label="Grupo"
+                />
+              )}
+              <span className="truncate">{conversation.contactName}</span>
             </h3>
             <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
               {getTimeAgo(conversation.lastTimestamp)}

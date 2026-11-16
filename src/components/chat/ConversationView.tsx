@@ -14,6 +14,7 @@ import {
   isSlaBreached,
   type Conversation,
   type Message,
+  type MessageReplyPreview,
   type Channel,
 } from "../../types";
 import {
@@ -58,6 +59,7 @@ import { useWhatsappConnections } from "../../hooks/useWhatsappConnections";
 import { useFloatingChats } from "../../modules/floatingChats/FloatingChatsContext";
 import { useConversationList } from "../../contexts/ConversationsContext";
 import { WindowControls, type WindowControlsProps } from "./WindowControls";
+import { CONVERSATION_GROUP_SELECT, conversationGroupOf, groupConversationFields } from "../../utils/whatsappGroup";
 
 type UiTag = { id: string; name: string; color: string };
 
@@ -83,6 +85,7 @@ type LocalPayload = {
   filename?: string;
   fileSize?: number;
   contact?: SharedContact;
+  replyToMessageId?: string;
 };
 
 type LocalMessageMeta = {
@@ -162,6 +165,18 @@ function getSendFunctionName(channel: string, provider?: string) {
     default:
       throw new Error(`Unsupported channel: ${channel}`);
   }
+}
+
+// Citação mostrada no campo e na mensagem otimista (o servidor grava a mesma)
+function replyPreviewOf(message: Message): MessageReplyPreview {
+  return {
+    id: message.id,
+    author: message.author,
+    type: message.type,
+    text: (message.text ?? "").trim().slice(0, 200),
+    // atendente; ou, no grupo, quem escreveu
+    senderName: message.senderName,
+  };
 }
 
 function normalizeInput(input: SendableInput) {
@@ -597,6 +612,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         assigned_user_id,
         in_bot_flow,
         contacts:contact_id (*),
+        ${CONVERSATION_GROUP_SELECT},
         departments:department_id (name),
         last_inbound_at,
         sla_breached_at,
@@ -705,6 +721,10 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           contactRow?.name ?? contactRow?.phone ?? "Contato sem nome",
         contactNumber: contactRow?.phone ?? "",
         contactAvatar: contactAvatar ?? undefined,
+        // Grupo: nome e foto do grupo no lugar do contato
+        ...(conversationGroupOf(data)
+          ? groupConversationFields(conversationGroupOf(data)!)
+          : {}),
         lastMessage: last?.text ?? "",
         lastMessageType: (last as any)?.type ?? "text",
         lastTimestamp:
@@ -1072,6 +1092,71 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     return true;
   }, [authUser, conversation, participantIds]);
 
+  // Menu da setinha no balão: responder citando e reagir só no WhatsApp
+  // (QR Code e oficial); apagar depende da permissão do cargo
+  const canReplyAndReact =
+    canReply &&
+    conversation?.status === "open" &&
+    conversation?.channel === "whatsapp" &&
+    (conversation?.provider === "evolution" || conversation?.provider === "meta");
+  const canDeleteMessages = can("messages.delete");
+
+  const [replyingTo, setReplyingToState] = useState<Message | null>(null);
+  // Lido no envio: vários anexos enviados de uma vez levam a citação só no 1º
+  const replyingToRef = useRef<Message | null>(null);
+  const setReplyingTo = useCallback((message: Message | null) => {
+    replyingToRef.current = message;
+    setReplyingToState(message);
+  }, []);
+  // Outra conversa: sai do modo resposta
+  useEffect(() => {
+    setReplyingTo(null);
+  }, [id, setReplyingTo]);
+
+  const handleStartReply = useCallback(
+    (message: Message) => setReplyingTo(message),
+    [setReplyingTo],
+  );
+
+  const scrollToQuotedMessage = useCallback((messageId: string) => {
+    const el = messagesContainerRef.current?.querySelector<HTMLElement>(
+      `[data-message-id="${CSS.escape(messageId)}"]`,
+    );
+    if (!el) {
+      toast.info(
+        "A mensagem citada é mais antiga. Carregue as mensagens anteriores para vê-la.",
+      );
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("bg-blue-100/70");
+    window.setTimeout(() => el.classList.remove("bg-blue-100/70"), 1400);
+  }, []);
+
+  const handleReact = useCallback(
+    async (message: Message, emoji: string | null) => {
+      const previous = message.agentReaction;
+      const apply = (value: string | undefined) =>
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === message.id ? { ...m, agentReaction: value } : m,
+          ),
+        );
+      apply(emoji ?? undefined);
+
+      const { error } = await supabase.functions.invoke("react-message", {
+        body: { messageId: message.id, emoji: emoji ?? "" },
+      });
+      if (error) {
+        apply(previous);
+        const response = (error as { context?: Response }).context;
+        const payload = await response?.json?.().catch(() => null);
+        toast.error(payload?.error ?? "Não foi possível reagir à mensagem.");
+      }
+    },
+    [setMessages],
+  );
+
   // Responsável ou quem atende todos os setores adiciona/remove atendentes
   const canManageParticipants =
     !!authUser &&
@@ -1161,12 +1246,13 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       tempId: string;
       input: SendableInput;
       isRetry?: boolean;
+      replyToMessageId?: string;
     }) => {
       if (!id) return;
       if (!conversation?.channel) return;
       if (!canReply) return;
 
-      const { tempId, input } = opts;
+      const { tempId, input, replyToMessageId } = opts;
 
       const lastInboundAt = latestIso(
         conversation.lastInboundAt,
@@ -1247,6 +1333,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           contact: contact
             ? { name: contact.name, phone: `+${contact.phone}` }
             : undefined,
+          replyToMessageId,
         },
       });
 
@@ -1382,6 +1469,15 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
     if (!bodyText && !mediaUrl) return;
 
+    // Respondendo: a citação vai só na primeira mensagem enviada (com vários
+    // anexos, o primeiro leva a citação, como no WhatsApp)
+    const pendingReply = replyingToRef.current;
+    replyingToRef.current = null;
+    const replyTarget =
+      pendingReply && !isLocalOptimisticId(pendingReply.id) ? pendingReply : null;
+    if (pendingReply) setReplyingTo(null);
+    const replyToMessageId = replyTarget?.id;
+
     const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const optimistic: Message & LocalMessageMeta = {
@@ -1396,6 +1492,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       mediaMimeType,
       filename,
       fileSize,
+      replyTo: replyTarget ? replyPreviewOf(replyTarget) : undefined,
 
       localStatus: "sending",
       localError: null,
@@ -1407,13 +1504,14 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         filename,
         fileSize,
         contact,
+        replyToMessageId,
       },
     };
 
     setMessages((prev) => [...prev, optimistic]);
     scrollToBottom("smooth");
 
-    await enqueueSend(id, () => sendNow({ tempId, input }));
+    await enqueueSend(id, () => sendNow({ tempId, input, replyToMessageId }));
   };
 
   const handleRetryLocalMessage = useCallback(
@@ -1428,6 +1526,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           tempId: msg.id,
           input: localPayload,
           isRetry: true,
+          replyToMessageId: localPayload.replyToMessageId,
         }),
       );
     },
@@ -1605,6 +1704,14 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
               : undefined
           }
           onOpenFiles={conversation.contactId ? () => setIsFilesOpen(true) : undefined}
+          onViewContact={
+            can("contacts.view") && conversation.contactId
+              ? () =>
+                  navigate(
+                    `/contacts?contato=${encodeURIComponent(conversation.contactId ?? "")}`,
+                  )
+              : undefined
+          }
           onBlockContact={
             canBlockContacts && conversation.contactId && !conversation.contactBlocked
               ? () => setIsBlockOpen(true)
@@ -1711,14 +1818,24 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
             ) : null}
             {timelineItems.map((item) =>
               item.kind === "message" ? (
-                <div key={`message-${item.message.id}`}>
+                <div
+                  key={`message-${item.message.id}`}
+                  data-message-id={item.message.id}
+                  className="rounded-lg transition-colors duration-700"
+                >
                   <MessageBubble
                     message={item.message}
                     contactName={conversation?.contactName ?? ""}
+                    isGroup={conversation?.isGroup === true}
                     onRetry={handleRetryLocalMessage}
                     onRetryTranscript={handleRetryAudioTranscript}
-                    onDeleteMessage={handleDeleteMessage}
+                    onDeleteMessage={
+                      canDeleteMessages ? handleDeleteMessage : undefined
+                    }
                     deleteMode={deleteMode}
+                    onReply={canReplyAndReact ? handleStartReply : undefined}
+                    onReact={canReplyAndReact ? handleReact : undefined}
+                    onQuotedClick={scrollToQuotedMessage}
                   />
                 </div>
               ) : (
@@ -1954,6 +2071,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           quickMessages={quickMessages}
           quickMessagesLoading={loadingQuickMessages}
           onRecordingStateChange={setRecordingUiState}
+          replyingTo={replyingTo ? replyPreviewOf(replyingTo) : null}
+          replyContactName={conversation?.contactName ?? ""}
+          onCancelReply={() => setReplyingTo(null)}
         />
       )}
     </div>

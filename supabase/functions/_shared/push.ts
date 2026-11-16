@@ -82,7 +82,7 @@ async function sendInboundPush(supabase, { conversationId, messageType }) {
 
   const { data: conversation, error: convErr } = await supabase
     .from("conversations")
-    .select("id, clinic_id, department_id, assigned_user_id, contact:contacts(name, phone)")
+    .select("id, clinic_id, department_id, assigned_user_id, contact:contacts(name, phone), group:whatsapp_groups(name)")
     .eq("id", conversationId)
     .maybeSingle();
   if (convErr) throw convErr;
@@ -91,7 +91,7 @@ async function sendInboundPush(supabase, { conversationId, messageType }) {
   const userIds = await resolveRecipients(supabase, conversation);
 
   await sendPushToUsers(supabase, userIds, {
-    title: conversation.contact?.name || conversation.contact?.phone || "Novo contato",
+    title: conversation.group ? conversation.group.name || "Grupo do WhatsApp" : conversation.contact?.name || conversation.contact?.phone || "Novo contato",
     body: buildBody(messageType),
     conversationId,
     url: `/inbox/chat/${conversationId}`,

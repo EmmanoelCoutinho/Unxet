@@ -6,8 +6,9 @@ desenhados na própria página. Nada de dado real aparece.
 
 ## Gravar
 
-1. Suba o Supabase local e o app apontando para ele (`.env.local` com
-   `VITE_SUPABASE_URL=http://127.0.0.1:54321` e `LOCAL_TEST_PASSWORD`).
+1. Suba o Supabase local e o app apontando para ele: `.env.local` (ou
+   `.env.localtest.local`, com o app em `vite --mode localtest`) com
+   `VITE_SUPABASE_URL=http://127.0.0.1:54321` e `LOCAL_TEST_PASSWORD`.
 2. Nesta pasta:
 
 ```bash
@@ -15,8 +16,32 @@ npm install
 node record.mjs criar-atendente --url http://localhost:5173
 ```
 
-O vídeo vai para `public/tutorials/<id>.mp4`. Use `--headed` para assistir
+O vídeo vai para `out/<id>.mp4` (fora do git). Use `--headed` para assistir
 a gravação. Se algo falhar, a tela do momento do erro fica em `erro.png`.
+
+Para revisar sem assistir tudo, `node frames.mjs <id> [segundos] [início]`
+monta uma folha com quadros do vídeo em `out/<id>-quadros-<início>.jpg`.
+
+## Publicar
+
+Os vídeos ficam no bucket público `tutorials` do Supabase Storage (migration
+`20261124000000_tutorials_bucket.sql`), não no repositório. Envie para o
+develop e para a produção (na raiz do projeto, PowerShell ou bash):
+
+```bash
+node scripts/tutorials/upload.mjs --project ketolvqnptmdczkzrqba criar-atendente
+node scripts/tutorials/upload.mjs --project karmtrldanuxqisgzlhk criar-atendente
+```
+
+`--project` busca a service role pelo CLI do Supabase (precisa estar logado
+no CLI) e cria o bucket se ainda não existir. `--all` envia tudo que estiver
+em `out/`. Regravar com o mesmo id substitui o
+arquivo (o navegador pega o novo em até 1 hora).
+
+O app monta o link a partir do `VITE_SUPABASE_URL`. Rodando o app no banco
+local (que não tem os vídeos), use
+`VITE_TUTORIALS_URL=https://ketolvqnptmdczkzrqba.supabase.co/storage/v1/object/public/tutorials`
+para assistir os do develop.
 
 ## WhatsApp por QR Code
 
@@ -58,4 +83,5 @@ sem direitos autorais de terceiros). Para ouvir: `node music.mjs 30` gera
    Para mudanças maiores no banco local, exporte `prepare(db)` e
    `restore(db, estado)` (restore roda mesmo se a gravação falhar).
    Exemplo: `scenarios/conectar-whatsapp-qr.mjs`.
-4. Grave e preencha `video` e `duration` no tutorial.
+4. Grave, publique (`upload.mjs`) e preencha `video` (`<id>.mp4`) e
+   `duration` no tutorial.

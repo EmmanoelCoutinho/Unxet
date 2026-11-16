@@ -9,6 +9,7 @@ export type Permission =
   | "tags.manage"
   | "file_library.manage"
   | "contacts.block"
+  | "messages.delete"
   | "contacts.view"
   | "leads.all"
   | "campaigns.all"
@@ -63,6 +64,13 @@ export const PERMISSIONS: PermissionInfo[] = [
     label: "Bloquear contatos",
     description:
       "Bloqueia e desbloqueia contatos. As mensagens de um contato bloqueado não chegam e a empresa não envia para ele.",
+  },
+  {
+    key: "messages.delete",
+    group: "Atendimento",
+    label: "Apagar mensagens",
+    description:
+      "Apaga mensagens enviadas nas conversas que atende. No WhatsApp por QR Code some também para o cliente.",
   },
   {
     key: "contacts.view",

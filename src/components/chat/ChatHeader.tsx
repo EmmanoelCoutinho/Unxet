@@ -9,6 +9,7 @@ import { CustomTooltip } from "../ui/CustomTooltip";
 import {
   ArrowLeftIcon,
   BanIcon,
+  ContactRoundIcon,
   MessageCircleIcon,
   TagIcon,
   MoreVerticalIcon,
@@ -38,6 +39,8 @@ interface ChatHeaderProps {
   onManageParticipants?: () => void;
   // Arquivos enviados e recebidos com o cliente
   onOpenFiles?: () => void;
+  // Abre a Carteira de Clientes já no cliente da conversa
+  onViewContact?: () => void;
   // Bloquear / desbloquear o contato (só para quem tem a permissão)
   onBlockContact?: () => void;
   onUnblockContact?: () => void;
@@ -78,6 +81,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   participantNames = [],
   onManageParticipants,
   onOpenFiles,
+  onViewContact,
   onBlockContact,
   onUnblockContact,
   onAccept,
@@ -97,7 +101,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const isMobile = useIsMobile();
   const confirm = useConfirm();
 
-  const initials = useMemo(() => {
+  const initialsText = useMemo(() => {
     const name = (conversation.contactName ?? "").trim();
     if (!name) return "--";
     return name
@@ -108,9 +112,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       .toUpperCase()
       .slice(0, 2);
   }, [conversation.contactName]);
+  // Grupo sem foto: ícone de pessoas no lugar das iniciais
+  const initials = conversation.isGroup ? (
+    <UsersIcon className="h-5 w-5" aria-hidden="true" />
+  ) : (
+    initialsText
+  );
 
   const avatar = conversation.contactAvatar;
   const formattedIdentifier = useMemo(() => {
+    if (conversation.isGroup) return "Grupo";
     const rawValue = (conversation.contactNumber ?? "").trim();
     if (!rawValue) return "";
 
@@ -136,7 +147,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     }
 
     return identifier;
-  }, [conversation.contactNumber]);
+  }, [conversation.contactNumber, conversation.isGroup]);
 
   const handleAccept = async () => {
     if (!onAccept || acceptDisabled || isAccepting) return;
@@ -204,6 +215,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       ]
     : [];
 
+  const viewContactItem = onViewContact
+    ? [
+        {
+          label: "Ver contato",
+          icon: <ContactRoundIcon className="h-4 w-4" />,
+          onSelect: () => onViewContact(),
+        },
+      ]
+    : [];
+
   const blockItem = onUnblockContact
     ? [
         {
@@ -225,6 +246,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
   // No celular as ações secundárias vão para o menu "mais"
   const dropdownItems = [
+    ...viewContactItem,
     ...(isMobile ? participantsItem : []),
     ...(isMobile ? filesItem : []),
     ...(isMobile && onTransfer
@@ -262,6 +284,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   if (compact) {
     const [firstTag, ...otherTags] = visibleTags;
     const compactItems = [
+      ...viewContactItem,
       ...participantsItem,
       ...filesItem,
       ...(onTransfer
@@ -546,7 +569,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2">
           {onSearch && (
             <CustomTooltip text="Buscar na conversa">
-              <Button variant="ghost" size="sm" onClick={onSearch}>
+              <Button variant="ghost" size="sm" onClick={onSearch} aria-label="Buscar na conversa">
                 <FiSearch className="h-5 w-5" />
               </Button>
             </CustomTooltip>
@@ -601,6 +624,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                     onClick={onTransfer}
                     disabled={transferDisabled}
                     aria-disabled={transferDisabled}
+                    aria-label="Transferir conversa"
                   >
                     <HiOutlineSwitchHorizontal className="h-5 w-5 text-blue-600" />
                   </Button>
@@ -618,6 +642,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                     onClick={handleAccept}
                     disabled={acceptIsDisabled || !onAccept}
                     aria-disabled={acceptIsDisabled || !onAccept}
+                    aria-label="Aceitar conversa"
                   >
                     <TbMessageCheck className="h-5 w-5 text-green-600" />
                   </Button>
@@ -633,6 +658,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                   onClick={handleClose}
                   disabled={closeIsDisabled || !onClose}
                   aria-disabled={closeIsDisabled || !onClose}
+                  aria-label="Finalizar conversa"
                 >
                   <TbMessageOff className="h-5 w-5 text-red-600" />
                 </Button>

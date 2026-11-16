@@ -33,10 +33,15 @@ import { adminSupabase } from "../lib/adminSupabaseClient";
 import {
   DUE_SOON_DAYS,
   addPeriodsIso,
+  attendantsLimit,
+  EXTRA_ATTENDANTS_DEFAULT,
+  EXTRA_ATTENDANTS_MAX,
+  EXTRA_ATTENDANTS_MIN,
   formatMoney,
   formatUsage,
   getDueState,
   getPlanAlerts,
+  parseExtraAttendants,
   parseWhatsappAddon,
   predictStatus,
   todayIso,
@@ -50,6 +55,7 @@ import {
   type SubscriptionPayment,
 } from "../lib/subscriptions";
 import { WhatsappAddonField } from "../components/WhatsappAddonField";
+import { ExtraAttendantsField } from "../components/ExtraAttendantsField";
 
 const STATUSES = Object.keys(
   SUBSCRIPTION_STATUS_LABELS,
@@ -264,16 +270,30 @@ const EditSubscriptionModal = ({
   const [addonQuantity, setAddonQuantity] = useState(
     String(clinic.whatsapp_numbers_addon ?? WHATSAPP_ADDON_DEFAULT),
   );
+  const [extraEnabled, setExtraEnabled] = useState(
+    clinic.extra_attendants !== null,
+  );
+  const [extraQuantity, setExtraQuantity] = useState(
+    String(clinic.extra_attendants ?? EXTRA_ATTENDANTS_DEFAULT),
+  );
   const [saving, setSaving] = useState(false);
 
   const plan = plans.find((p) => p.code === planCode);
+  const planAttendants = plan?.max_attendants ?? null;
   const addonValue = parseWhatsappAddon(addonEnabled, addonQuantity);
-  // Prévia do que ficaria acima do plano (e do adicional) escolhido
+  // Plano ilimitado não tem extras (o banco também grava null)
+  const extraValue =
+    planAttendants === null
+      ? null
+      : parseExtraAttendants(extraEnabled, extraQuantity);
+  // Prévia do que ficaria acima do plano (e dos adicionais) escolhido
   const alerts = getPlanAlerts(
     {
       ...clinic,
       plan_code: planCode,
       whatsapp_numbers_addon: addonValue ?? clinic.whatsapp_numbers_addon,
+      extra_attendants:
+        extraValue === undefined ? clinic.extra_attendants : extraValue,
     },
     plan,
   );
@@ -309,6 +329,12 @@ const EditSubscriptionModal = ({
       );
       return;
     }
+    if (extraValue === undefined) {
+      toast.error(
+        `Atendentes extras: informe de ${EXTRA_ATTENDANTS_MIN} a ${EXTRA_ATTENDANTS_MAX}.`,
+      );
+      return;
+    }
 
     setSaving(true);
     const { error } = await adminSupabase.rpc("platform_set_subscription", {
@@ -321,6 +347,7 @@ const EditSubscriptionModal = ({
       p_price: priceValue,
       p_grace_days: grace,
       p_whatsapp_numbers_addon: addonValue,
+      p_extra_attendants: extraValue,
     });
     setSaving(false);
     if (error) {
@@ -373,6 +400,16 @@ const EditSubscriptionModal = ({
             ))}
           </ul>
         </div>
+
+        {planAttendants !== null && (
+          <ExtraAttendantsField
+            planLimit={planAttendants}
+            enabled={extraEnabled}
+            quantity={extraQuantity}
+            onEnabledChange={setExtraEnabled}
+            onQuantityChange={setExtraQuantity}
+          />
+        )}
 
         <WhatsappAddonField
           enabled={addonEnabled}
@@ -812,13 +849,129 @@ const PaymentHistoryModal = ({
   );
 };
 
+// A edge function responde { error } com o motivo; o supabase-js só expõe o Response
+const functionErrorMessage = async (error: any, fallback: string) => {
+  if (error?.context instanceof Response) {
+    const data = await error.context
+      .clone()
+      .json()
+      .catch(() => null);
+    if (typeof data?.error === "string") return data.error as string;
+  }
+  return fallback;
+};
+
+const DeleteClinicModal = ({
+  clinic,
+  onClose,
+  onDeleted,
+}: {
+  clinic: SubscriberRow;
+  onClose: () => void;
+  onDeleted: () => void;
+}) => {
+  const [typed, setTyped] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const matches =
+    typed.trim().normalize("NFC") === clinic.name.trim().normalize("NFC");
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!matches || deleting) return;
+    setDeleting(true);
+    const { data, error } = await adminSupabase.functions.invoke(
+      "admin-delete-clinic",
+      { body: { clinic_id: clinic.id, confirm_name: typed.trim() } },
+    );
+    setDeleting(false);
+    if (error) {
+      toast.error(
+        await functionErrorMessage(
+          error,
+          "Não foi possível apagar a empresa. Nada foi apagado.",
+        ),
+      );
+      return;
+    }
+    const warnings: string[] = data?.warnings ?? [];
+    if (warnings.length > 0) {
+      console.warn("[admin-delete-clinic]", warnings);
+      toast.warning(
+        `${clinic.name} foi apagada, mas ${plural(warnings.length, "item não saiu", "itens não saíram")} (arquivos ou contas). Veja os logs da function.`,
+      );
+    } else {
+      toast.success(`${clinic.name} foi apagada.`);
+    }
+    onDeleted();
+  }
+
+  return (
+    <Modal
+      title={`Apagar ${clinic.name}`}
+      subtitle="Esta ação não pode ser desfeita"
+      onClose={onClose}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="flex gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">Tudo da empresa será apagado:</p>
+            <ul className="mt-1 list-inside list-disc text-xs">
+              <li>conversas, mensagens, contatos e arquivos enviados</li>
+              <li>funil, campanhas, bots, etiquetas e mensagens rápidas</li>
+              <li>
+                números de WhatsApp (desconectados e removidos da Evolution),
+                Instagram e Messenger
+              </li>
+              <li>assinatura e histórico de pagamentos</li>
+              <li>
+                {plural(clinic.attendants, "conta de acesso", "contas de acesso")}{" "}
+                (as que não pertencem a outra empresa)
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <label className="block">
+          <span className={labelClassName}>
+            Para confirmar, digite <strong>{clinic.name}</strong>
+          </span>
+          <input
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            autoComplete="off"
+            autoFocus
+            className={fieldClassName}
+            aria-label="Nome da empresa"
+          />
+        </label>
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <button
+            type="submit"
+            disabled={!matches || deleting}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            {deleting ? "Apagando…" : "Apagar empresa"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
 type QuickFilter =
   "all" | "overdue" | "soon" | "past_due" | "suspended" | "trial" | "alerts";
 
 type Dialog =
   | { kind: "edit"; clinic: SubscriberRow }
   | { kind: "payment"; clinic: SubscriberRow }
-  | { kind: "history"; clinic: SubscriberRow };
+  | { kind: "history"; clinic: SubscriberRow }
+  | { kind: "delete"; clinic: SubscriberRow };
 
 export const SubscribersPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -1064,6 +1217,15 @@ export const SubscribersPage: React.FC = () => {
                         <Pencil className="h-4 w-4" />
                         Editar
                       </Button>
+                      <button
+                        type="button"
+                        onClick={() => setDialog({ kind: "delete", clinic })}
+                        className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                        aria-label={`Apagar ${clinic.name}`}
+                        title="Apagar empresa"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
 
@@ -1116,8 +1278,18 @@ export const SubscribersPage: React.FC = () => {
                       <dd className="text-slate-800">
                         {formatUsage(
                           clinic.attendants,
-                          plan?.max_attendants ?? null,
+                          attendantsLimit(clinic.extra_attendants, plan),
                         )}
+                        {clinic.extra_attendants !== null &&
+                          plan?.max_attendants != null && (
+                            <span className="block text-xs text-slate-500">
+                              {plural(
+                                clinic.extra_attendants,
+                                "extra",
+                                "extras",
+                              )}
+                            </span>
+                          )}
                         {clinic.pending_invites > 0 && (
                           <span className="block text-xs text-slate-500">
                             {plural(
@@ -1203,6 +1375,16 @@ export const SubscribersPage: React.FC = () => {
           today={today}
           onClose={() => setDialog(null)}
           onSaved={() => {
+            setDialog(null);
+            reload();
+          }}
+        />
+      )}
+      {dialog?.kind === "delete" && (
+        <DeleteClinicModal
+          clinic={dialog.clinic}
+          onClose={() => setDialog(null)}
+          onDeleted={() => {
             setDialog(null);
             reload();
           }}

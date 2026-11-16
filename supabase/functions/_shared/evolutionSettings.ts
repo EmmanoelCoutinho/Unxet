@@ -5,14 +5,14 @@
 
 /**
  * O que o Unxet precisa em toda instância:
- * - groupsIgnore: a Evolution nem gera webhook de grupo (o atendimento já
- *   ignorava grupos, mas cada mensagem chegava e era descartada no evolution-in)
+ * - groupsIgnore: segue a opção do número (channel_connections.groups_enabled).
+ *   Desligada, a Evolution nem gera webhook de grupo.
  * - syncFullHistory: ao conectar, não manda o histórico antigo do celular
  */
-export const REQUIRED_SETTINGS = {
-  groupsIgnore: true,
+export const requiredSettings = ({ groupsEnabled = false } = {}) => ({
+  groupsIgnore: !groupsEnabled,
   syncFullHistory: false,
-};
+});
 
 // Campos aceitos pelo /settings/set da Evolution v2 (todos obrigatórios)
 const DEFAULTS = {
@@ -44,16 +44,17 @@ export const normalizeSettings = (raw) => {
  * Corpo do /settings/set quando algo precisa mudar, ou null quando a
  * instância já está certa. Mantém o resto como a empresa deixou.
  */
-export const settingsPatch = (raw) => {
+export const settingsPatch = (raw, options = {}) => {
   const current = normalizeSettings(raw);
-  const needsChange = Object.entries(REQUIRED_SETTINGS).some(
+  const required = requiredSettings(options);
+  const needsChange = Object.entries(required).some(
     ([key, value]) => current[key] !== value,
   );
-  return needsChange ? { ...current, ...REQUIRED_SETTINGS } : null;
+  return needsChange ? { ...current, ...required } : null;
 };
 
 /**
- * Garante REQUIRED_SETTINGS na instância. Nunca lança erro: quem chama
+ * Garante requiredSettings na instância (groupsEnabled: opção do número). Nunca lança erro: quem chama
  * segue o fluxo normal se a Evolution falhar.
  * Retorna "ok" (já estava certo), "updated" ou "failed".
  */
@@ -61,7 +62,7 @@ export const ensureInstanceSettings = async (
   apiUrl: string,
   apiKey: string,
   sessionName: string,
-  { fetchImpl = fetch, timeoutMs = 8000 } = {},
+  { fetchImpl = fetch, timeoutMs = 8000, groupsEnabled = false } = {},
 ) => {
   const base = apiUrl.replace(/\/$/, "");
   const name = encodeURIComponent(sessionName);
@@ -76,7 +77,7 @@ export const ensureInstanceSettings = async (
       console.warn("[EVOLUTION_SETTINGS_FIND_FAILED]", { sessionName, status: findResponse.status });
       return "failed";
     }
-    const patch = settingsPatch(await findResponse.json());
+    const patch = settingsPatch(await findResponse.json(), { groupsEnabled });
     if (!patch) return "ok";
 
     const setResponse = await fetchImpl(`${base}/settings/set/${name}`, {
@@ -94,7 +95,7 @@ export const ensureInstanceSettings = async (
       return "failed";
     }
     await setResponse.body?.cancel?.();
-    console.log("[EVOLUTION_SETTINGS_UPDATED]", { sessionName, ...REQUIRED_SETTINGS });
+    console.log("[EVOLUTION_SETTINGS_UPDATED]", { sessionName, ...requiredSettings({ groupsEnabled }) });
     return "updated";
   } catch (err) {
     console.warn("[EVOLUTION_SETTINGS_ERROR]", {

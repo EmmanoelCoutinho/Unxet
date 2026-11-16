@@ -8,6 +8,8 @@ import { clinicIsSuspended } from "../_shared/plan.ts";
 import { parseSharedContact, sharedContactText, toEvolutionContact } from "../_shared/contactCard.ts";
 import { loadAgentSender, signText } from "../_shared/agentSignature.ts";
 import { isConversationParticipant } from "../_shared/conversationParticipants.ts";
+import { evolutionQuoted, loadReplyTarget, replyColumns } from "../_shared/messageReply.ts";
+import { isGroupJid } from "../_shared/whatsappGroups.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -133,7 +135,7 @@ serve(async (req)=>{
      * =========================================================
      * CONVERSATION
      * =========================================================
-     */ const { data: conversation, error: conversationError } = await adminSupabase.from("conversations").select(`*, contacts (*), channel_connections (*)`).eq("id", conversationId).single();
+     */ const { data: conversation, error: conversationError } = await adminSupabase.from("conversations").select(`*, contacts (*), whatsapp_groups (jid), channel_connections (*)`).eq("id", conversationId).single();
     if (conversationError || !conversation) {
       return new Response(JSON.stringify({
         error: "Conversation not found"
@@ -251,7 +253,9 @@ serve(async (req)=>{
      * CONTACT + RESOLVE NÚMERO REAL
      * =========================================================
      */ const contact = conversation.contacts;
-    if (!contact?.phone) {
+    // Conversa de grupo: envia para o JID do grupo (a Evolution aceita no "number")
+    const groupJid = isGroupJid(conversation.whatsapp_groups?.jid) ? conversation.whatsapp_groups.jid : null;
+    if (!groupJid && !contact?.phone) {
       return new Response(JSON.stringify({
         error: "Contact phone not found"
       }), {
@@ -260,21 +264,22 @@ serve(async (req)=>{
       });
     }
     // Limpeza inicial — remove tudo que não é dígito
-    const rawNumber = String(contact.phone).replace(/\D/g, "").trim();
+    const rawNumber = groupJid ?? String(contact.phone).replace(/\D/g, "").trim();
     // Resolve LID → telefone real se necessário
-    const number = await resolvePhoneNumber({
+    const number = groupJid ?? await resolvePhoneNumber({
       evolutionApiUrl: baseUrl,
       evolutionApiKey: apiKey,
       instanceName: session,
       rawNumber
     });
+    const remoteJid = groupJid ?? `${number}@s.whatsapp.net`;
     console.log("[SEND] Número final para envio:", {
       rawNumber,
       number
     });
     // Valida que é telefone real (10-13 dígitos) antes de enviar
     // Números com 14-15 dígitos são LIDs que não foram resolvidos
-    if (!/^\d{10,13}$/.test(number)) {
+    if (!groupJid && !/^\d{10,13}$/.test(number)) {
       return new Response(JSON.stringify({
         error: "Não foi possível resolver o número do contato",
         rawNumber,
@@ -315,6 +320,11 @@ serve(async (req)=>{
     const outboundText = sender.sign ? signText(text ?? "", sender.name, {
       bold: true
     }) : text ?? "";
+    // Resposta citando uma mensagem da conversa (menu da setinha no balão)
+    const replyTarget = await loadReplyTarget(adminSupabase, conversation.id, body.replyToMessageId);
+    const quotedFields = replyTarget ? {
+      quoted: evolutionQuoted(replyTarget, remoteJid)
+    } : {};
     if (sharedContact) {
       console.log("[EVOLUTION_SEND_CONTACT]", JSON.stringify({
         number,
@@ -328,6 +338,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
+          ...quotedFields,
           contact: [
             toEvolutionContact(sharedContact)
           ]
@@ -357,6 +368,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
+          ...quotedFields,
           audio: providerMediaUrl,
           encoding: true
         })
@@ -385,6 +397,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
+          ...quotedFields,
           mediatype: "image",
           media: providerMediaUrl,
           caption: outboundText
@@ -415,6 +428,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
+          ...quotedFields,
           mediatype: "document",
           media: providerMediaUrl,
           caption: outboundText,
@@ -445,6 +459,7 @@ serve(async (req)=>{
         },
         body: JSON.stringify({
           number,
+          ...quotedFields,
           text: outboundText
         })
       });
@@ -482,7 +497,8 @@ serve(async (req)=>{
       sent_at: now,
       created_at: now,
       sender_user_id: user.id,
-      sender_name: sender.name
+      sender_name: sender.name,
+      ...replyColumns(replyTarget)
     };
     // A mensagem já saiu para o cliente: devolver erro aqui faria o atendente
     // reenviar e o cliente receber em dobro. Tenta gravar de novo e, se não
@@ -525,7 +541,7 @@ serve(async (req)=>{
     await adminSupabase.from("conversations").update(conversationUpdates).eq("id", conversation.id);
     // Atualiza o phone do contato para o número resolvido,
     // evitando nova resolução nas próximas mensagens
-    if (rawNumber !== number) {
+    if (!groupJid && rawNumber !== number) {
       await adminSupabase.from("contacts").update({
         phone: number
       }).eq("id", contact.id);

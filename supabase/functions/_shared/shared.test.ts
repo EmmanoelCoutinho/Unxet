@@ -39,19 +39,52 @@ describe("parseSurveyScore (pesquisa de satisfação)", () => {
     ["Minha nota é 5", 5],
     ["⭐⭐⭐⭐⭐ obrigado", 5],
     ["Dou 5 estrelas", 5],
+    // padrão 0 a 10
+    ["10", 10],
+    ["0", 0],
+    ["nota dez", 10],
+    ["8/10", 8],
+    ["4/10", 4],
   ])("aceita %j como nota %i", (input, expected) => {
     expect(parseSurveyScore(input)).toBe(expected);
   });
 
   it.each([
-    "10", "0", "6", "5 consultas", "1 minuto", "obrigado", "nota dez", "4/10", "⭐⭐⭐⭐⭐⭐", "", null,
-    "obrigado, um ótimo dia", "5 ou 4?", "quero marcar 2 consultas", "3 e 4",
+    ["9.9", 10],
+    ["9,99", 10],
+    ["3.5", 4],
+    ["3,4", 3],
+    ["0,4", 0],
+    ["nota 8,5", 9],
+    ["9,5 obrigado!", 10],
+    ["8.5/10", 9],
+    ["7,5.", 8],
+  ])("arredonda a nota fracionada %j para %i", (input, expected) => {
+    expect(parseSurveyScore(input)).toBe(expected);
+  });
+
+  it.each([
+    "11", "10,5", "5 consultas", "1 minuto", "obrigado", "⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐", "", null,
+    "obrigado, um ótimo dia", "5 ou 4?", "quero marcar 2 consultas", "3 e 4", "9.5.3",
   ])(
     "rejeita %j",
     (input) => {
       expect(parseSurveyScore(input)).toBeNull();
     },
   );
+
+  it("nota fracionada também não reabre a conversa", () => {
+    expect(isScoreAttempt("9,5")).toBe(true);
+  });
+
+  it.each([
+    ["10", 1, 5],
+    ["0", 1, 5],
+    ["6", 1, 5],
+    ["4/10", 1, 5],
+  ])("pesquisa antiga em 1 a 5 rejeita %j", (input, min, max) => {
+    expect(parseSurveyScore(input, min, max)).toBeNull();
+  });
 
   describe("escala escolhida pela empresa", () => {
     it.each([
@@ -101,9 +134,9 @@ describe("scaleFromMessage (escala que a mensagem pede)", () => {
     },
   );
 
-  it("a nota 8 vale na escala da mensagem mesmo com a configurada em 1 a 5", () => {
+  it("a nota 8 vale na escala da mensagem mesmo com a gravada em 1 a 5", () => {
     const scale = scaleFromMessage("Responda com uma nota de 1 a 10");
-    expect(parseSurveyScore("8")).toBeNull();
+    expect(parseSurveyScore("8", 1, 5)).toBeNull();
     expect(parseSurveyScore("8", scale!.min, scale!.max)).toBe(8);
   });
 });
@@ -126,7 +159,8 @@ describe("matchSurveyAnswer (mesma nota entregue duas vezes)", () => {
         {
           id: "s1", clinic_id: "c1", contact_id: "p1", channel_connection_id: "ch1",
           conversation_id: "conv1", channel: "whatsapp", status: "sent", scale_min: 1, scale_max: 10,
-          sent_at: new Date().toISOString(), expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+          // sem prazo: enviada há 3 dias e ainda esperando a nota
+          sent_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), expires_at: null,
         },
       ],
       conversation_events: [],
@@ -168,6 +202,20 @@ describe("matchSurveyAnswer (mesma nota entregue duas vezes)", () => {
     const second = await matchSurveyAnswer(admin, params);
     expect(second).toMatchObject({ conversationId: "conv1", score: 8, duplicate: true });
     expect(admin.tables.conversation_events).toHaveLength(1);
+  });
+
+  it("nota fracionada dias depois é registrada arredondada", async () => {
+    const admin = makeAdmin();
+    expect(await matchSurveyAnswer(admin, { ...params, text: "9,9" })).toMatchObject({
+      conversationId: "conv1",
+      score: 10,
+    });
+  });
+
+  it("mensagem que não é nota encerra a espera e segue como mensagem normal", async () => {
+    const admin = makeAdmin();
+    expect(await matchSurveyAnswer(admin, { ...params, text: "Quero remarcar" })).toBeNull();
+    expect(admin.tables.satisfaction_surveys[0].status).toBe("skipped");
   });
 
   it("sem pesquisa pendente, outra mensagem segue como mensagem normal", async () => {

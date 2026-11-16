@@ -3,6 +3,7 @@ import { ArrowLeftIcon, UserPlusIcon } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { StartConversationModal } from "../modules/contacts/components/StartConversationModal";
 import { toast } from "react-toastify";
+import { useSearchParams } from "react-router-dom";
 import { ContactDashboard } from "../components/contacts/ContactDashboard";
 import { ContactDetails } from "../components/contacts/ContactDetails";
 import { ContactList } from "../components/contacts/ContactList";
@@ -11,6 +12,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useClinic } from "../contexts/ClinicContext";
 import { useIsBelowLg } from "../hooks/useMediaQuery";
 import {
+  useContact,
   useContactMetrics,
   useContactNotes,
   useContacts,
@@ -39,6 +41,35 @@ export const ContactsPage: React.FC = () => {
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [newContactOpen, setNewContactOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // "Ver contato" da conversa abre a Carteira em /contacts?contato=<id>. O
+  // cliente pode não estar na página atual da lista, então vem pelo id.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const contactParam = searchParams.get("contato");
+  const [focusContactId, setFocusContactId] = useState<string | null>(
+    contactParam,
+  );
+  const appliedFocusRef = useRef<string | null>(null);
+  const { contact: focusContact, loading: focusLoading } = useContact(
+    tenantId,
+    focusContactId,
+  );
+
+  useEffect(() => {
+    if (!contactParam) return;
+    setFocusContactId(contactParam);
+    appliedFocusRef.current = null;
+    // Tira o parâmetro do endereço: recarregar não volta para esse cliente
+    const next = new URLSearchParams(searchParams);
+    next.delete("contato");
+    setSearchParams(next, { replace: true });
+  }, [contactParam, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!focusContact || appliedFocusRef.current === focusContact.id) return;
+    appliedFocusRef.current = focusContact.id;
+    setSelectedContact(focusContact);
+    setMobileDetailsOpen(true);
+  }, [focusContact]);
   const showMobileDetails = isBelowLg && mobileDetailsOpen && !!selectedContact;
 
   useEffect(() => {
@@ -66,8 +97,11 @@ export const ContactsPage: React.FC = () => {
   } = useContactNotes(tenantId, selectedContact?.id ?? null);
 
   useEffect(() => {
+    // Enquanto o cliente vindo da conversa carrega, não escolhe o primeiro
+    if (focusContactId && focusLoading) return;
     const fresh = selectedContact
-      ? contacts.find((contact) => contact.id === selectedContact.id)
+      ? (contacts.find((contact) => contact.id === selectedContact.id) ??
+        (focusContact?.id === selectedContact.id ? focusContact : undefined))
       : undefined;
     if (fresh) {
       // Depois de editar, a lista volta com os dados novos do cliente
@@ -75,7 +109,7 @@ export const ContactsPage: React.FC = () => {
       return;
     }
     setSelectedContact(contacts[0] ?? null);
-  }, [contacts, selectedContact]);
+  }, [contacts, selectedContact, focusContact, focusContactId, focusLoading]);
 
   useEffect(() => {
     const message = contactsError ?? metricsError ?? notesError;

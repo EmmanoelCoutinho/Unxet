@@ -452,6 +452,9 @@ verify_jwt = true
 [functions.delete-message]
 verify_jwt = true
 
+[functions.react-message]
+verify_jwt = true
+
 [functions.retry-audio-transcript]
 verify_jwt = true
 
@@ -462,4 +465,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.admin-onboard-clinic]
+verify_jwt = true
+
+[functions.admin-delete-clinic]
 verify_jwt = true

@@ -21,6 +21,7 @@ import { Card } from "../components/ui/Card";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { useConfirm } from "../components/ui/ConfirmDialog";
 import { FileThumb } from "../components/files/FileThumb";
+import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import {
   LibraryFileFormModal,
   type LibraryFileFormValues,
@@ -200,6 +201,11 @@ export const FileLibraryPage: React.FC = () => {
       if (form.mode === "upload" && values.file) {
         library.upsertLocal(await uploadLibraryFile({ clinicId, file: values.file, ...fields }));
         toast.success("Arquivo adicionado ao Banco de arquivos.");
+        if (values.file.name.toLowerCase().endsWith(".pfx")) {
+          toast.warning(
+            "Atenção: o PFX contém a chave privada do certificado digital e fica disponível para toda a equipe no Banco de arquivos.",
+          );
+        }
       } else if (form.mode === "edit") {
         library.upsertLocal(await updateLibraryFile({ clinicId, id: form.file.id, ...fields }));
         toast.success("Arquivo atualizado.");
@@ -284,6 +290,7 @@ export const FileLibraryPage: React.FC = () => {
                 Arquivos da Empresa para enviar pelo <span className="font-semibold">+</span> da
                 conversa, e tudo o que já foi enviado e recebido nas conversas.
               </p>
+              <TutorialButton tutorialId="banco-de-arquivos" className="mt-1" />
             </div>
           </div>
 

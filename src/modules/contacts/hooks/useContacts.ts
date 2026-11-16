@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createContactNote,
   deleteContactNote,
+  getContact,
   getContactMetrics,
   listContactNotes,
   listContacts,
@@ -28,6 +29,8 @@ export const contactQueryKeys = {
   lists: () => [...contactQueryKeys.all, "list"] as const,
   list: (tenantId: string | null, filters: ContactListFilters) =>
     [...contactQueryKeys.lists(), tenantId, filters] as const,
+  detail: (tenantId: string | null, contactId: string | null) =>
+    [...contactQueryKeys.all, "detail", tenantId, contactId] as const,
   metrics: (tenantId: string | null) =>
     [...contactQueryKeys.all, "metrics", tenantId] as const,
   notes: (tenantId: string | null, contactId: string | null) =>
@@ -50,6 +53,24 @@ export const useContacts = (
     error: query.error instanceof Error ? query.error.message : null,
     refetch: query.refetch,
     queryKey: contactQueryKeys.list(tenantId, filters),
+  };
+};
+
+/** Um cliente pelo id (pode estar fora da página atual da lista). */
+export const useContact = (
+  tenantId: string | null,
+  contactId: string | null,
+) => {
+  const query = useQuery({
+    queryKey: contactQueryKeys.detail(tenantId, contactId),
+    queryFn: () => getContact(tenantId, contactId),
+    enabled: Boolean(tenantId && contactId),
+  });
+
+  return {
+    contact: query.data ?? null,
+    loading: query.isLoading,
+    error: query.error instanceof Error ? query.error.message : null,
   };
 };
 

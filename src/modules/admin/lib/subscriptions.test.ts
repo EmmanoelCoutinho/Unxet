@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { SubscriptionPlan } from "../../../constants/plans";
 import {
   addPeriodsIso,
+  attendantsLimit,
   formatUsage,
   getDueState,
   getPlanAlerts,
+  parseExtraAttendants,
   parseWhatsappAddon,
   predictStatus,
   todayIso,
@@ -49,6 +51,7 @@ const row = (overrides: Partial<SubscriberRow> = {}): SubscriberRow => ({
   price: null,
   grace_days: 10,
   whatsapp_numbers_addon: null,
+  extra_attendants: null,
   blocked_at: null,
   blocked_reason: null,
   notes: null,
@@ -143,6 +146,15 @@ describe("getPlanAlerts", () => {
     ]);
   });
 
+  it("atendentes extras somam ao limite do plano", () => {
+    expect(
+      getPlanAlerts(row({ attendants: 5, extra_attendants: 2 }), essencial),
+    ).toEqual([]);
+    expect(
+      getPlanAlerts(row({ attendants: 6, extra_attendants: 2 }), essencial),
+    ).toEqual(["6 atendentes (limite 5)"]);
+  });
+
   it("vários números QR Code sem o adicional", () => {
     expect(
       getPlanAlerts(row({ whatsapp: 1, qr_numbers: 2 }), empresarial),
@@ -213,5 +225,21 @@ describe("formatUsage", () => {
 describe("todayIso", () => {
   it("usa a data local", () => {
     expect(todayIso(new Date(2026, 0, 5, 23, 30))).toBe("2026-01-05");
+  });
+});
+
+describe("atendentes extras", () => {
+  it("limite é plano + extras; ilimitado continua ilimitado", () => {
+    expect(attendantsLimit(null, essencial)).toBe(3);
+    expect(attendantsLimit(4, essencial)).toBe(7);
+    expect(attendantsLimit(4, empresarial)).toBeNull();
+  });
+
+  it("valida a quantidade do formulário", () => {
+    expect(parseExtraAttendants(false, "abc")).toBeNull();
+    expect(parseExtraAttendants(true, "3")).toBe(3);
+    expect(parseExtraAttendants(true, "0")).toBeUndefined();
+    expect(parseExtraAttendants(true, "1.5")).toBeUndefined();
+    expect(parseExtraAttendants(true, "201")).toBeUndefined();
   });
 });

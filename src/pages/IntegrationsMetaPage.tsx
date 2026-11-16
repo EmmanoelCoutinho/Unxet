@@ -20,6 +20,8 @@ import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import {
   EvolutionConnectionsPanel,
+  EvolutionGroupsToggle,
+  EvolutionPhoneMessagesToggle,
   type DepartmentOption,
 } from "../components/settings/EvolutionConnectionsPanel";
 import { formatConnectionPhone } from "../lib/whatsappConnections";
@@ -56,6 +58,8 @@ type Connection = {
   session_name?: string | null;
   display_name?: string | null;
   default_department_id?: string | null;
+  groups_enabled?: boolean | null;
+  phone_messages_enabled?: boolean | null;
   archived_at?: string | null;
   // Por que o servidor desconectou o QR Code escaneado: 'plan_limit' (limite
   // de números da empresa) ou 'duplicate_number' (celular já conectado)
@@ -73,7 +77,7 @@ type Connection = {
 };
 
 const CONNECTION_COLUMNS =
-  "id,provider,channel,meta_waba_id,meta_phone_number_id,meta_page_id,meta_ig_user_id,qr_code,connected_phone,connected_name,session_name,display_name,default_department_id,archived_at,disconnect_reason,last_connection_at,last_disconnection_at,status,created_at,updated_at";
+  "id,provider,channel,meta_waba_id,meta_phone_number_id,meta_page_id,meta_ig_user_id,qr_code,connected_phone,connected_name,session_name,display_name,default_department_id,groups_enabled,phone_messages_enabled,archived_at,disconnect_reason,last_connection_at,last_disconnection_at,status,created_at,updated_at";
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return null;
@@ -132,7 +136,9 @@ export const MetaIntegrationsPage: React.FC = () => {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [metaDetails, setMetaDetails] = useState<Record<string, MetaAccountDetails>>({});
+  const [metaDetails, setMetaDetails] = useState<
+    Record<string, MetaAccountDetails>
+  >({});
   const [metaDetailsLoading, setMetaDetailsLoading] = useState(false);
 
   const clinicLabel = useMemo(() => {
@@ -473,8 +479,14 @@ export const MetaIntegrationsPage: React.FC = () => {
 
   // Nome, foto e @ das contas da Meta conectadas, lidos na hora pelo meta-connect.
   // Depende só de id/status/Página para não repetir a busca a cada atualização da conexão.
-  const messengerKey = messenger?.status === "connected" ? `${messenger.id}:${messenger.meta_page_id}` : "";
-  const instagramKey = instagram?.status === "connected" ? `${instagram.id}:${instagram.meta_ig_user_id}` : "";
+  const messengerKey =
+    messenger?.status === "connected"
+      ? `${messenger.id}:${messenger.meta_page_id}`
+      : "";
+  const instagramKey =
+    instagram?.status === "connected"
+      ? `${instagram.id}:${instagram.meta_ig_user_id}`
+      : "";
   useEffect(() => {
     if (!clinicId || (!messengerKey && !instagramKey)) {
       setMetaDetails({});
@@ -483,14 +495,18 @@ export const MetaIntegrationsPage: React.FC = () => {
     let cancelled = false;
     setMetaDetailsLoading(true);
     supabase.functions
-      .invoke("meta-connect", { body: { action: "connection_details", clinicId } })
+      .invoke("meta-connect", {
+        body: { action: "connection_details", clinicId },
+      })
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
           console.error("Erro ao ler dados das contas da Meta:", error);
           return;
         }
-        setMetaDetails((data?.details ?? {}) as Record<string, MetaAccountDetails>);
+        setMetaDetails(
+          (data?.details ?? {}) as Record<string, MetaAccountDetails>,
+        );
       })
       .finally(() => {
         if (!cancelled) setMetaDetailsLoading(false);
@@ -806,32 +822,50 @@ export const MetaIntegrationsPage: React.FC = () => {
                     actionAfterChildren={isWhatsAppEvolutionConnected}
                   >
                     {isWhatsAppEvolutionConnected ? (
-                      <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-                        <p className="font-medium">WhatsApp conectado</p>
-                        {whatsappEvolutionConnectedPhoneLabel ? (
-                          <p className="mt-1">
-                            <span className="font-medium">
-                              Número conectado:
-                            </span>{" "}
-                            {whatsappEvolutionConnectedPhoneLabel}
-                          </p>
-                        ) : null}
-                        {whatsappEvolution?.connected_name ? (
-                          <p className="mt-1">
-                            {whatsappEvolution.connected_name}
-                          </p>
-                        ) : null}
-                        {!whatsappEvolution?.connected_phone &&
-                        !whatsappEvolution?.connected_name &&
-                        whatsappEvolutionConnectedLabel ? (
-                          <p className="mt-1">
-                            {whatsappEvolutionConnectedLabel}
-                          </p>
-                        ) : null}
-                        {lastConnectionLabel ? (
-                          <p className="mt-2 text-xs text-green-700">
-                            Conectado em {lastConnectionLabel}
-                          </p>
+                      <div className="space-y-3">
+                        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                          <p className="font-medium">WhatsApp conectado</p>
+                          {whatsappEvolutionConnectedPhoneLabel ? (
+                            <p className="mt-1">
+                              <span className="font-medium">
+                                Número conectado:
+                              </span>{" "}
+                              {whatsappEvolutionConnectedPhoneLabel}
+                            </p>
+                          ) : null}
+                          {whatsappEvolution?.connected_name ? (
+                            <p className="mt-1">
+                              {whatsappEvolution.connected_name}
+                            </p>
+                          ) : null}
+                          {!whatsappEvolution?.connected_phone &&
+                          !whatsappEvolution?.connected_name &&
+                          whatsappEvolutionConnectedLabel ? (
+                            <p className="mt-1">
+                              {whatsappEvolutionConnectedLabel}
+                            </p>
+                          ) : null}
+                          {lastConnectionLabel ? (
+                            <p className="mt-2 text-xs text-green-700">
+                              Conectado em {lastConnectionLabel}
+                            </p>
+                          ) : null}
+                        </div>
+                        {whatsappEvolution ? (
+                          <>
+                            <EvolutionGroupsToggle
+                              connection={whatsappEvolution}
+                              onChanged={fetchConnections}
+                              onError={setErrorMsg}
+                              disabled={disconnectLoading}
+                            />
+                            <EvolutionPhoneMessagesToggle
+                              connection={whatsappEvolution}
+                              onChanged={fetchConnections}
+                              onError={setErrorMsg}
+                              disabled={disconnectLoading}
+                            />
+                          </>
                         ) : null}
                       </div>
                     ) : blockEvolutionByMeta ? (
@@ -934,7 +968,9 @@ export const MetaIntegrationsPage: React.FC = () => {
                         instagram.last_connection_at ?? instagram.created_at,
                       )}
                       linkedPageName={
-                        metaDetails.messenger?.name ?? messenger?.connected_name ?? null
+                        metaDetails.messenger?.name ??
+                        messenger?.connected_name ??
+                        null
                       }
                     />
                   ) : null}
@@ -963,7 +999,9 @@ export const MetaIntegrationsPage: React.FC = () => {
                   >
                     <span className="flex items-center gap-2">
                       <LogOutIcon className="h-4 w-4" />
-                      {metaDisconnectLoading ? "Desconectando..." : "Desconectar"}
+                      {metaDisconnectLoading
+                        ? "Desconectando..."
+                        : "Desconectar"}
                     </span>
                   </Button>
                 ) : null}

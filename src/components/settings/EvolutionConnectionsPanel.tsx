@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { LogOutIcon, PlusIcon, QrCodeIcon, Trash2Icon } from "lucide-react";
 import { Button } from "../ui/Button";
+import { Toggle } from "../ui/Toggle";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { WhatsAppQrCode } from "./WhatsAppQrCode";
 import { supabase } from "../../lib/supabaseClient";
@@ -17,6 +18,10 @@ export type EvolutionConnection = {
   connected_name?: string | null;
   display_name?: string | null;
   default_department_id?: string | null;
+  // Recebe as mensagens dos grupos do WhatsApp deste número
+  groups_enabled?: boolean | null;
+  // Grava as mensagens enviadas pelo celular (ou WhatsApp Web) da empresa
+  phone_messages_enabled?: boolean | null;
   last_connection_at?: string | null;
   last_disconnection_at?: string | null;
 };
@@ -88,6 +93,95 @@ const statusBadge = (status: string) => {
     <span className={`rounded-full border px-2 py-1 text-xs ${config.cls}`}>
       {config.label}
     </span>
+  );
+};
+
+/**
+ * Chave "Receber mensagens de grupos" de um número de QR Code. Usada no
+ * painel de vários números e no card do número único.
+ */
+export const EvolutionGroupsToggle: React.FC<{
+  connection: Pick<EvolutionConnection, "id" | "groups_enabled">;
+  onChanged: () => void | Promise<void>;
+  onError: (message: string | null) => void;
+  disabled?: boolean;
+}> = ({ connection, onChanged, onError, disabled }) => {
+  const [saving, setSaving] = useState(false);
+  const enabled = connection.groups_enabled === true;
+
+  const save = async (next: boolean) => {
+    onError(null);
+    setSaving(true);
+    const { error } = await supabase
+      .from("channel_connections")
+      .update({ groups_enabled: next, updated_at: new Date().toISOString() })
+      .eq("id", connection.id);
+    setSaving(false);
+    if (error) {
+      onError("Não foi possível salvar a opção de grupos.");
+      return;
+    }
+    await onChanged();
+  };
+
+  return (
+    <Toggle
+      label="Receber mensagens de grupos"
+      helper={
+        enabled
+          ? "Cada grupo vira uma conversa na fila, com o nome de quem escreveu em cada mensagem. Bot, IA e pesquisa de satisfação não atuam em grupos. Pode levar até 5 minutos para começar."
+          : "Desligado: mensagens de grupos ficam só no celular."
+      }
+      checked={enabled}
+      onChange={save}
+      disabled={disabled || saving}
+    />
+  );
+};
+
+/**
+ * Chave "Mostrar mensagens enviadas pelo celular" de um número de QR Code.
+ * Usada no painel de vários números e no card do número único.
+ */
+export const EvolutionPhoneMessagesToggle: React.FC<{
+  connection: Pick<EvolutionConnection, "id" | "phone_messages_enabled">;
+  onChanged: () => void | Promise<void>;
+  onError: (message: string | null) => void;
+  disabled?: boolean;
+}> = ({ connection, onChanged, onError, disabled }) => {
+  const [saving, setSaving] = useState(false);
+  const enabled = connection.phone_messages_enabled === true;
+
+  const save = async (next: boolean) => {
+    onError(null);
+    setSaving(true);
+    const { error } = await supabase
+      .from("channel_connections")
+      .update({
+        phone_messages_enabled: next,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", connection.id);
+    setSaving(false);
+    if (error) {
+      onError("Não foi possível salvar a opção de mensagens do celular.");
+      return;
+    }
+    await onChanged();
+  };
+
+  return (
+    <Toggle
+      label="Mostrar mensagens enviadas pelo celular"
+      helper={
+        enabled
+          ? "O que a equipe responder direto no celular ou no WhatsApp Web aparece na conversa, marcado como \"Pelo celular\". Pode levar alguns segundos para aparecer."
+          : "Desligado: mensagens enviadas pelo celular ficam só no WhatsApp."
+      }
+      checked={enabled}
+      onChange={save}
+      disabled={disabled || saving}
+    />
   );
 };
 
@@ -274,6 +368,21 @@ const EvolutionConnectionItem: React.FC<ItemProps> = ({
         </div>
       ) : null}
 
+      <div className="mt-3 space-y-3">
+        <EvolutionGroupsToggle
+          connection={connection}
+          onChanged={onChanged}
+          onError={onError}
+          disabled={busy !== null}
+        />
+        <EvolutionPhoneMessagesToggle
+          connection={connection}
+          onChanged={onChanged}
+          onError={onError}
+          disabled={busy !== null}
+        />
+      </div>
+
       {!isConnected && connection.qr_code ? (
         <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-5 text-center">
           <p className="text-sm font-semibold text-gray-900">
@@ -442,7 +551,7 @@ export const EvolutionConnectionsPanel: React.FC<Props> = ({
             Aparece no atendimento para a equipe saber por qual número o cliente
             falou.
           </p>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-2 flex flex-col gap-2">
             <input
               id="new-evolution-connection-name"
               value={newName}

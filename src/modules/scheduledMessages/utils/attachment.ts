@@ -1,5 +1,5 @@
 import { supabase } from "../../../lib/supabaseClient";
-import { classifyLibraryFile, storageContentType, type FileKind } from "../../../services/fileLibrary";
+import { classifyLibraryFile, storageContentType, storageFile, type FileKind } from "../../../services/fileLibrary";
 
 // Anexo de uma mensagem agendada (Carteira e cartão do Funil). Migration
 // 20261114000000_scheduled_message_media.
@@ -46,7 +46,7 @@ export const resolveAttachment = async (
 
   const random = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const path = `${clinicId}/scheduled/${random}.${draft.extension}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, draft.file, {
+  const { error } = await supabase.storage.from(BUCKET).upload(path, storageFile(draft.file, draft.mimeType), {
     cacheControl: "3600",
     upsert: false,
     contentType: storageContentType(draft.mimeType),

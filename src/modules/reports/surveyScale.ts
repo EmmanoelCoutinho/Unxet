@@ -1,9 +1,9 @@
-// Escala da nota da pesquisa de satisfação (cada empresa escolhe, ex.: 1 a 5
-// ou 0 a 10). Os relatórios já chegam convertidos para a escala atual.
+// Escala da nota da pesquisa de satisfação (hoje sempre 0 a 10; avaliações
+// antigas em 1 a 5 ou 1 a 10 chegam convertidas para a escala atual).
 
 export type SurveyScale = { min: number; max: number };
 
-export const DEFAULT_SURVEY_SCALE: SurveyScale = { min: 1, max: 5 };
+export const DEFAULT_SURVEY_SCALE: SurveyScale = { min: 0, max: 10 };
 
 const EPSILON = 1e-9;
 

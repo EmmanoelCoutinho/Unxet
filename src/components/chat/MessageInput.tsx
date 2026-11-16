@@ -25,11 +25,14 @@ import {
 } from "../../lib/quickMessageSlash";
 import type { QuickMessage } from "../../services/quickMessages";
 import { compressImageFile } from "../../lib/imageUtils";
-import { storageContentType } from "../../services/fileLibrary";
+import { storageContentType, storageFile } from "../../services/fileLibrary";
 import type { SharedContact } from "../../lib/sharedContact";
 import { ShareContactModal } from "./ShareContactModal";
 import { AttachmentTray, type PendingAttachment } from "./AttachmentTray";
 import { FileLibraryPicker, type PickedFile } from "./FileLibraryPicker";
+import { QuotedMessage } from "./QuotedMessage";
+import { CloseButton } from "../ui/CloseButton";
+import type { MessageReplyPreview } from "../../types";
 
 const MAX_AUDIO_FILE_BYTES = 16 * 1024 * 1024;
 // Limite de documento do WhatsApp
@@ -68,6 +71,10 @@ interface MessageInputProps {
     isSendingAudio: boolean;
     recordSeconds: number;
   }) => void;
+  // Respondendo a uma mensagem (menu da setinha no balão)
+  replyingTo?: MessageReplyPreview | null;
+  replyContactName?: string;
+  onCancelReply?: () => void;
 }
 
 type AllowedImageMime = "image/jpeg" | "image/png";
@@ -103,6 +110,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   quickMessagesLoading = false,
   onRecordingStateChange,
   compact = false,
+  replyingTo = null,
+  replyContactName,
+  onCancelReply,
 }) => {
   const [internalMessage, setInternalMessage] = useState("");
   // Classes de telas largas (sm:) ficam de fora na caixa flutuante
@@ -127,6 +137,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const hasAttachments = pendingAttachments.length > 0;
+
+  // Escolheu "Responder": o cursor vai para o campo
+  useEffect(() => {
+    if (replyingTo) textareaRef.current?.focus();
+  }, [replyingTo]);
 
   // Libera as prévias das imagens ao sair da conversa
   useEffect(
@@ -690,20 +705,21 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
     const filePath = `${clinicId}/${folder}/${fileName}`;
 
+    const contentType = storageContentType(
+      options?.contentType ||
+        file.type ||
+        (kind === "image"
+          ? "image/jpeg"
+          : kind === "audio"
+            ? "audio/mpeg"
+            : "application/octet-stream"),
+    );
     const { error: uploadError } = await supabase.storage
       .from("whatsapp-media")
-      .upload(filePath, file, {
+      .upload(filePath, storageFile(file, contentType), {
         cacheControl: "3600",
         upsert: false,
-        contentType: storageContentType(
-          options?.contentType ||
-            file.type ||
-            (kind === "image"
-              ? "image/jpeg"
-              : kind === "audio"
-                ? "audio/mpeg"
-                : "application/octet-stream"),
-        ),
+        contentType,
       });
 
     if (uploadError) {
@@ -958,6 +974,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       rejected += 1;
     }
 
+    // O PFX leva a chave privada do certificado: quem recebe assina em nome da empresa
+    if (accepted.some((item) => item.extension === "pfx")) {
+      toast.warning(
+        "Atenção: o arquivo PFX contém a chave privada do certificado digital. Envie só para quem deve ter acesso a ele e passe a senha por outro canal.",
+      );
+    }
+
     if (rejected > 0) {
       toast.info(
         rejected === 1
@@ -1171,6 +1194,17 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             : "o texto digitado vai em uma mensagem separada"
         }
       />
+
+      {replyingTo && !disabled && (
+        <div className="mb-2 flex items-start gap-2">
+          <QuotedMessage
+            preview={replyingTo}
+            contactName={replyContactName}
+            className="flex-1"
+          />
+          <CloseButton onClick={() => onCancelReply?.()} label="Cancelar resposta" />
+        </div>
+      )}
 
       {disabled && (
         <div className="mb-2 flex items-center gap-2 text-xs text-gray-500">

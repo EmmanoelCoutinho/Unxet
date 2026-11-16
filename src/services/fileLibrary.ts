@@ -101,7 +101,17 @@ const FIXED_MIME_EXTENSIONS = new Set(["xml", "ofx", "csv", "pfx", "doc", "docx"
 
 export const storageContentType = (mime: string) => {
   const base = mime.toLowerCase().split(";")[0].trim();
-  return TEXT_DOCUMENT_MIMES.has(base) ? "text/plain" : mime;
+  return TEXT_DOCUMENT_MIMES.has(base) ? "text/plain" : base || "application/octet-stream";
+};
+
+/**
+ * O arquivo com o tipo que deve ficar no Storage. O supabase-js ignora a opção
+ * contentType quando recebe um File e grava o tipo que o navegador deu ao
+ * arquivo (text/xml, vazio...), que o bucket recusa (allowed_mime_types).
+ */
+export const storageFile = (file: File, mime: string) => {
+  const type = storageContentType(mime);
+  return file.type === type ? file : new File([file], file.name, { type });
 };
 
 const extensionOf = (name: string) => {
@@ -238,7 +248,7 @@ export const uploadLibraryFile = async (params: {
   const random = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const path = `${params.clinicId}/library/${random}.${check.extension}`;
 
-  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, params.file, {
+  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, storageFile(params.file, check.mimeType), {
     cacheControl: "3600",
     upsert: false,
     contentType: storageContentType(check.mimeType),
