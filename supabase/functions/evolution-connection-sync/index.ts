@@ -24,7 +24,7 @@ import { reconcileConnectionStatus } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 import { ensureInstanceSettings } from "../_shared/evolutionSettings.ts";
 import { sendPushToUsers } from "../_shared/push.ts";
-import { RECOVERY_MAX_LID_LOOKUPS, fetchLidPhone, fetchStoredMessages, importOutcome, lidPhoneMap, pickRecoverable, recoveredWebhookBody, recoveryPhase, recoveryWindow, unresolvedLids, withPhone } from "../_shared/inboundRecovery.ts";
+import { RECOVERY_MAX_LID_LOOKUPS, fetchLidPhone, fetchStoredMessages, importOutcome, isRateLimitError, lidPhoneMap, pickRecoverable, recoveredWebhookBody, recoveryExpired, recoveryPhase, recoveryWindow, unresolvedLids, withPhone } from "../_shared/inboundRecovery.ts";
 import { WATCHDOG_WINDOW_MINUTES, restartInstance, watchdogDecision, watchdogNotification } from "../_shared/whatsappWatchdog.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -193,9 +193,12 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
     });
     return importOutcome(response.status, await response.text().catch(()=>""));
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // Limite de chamadas entre funções: quem chamou para a rodada e loga uma vez só
+    if (isRateLimitError(message)) return "rate_limited";
     console.warn("[INBOUND_RECOVERY_IMPORT_ERROR]", {
       sessionName,
-      error: err instanceof Error ? err.message : String(err)
+      error: message
     });
     return "failed";
   }
@@ -206,6 +209,8 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
  * "connected". Nunca lança erro.
  */ async function runInboundRecovery(supabase) {
   const results = [];
+  // Esbarrou no limite de chamadas entre funções: o resto fica para a próxima rodada
+  let rateLimited = false;
   try {
     const { data: connections, error } = await supabase.from("channel_connections").select("id, session_name, evolution_api_url, evolution_api_key, inbound_recovery_requested_at, inbound_recovery_from").eq("provider", "evolution").eq("status", "connected").is("archived_at", null).not("session_name", "is", null).not("inbound_recovery_requested_at", "is", null);
     if (error) {
@@ -215,6 +220,7 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
     const startedAt = Date.now();
     let imports = 0;
     for (const connection of connections ?? []){
+      if (rateLimited) break;
       const phase = recoveryPhase(connection.inbound_recovery_requested_at);
       if (phase === "wait") continue;
       const apiUrl = connection.evolution_api_url || EVOLUTION_API_URL;
@@ -230,8 +236,9 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
         // Sem o telefone do contato (@lid): não há como importar
         unresolved: 0,
         failed: 0,
+        rateLimited: false,
         truncated: false,
-        done: phase === "last"
+        done: false
       };
       let complete = true;
       if (window && apiUrl && apiKey) {
@@ -246,7 +253,10 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
           result.truncated = stored.truncated;
           // Telefone das mensagens do histórico que vieram só com o @lid
           const lidMap = lidPhoneMap(stored.records);
-          for (const lid of unresolvedLids(missing, lidMap).slice(0, RECOVERY_MAX_LID_LOOKUPS)){
+          const lids = unresolvedLids(missing, lidMap);
+          // Contatos que passaram do teto de buscas são procurados na próxima rodada
+          if (lids.length > RECOVERY_MAX_LID_LOOKUPS) complete = false;
+          for (const lid of lids.slice(0, RECOVERY_MAX_LID_LOOKUPS)){
             const phone = await fetchLidPhone(apiUrl, apiKey, connection.session_name, lid);
             if (phone) lidMap.set(lid, phone);
           }
@@ -262,9 +272,18 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
             }
             imports += 1;
             const outcome = await importRecovered(connection.session_name, ready);
+            if (outcome === "rate_limited") {
+              rateLimited = true;
+              result.rateLimited = true;
+              complete = false;
+              break;
+            }
             if (outcome === "imported") result.imported += 1;
-            else if (outcome === "failed") result.failed += 1;
-            else {
+            else if (outcome === "failed") {
+              result.failed += 1;
+              // Tenta de novo na próxima rodada
+              complete = false;
+            } else {
               const reason = outcome.replace(/^ignored:/, "");
               result.ignored[reason] = (result.ignored[reason] ?? 0) + 1;
             }
@@ -273,18 +292,21 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
       }
       // Última rodada e nada ficou para trás: limpa a marca. A comparação com
       // a hora da marca evita apagar uma reconexão que aconteceu nesse meio-tempo.
-      if (phase === "last" && complete) {
+      const expired = recoveryExpired(connection.inbound_recovery_requested_at);
+      if (phase === "last" && (complete || expired)) {
         const { error: clearError } = await supabase.from("channel_connections").update({
           inbound_recovery_requested_at: null,
           inbound_recovery_from: null
         }).eq("id", connection.id).eq("inbound_recovery_requested_at", connection.inbound_recovery_requested_at);
         if (clearError) console.error("[INBOUND_RECOVERY_CLEAR_ERROR]", connection.id, clearError);
       }
+      result.done = phase === "last" && (complete || expired);
       if (result.missing > 0 || result.truncated || result.done) results.push(result);
     }
   } catch (err) {
     console.error("[INBOUND_RECOVERY_ERROR]", err);
   }
+  if (rateLimited) console.warn("[INBOUND_RECOVERY_RATE_LIMITED]", "limite de chamadas entre funções; o restante fica para a próxima rodada");
   if (results.length > 0) console.log("[INBOUND_RECOVERY]", JSON.stringify(results));
   return results;
 }

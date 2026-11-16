@@ -3,11 +3,13 @@ import {
   fetchLidPhone,
   fetchStoredMessages,
   importOutcome,
+  isRateLimitError,
   lidPhoneMap,
   unresolvedLids,
   withPhone,
   pickRecoverable,
   recoveredWebhookBody,
+  recoveryExpired,
   recoveryPhase,
   recoveryWindow,
 } from "./inboundRecovery";
@@ -184,5 +186,21 @@ describe("importOutcome", () => {
     expect(importOutcome(200, '{"ignored":true,"reason":"lid_unresolvable"}')).toBe("ignored:lid_unresolvable");
     expect(importOutcome(200, "OK")).toBe("imported");
     expect(importOutcome(502, "Upstream error")).toBe("failed");
+  });
+
+  it("reconhece o limite de chamadas entre funções", () => {
+    expect(importOutcome(429, "")).toBe("rate_limited");
+    expect(importOutcome(503, "Rate limit exceeded for function. Retry after 35469ms.")).toBe("rate_limited");
+    expect(isRateLimitError("Rate limit exceeded for function. Retry after 35469ms.")).toBe(true);
+    expect(isRateLimitError("offline")).toBe(false);
+    expect(isRateLimitError(undefined)).toBe(false);
+  });
+});
+
+describe("recoveryExpired", () => {
+  it("encerra a recuperação incompleta depois de 24 horas", () => {
+    expect(recoveryExpired(minutesAgo(60 * 23), now)).toBe(false);
+    expect(recoveryExpired(minutesAgo(60 * 24), now)).toBe(true);
+    expect(recoveryExpired("data inválida", now)).toBe(true);
   });
 });
