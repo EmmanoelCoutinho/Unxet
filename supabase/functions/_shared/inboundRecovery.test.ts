@@ -5,6 +5,8 @@ import {
   gatewayQueueOutcome,
   importOutcome,
   isRateLimitError,
+  knownLidPhones,
+  whatsappNumbersPhone,
   lidPhoneMap,
   unresolvedLids,
   withPhone,
@@ -178,6 +180,42 @@ describe("telefone das mensagens com @lid", () => {
     });
     const offline = vi.fn().mockRejectedValue(new Error("offline"));
     expect(await fetchLidPhone("https://evo.test", "key", "loja", "111@lid", { fetchImpl: offline })).toBeNull();
+  });
+
+  it("sem histórico, pergunta ao /chat/whatsappNumbers", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ messages: { records: [] } }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [{ exists: true, jid: "5511977776666@s.whatsapp.net", number: "111" }],
+      });
+    expect(await fetchLidPhone("https://evo.test", "key", "loja", "111@lid", { fetchImpl })).toBe(
+      "5511977776666@s.whatsapp.net",
+    );
+    expect(fetchImpl.mock.calls[1][0]).toBe("https://evo.test/chat/whatsappNumbers/loja");
+    expect(JSON.parse(fetchImpl.mock.calls[1][1].body)).toEqual({ numbers: ["111@lid"] });
+  });
+
+  it("só aceita telefone de verdade do /chat/whatsappNumbers", () => {
+    expect(whatsappNumbersPhone([{ jid: "111@lid" }])).toBeNull();
+    expect(whatsappNumbersPhone({ jid: "5511977776666@s.whatsapp.net" })).toBe("5511977776666@s.whatsapp.net");
+    expect(whatsappNumbersPhone(null)).toBeNull();
+  });
+
+  it("usa o telefone dos contatos que o Unxet já conhece", () => {
+    const map = knownLidPhones([
+      { lid: "111@lid", phone: "5511999998888" },
+      { lid: "222@lid", phone: "+55 (11) 98888-7777" },
+      { lid: "333@lid", phone: "123" },
+      { lid: "444@s.whatsapp.net", phone: "5511999998888" },
+    ]);
+    expect(Object.fromEntries(map)).toEqual({
+      "111@lid": "5511999998888@s.whatsapp.net",
+      "222@lid": "5511988887777@s.whatsapp.net",
+    });
+    expect(knownLidPhones(null).size).toBe(0);
   });
 });
 

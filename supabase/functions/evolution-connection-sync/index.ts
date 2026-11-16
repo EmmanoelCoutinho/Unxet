@@ -24,7 +24,7 @@ import { reconcileConnectionStatus } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 import { ensureInstanceSettings } from "../_shared/evolutionSettings.ts";
 import { sendPushToUsers } from "../_shared/push.ts";
-import { RECOVERY_GATEWAY_BATCH, RECOVERY_LID_LOOKUP_CONCURRENCY, RECOVERY_MAX_LID_LOOKUPS, fetchLidPhone, fetchStoredMessages, importOutcome, isRateLimitError, gatewayQueueOutcome, lidPhoneMap, pickRecoverable, recoveredWebhookBody, recoveryExpired, recoveryPhase, recoveryWindow, unresolvedLids, withPhone } from "../_shared/inboundRecovery.ts";
+import { RECOVERY_GATEWAY_BATCH, RECOVERY_LID_LOOKUP_CONCURRENCY, RECOVERY_MAX_LID_LOOKUPS, fetchLidPhone, fetchStoredMessages, importOutcome, isRateLimitError, gatewayQueueOutcome, knownLidPhones, lidPhoneMap, pickRecoverable, recoveredWebhookBody, recoveryExpired, recoveryPhase, recoveryWindow, unresolvedLids, withPhone } from "../_shared/inboundRecovery.ts";
 import { WATCHDOG_WINDOW_MINUTES, restartInstance, watchdogDecision, watchdogNotification } from "../_shared/whatsappWatchdog.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -298,6 +298,16 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
           result.truncated = stored.truncated;
           // Telefone das mensagens do histórico que vieram só com o @lid
           const lidMap = lidPhoneMap(stored.records);
+          // Quem já escreveu antes: o Unxet tem o @lid e o telefone do contato
+          const lidsBefore = unresolvedLids(missing, lidMap);
+          if (lidsBefore.length > 0) {
+            const { data: known, error: knownError } = await supabase.rpc("inbound_recovery_lid_phones", {
+              p_connection_id: connection.id,
+              p_lids: lidsBefore
+            });
+            if (knownError) console.warn("[INBOUND_RECOVERY_LID_QUERY_ERROR]", connection.id, knownError);
+            for (const [lid, phone] of knownLidPhones(known))lidMap.set(lid, phone);
+          }
           const lids = unresolvedLids(missing, lidMap);
           // Contatos que passaram do teto de buscas são procurados na próxima rodada
           if (lids.length > RECOVERY_MAX_LID_LOOKUPS) complete = false;

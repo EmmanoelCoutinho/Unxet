@@ -213,7 +213,25 @@ export const withPhone = (record, map: Map<string, string>) => {
   return alt ? { ...record, key: { ...record.key, remoteJidAlt: alt } } : null;
 };
 
-/** Procura o telefone de um @lid nas mensagens mais recentes dele na Evolution. */
+const findMessagesRecords = (json) => {
+  const result = json?.messages ?? json;
+  return Array.isArray(result?.records) ? result.records : Array.isArray(result) ? result : [];
+};
+
+/** Telefone que o /chat/whatsappNumbers devolveu para o @lid, ou null. */
+export const whatsappNumbersPhone = (json: unknown) => {
+  const items = Array.isArray(json) ? json : [json];
+  for (const item of items) {
+    const jid = (item as { jid?: unknown })?.jid;
+    if (typeof jid === "string" && PHONE_JID.test(jid)) return jid;
+  }
+  return null;
+};
+
+/**
+ * Procura o telefone de um @lid na Evolution: primeiro nas mensagens mais
+ * recentes do contato, depois no /chat/whatsappNumbers (versões >= 2.3).
+ */
 export const fetchLidPhone = async (
   apiUrl: string,
   apiKey: string,
@@ -221,27 +239,40 @@ export const fetchLidPhone = async (
   lid: string,
   { fetchImpl = fetch, timeoutMs = 15000 } = {},
 ) => {
-  try {
-    const response = await fetchImpl(
-      `${apiUrl.replace(/\/$/, "")}/chat/findMessages/${encodeURIComponent(sessionName)}`,
-      {
+  const base = apiUrl.replace(/\/$/, "");
+  const post = async (path: string, body: unknown) => {
+    try {
+      const response = await fetchImpl(`${base}${path}/${encodeURIComponent(sessionName)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: apiKey },
-        body: JSON.stringify({ where: { key: { remoteJid: lid } }, page: 1, offset: 50 }),
+        body: JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
-      },
-    );
-    if (!response.ok) {
-      await response.body?.cancel?.();
+      });
+      if (!response.ok) {
+        await response.body?.cancel?.();
+        return null;
+      }
+      return await response.json();
+    } catch {
       return null;
     }
-    const json = await response.json();
-    const result = json?.messages ?? json;
-    const records = Array.isArray(result?.records) ? result.records : Array.isArray(result) ? result : [];
-    return lidPhoneMap(records).get(lid) ?? null;
-  } catch {
-    return null;
+  };
+  const history = await post("/chat/findMessages", { where: { key: { remoteJid: lid } }, page: 1, offset: 50 });
+  const fromHistory = lidPhoneMap(findMessagesRecords(history)).get(lid);
+  if (fromHistory) return fromHistory;
+  return whatsappNumbersPhone(await post("/chat/whatsappNumbers", { numbers: [lid] }));
+};
+
+/** Linhas do inbound_recovery_lid_phones como @lid -> telefone (JID). */
+export const knownLidPhones = (rows: unknown) => {
+  const map = new Map<string, string>();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const lid = row?.lid;
+    const phone = String(row?.phone ?? "").replace(/\D/g, "");
+    if (typeof lid !== "string" || !lid.endsWith("@lid") || !/^\d{10,15}$/.test(phone)) continue;
+    map.set(lid, `${phone}@s.whatsapp.net`);
   }
+  return map;
 };
 
 /**
