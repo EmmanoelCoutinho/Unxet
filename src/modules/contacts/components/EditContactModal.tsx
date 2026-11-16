@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { InfoIcon } from "lucide-react";
 import { toast } from "react-toastify";
 import { FIELD_CLASS, LABEL_CLASS, LeadModal } from "../../leads/components/LeadModal";
 import { useUpdateContact } from "../hooks/useContacts";
 import type { Contact } from "../types/contacts";
+import { buildCountryPhone, DEFAULT_COUNTRY, splitCountryPhone } from "../utils/countryPhone";
+import { CountryPhoneInput } from "./CountryPhoneInput";
 
 const onlyDigits = (value: string | null | undefined) => String(value ?? "").replace(/\D/g, "");
 
@@ -14,10 +16,15 @@ export const EditContactModal: React.FC<{
 }> = ({ contact, onClose }) => {
   const { save, saving } = useUpdateContact();
   const [name, setName] = useState(contact.name ?? "");
-  const [phone, setPhone] = useState(contact.phone ?? "");
+  // Abre no país do número salvo, com o número local no campo
+  const initial = useMemo(() => splitCountryPhone(contact.phone), [contact.phone]);
+  const [country, setCountry] = useState(initial.iso);
+  const [phone, setPhone] = useState(initial.local);
   const [email, setEmail] = useState(contact.email ?? "");
 
-  const phoneChanged = onlyDigits(phone) !== onlyDigits(contact.phone);
+  const hasPhone = onlyDigits(phone) !== "";
+  const fullPhone = hasPhone ? buildCountryPhone(phone, country) : null;
+  const phoneChanged = hasPhone && fullPhone !== onlyDigits(contact.phone);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -25,8 +32,17 @@ export const EditContactModal: React.FC<{
       toast.error("Informe o nome do cliente.");
       return;
     }
+    if (hasPhone && !fullPhone) {
+      toast.error(
+        country === DEFAULT_COUNTRY
+          ? "Telefone inválido. Use DDD + número, por exemplo (11) 98765-4321. Cliente de outro país? Troque o país ao lado."
+          : "Telefone inválido. Confira o número do cliente.",
+      );
+      return;
+    }
     try {
-      await save({ contactId: contact.id, name, phone, email });
+      // Com o +, o banco não confunde o código do país com DDD
+      await save({ contactId: contact.id, name, phone: fullPhone ? `+${fullPhone}` : "", email });
       toast.success("Cliente atualizado.");
       onClose();
     } catch (err: any) {
@@ -56,16 +72,19 @@ export const EditContactModal: React.FC<{
           <label htmlFor="contact-edit-phone" className={LABEL_CLASS}>
             Telefone (WhatsApp)
           </label>
-          <input
+          <CountryPhoneInput
             id="contact-edit-phone"
-            type="tel"
-            inputMode="tel"
+            country={country}
+            onCountryChange={setCountry}
             value={phone}
-            maxLength={25}
-            onChange={(event) => setPhone(event.target.value)}
-            className={`${FIELD_CLASS} mt-1.5`}
-            placeholder="Ex.: (11) 98765-4321"
+            onChange={setPhone}
+            className="mt-1.5"
           />
+          <p className="mt-1 text-xs text-slate-500">
+            {country === DEFAULT_COUNTRY
+              ? "DDD + número. Cliente de outro país? Troque o país ao lado."
+              : "Só o número, sem o código do país."}
+          </p>
           {phoneChanged && (
             <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
               <InfoIcon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />

@@ -251,7 +251,8 @@ serve(async (req)=>{
       if (!contact) return json(404, {
         error: "Cliente não encontrado."
       });
-      phone = normalizeTypedPhone(contact.phone);
+      // Telefone da carteira já tem o código do país
+      phone = normalizeTypedPhone(contact.phone) ?? normalizeTypedPhone(`+${String(contact.phone ?? "").replace(/\D/g, "")}`);
     } else {
       phone = normalizeTypedPhone(body?.phone);
       if (!phone) return json(422, {
