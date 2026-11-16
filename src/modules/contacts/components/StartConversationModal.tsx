@@ -6,11 +6,9 @@ import { whatsappConnectionLabel } from "../../../lib/whatsappConnections";
 import { useWhatsappConnections } from "../../../hooks/useWhatsappConnections";
 import { useOpenConversation } from "../../floatingChats/useOpenConversation";
 import { FIELD_CLASS, LABEL_CLASS, LeadModal } from "../../leads/components/LeadModal";
-import {
-  formatPhone,
-  normalizeTypedPhone,
-  recipientLabel,
-} from "../../scheduledMessages/utils/schedule";
+import { formatPhone, recipientLabel } from "../../scheduledMessages/utils/schedule";
+import { buildCountryPhone, DEFAULT_COUNTRY } from "../utils/countryPhone";
+import { CountryPhoneInput } from "./CountryPhoneInput";
 import { contactQueryKeys } from "../hooks/useContacts";
 
 type PresetContact = { id: string; name: string | null; phone: string | null };
@@ -32,6 +30,7 @@ export const StartConversationModal: React.FC<{
   const { connections, loading: connectionsLoading } = useWhatsappConnections(clinicId);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [connectionId, setConnectionId] = useState("");
   const [busy, setBusy] = useState<"save" | "start" | null>(null);
 
@@ -51,7 +50,7 @@ export const StartConversationModal: React.FC<{
   }, [qrNumbers, connectionId]);
 
   const submit = async (start: boolean) => {
-    const typedPhone = contact ? null : normalizeTypedPhone(phone);
+    const typedPhone = contact ? null : buildCountryPhone(phone, country);
     if (!contact) {
       if (!name.trim()) {
         toast.error("Informe o nome do cliente.");
@@ -59,7 +58,9 @@ export const StartConversationModal: React.FC<{
       }
       if (!typedPhone) {
         toast.error(
-          "Número inválido. Use DDD + número, por exemplo (11) 98765-4321. Para outro país, comece com + e o código do país.",
+          country === DEFAULT_COUNTRY
+            ? "Número inválido. Use DDD + número, por exemplo (11) 98765-4321. Cliente de outro país? Troque o país ao lado do número."
+            : "Número inválido. Confira o número do cliente.",
         );
         return;
       }
@@ -142,17 +143,17 @@ export const StartConversationModal: React.FC<{
               <label htmlFor="new-contact-phone" className={LABEL_CLASS}>
                 WhatsApp do cliente
               </label>
-              <input
+              <CountryPhoneInput
                 id="new-contact-phone"
-                type="tel"
-                inputMode="tel"
+                country={country}
+                onCountryChange={setCountry}
                 value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="(11) 98765-4321"
-                className={`${FIELD_CLASS} mt-1`}
+                onChange={setPhone}
               />
               <p className="mt-1 text-xs text-slate-500">
-                DDD + número. Para outro país, comece com + e o código do país (ex.: +33 7 45 51 36 37).
+                {country === DEFAULT_COUNTRY
+                  ? "DDD + número. Cliente de outro país? Troque o país ao lado."
+                  : "Só o número, sem o código do país."}
               </p>
             </div>
           </>
