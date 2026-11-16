@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   MAX_QUEUE_MESSAGE_BYTES,
+  chunkForQueue,
   deliveryOutcome,
   evolutionSkipReason,
   fromBase64,
   functionUrl,
+  parseRecoveryRequest,
   retryDelaySeconds,
+  safeEqual,
   targetFromPath,
   toBase64,
   type QueuedWebhook,
@@ -14,11 +17,16 @@ import { handleBatch, handleRequest, type Env, type QueueMessage } from "./index
 
 const BASE = "https://proj.supabase.co/functions/v1";
 
-const makeEnv = (send = vi.fn().mockResolvedValue(undefined)): Env & { send: typeof send } => ({
-  INBOUND: { send },
+const makeEnv = (
+  send = vi.fn().mockResolvedValue(undefined),
+  sendBatch = vi.fn().mockResolvedValue(undefined),
+): Env & { send: typeof send; sendBatch: typeof sendBatch } => ({
+  INBOUND: { send, sendBatch },
   SUPABASE_FUNCTIONS_URL: BASE,
   ENVIRONMENT: "test",
+  INTERNAL_BOT_SECRET: "INTERNO",
   send,
+  sendBatch,
 });
 
 const evolutionRequest = (body: string, extra: Record<string, string> = {}) =>
@@ -263,5 +271,84 @@ describe("gateway: filtro da Evolution", () => {
       env,
     );
     expect(env.send).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("gateway: recuperação de mensagens", () => {
+  const webhook = (id: string) => ({
+    event: "messages.upsert",
+    instance: "loja",
+    recovered: true,
+    data: { key: { id, fromMe: false, remoteJid: "5511999998888@s.whatsapp.net" }, message: { conversation: "oi" } },
+  });
+  const recoveryRequest = (body: unknown, secret = "INTERNO") =>
+    new Request("https://gw.test/evolution-recovery", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-internal-secret": secret, "x-webhook-secret": "TOKEN" },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    });
+
+  it("enfileira todos de uma vez, marcados como recuperados", async () => {
+    const env = makeEnv();
+    const res = await handleRequest(recoveryRequest({ webhooks: [webhook("A"), webhook("B")] }), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ queued: 2, rejected: [] });
+    expect(env.sendBatch).toHaveBeenCalledTimes(1);
+    const [batch] = env.sendBatch.mock.calls[0];
+    expect(batch).toHaveLength(2);
+    const first = batch[0].body as QueuedWebhook;
+    expect(first.target).toBe("evolution-in");
+    expect(first.headers).toMatchObject({
+      "x-webhook-secret": "TOKEN",
+      "x-internal-secret": "INTERNO",
+      "x-unxet-recovered": "1",
+    });
+    expect(JSON.parse(new TextDecoder().decode(fromBase64(first.body)))).toEqual(webhook("A"));
+  });
+
+  it("entrega pela fila com os cabeçalhos de recuperada", async () => {
+    const env = makeEnv();
+    await handleRequest(recoveryRequest({ webhooks: [webhook("A")] }), env);
+    const body = env.sendBatch.mock.calls[0][0][0].body as QueuedWebhook;
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
+    await handleBatch({ queue: "q", messages: [{ body, attempts: 1, ack: vi.fn(), retry: vi.fn() }] }, env, fetchImpl);
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe(`${BASE}/evolution-in`);
+    expect(init.headers["x-unxet-recovered"]).toBe("1");
+    expect(init.headers["x-internal-secret"]).toBe("INTERNO");
+  });
+
+  it("deixa de fora o que não cabe na fila", async () => {
+    const env = makeEnv();
+    const big = { ...webhook("GRANDE"), data: { ...webhook("GRANDE").data, message: { conversation: "x".repeat(MAX_QUEUE_MESSAGE_BYTES) } } };
+    const res = await handleRequest(recoveryRequest({ webhooks: [webhook("A"), big] }), env);
+    expect(await res.json()).toEqual({ queued: 1, rejected: [1] });
+  });
+
+  it("recusa sem o segredo, sem configuração ou com corpo inválido", async () => {
+    expect((await handleRequest(recoveryRequest({ webhooks: [webhook("A")] }, "errado"), makeEnv())).status).toBe(401);
+    const semSegredo = { ...makeEnv(), INTERNAL_BOT_SECRET: undefined };
+    expect((await handleRequest(recoveryRequest({ webhooks: [webhook("A")] }), semSegredo)).status).toBe(503);
+    expect((await handleRequest(recoveryRequest("não é json"), makeEnv())).status).toBe(400);
+    expect((await handleRequest(recoveryRequest({ webhooks: [] }), makeEnv())).status).toBe(400);
+  });
+
+  it("responde 503 quando a fila falha", async () => {
+    const env = makeEnv(undefined, vi.fn().mockRejectedValue(new Error("fora")));
+    const res = await handleRequest(recoveryRequest({ webhooks: [webhook("A")] }), env);
+    expect(res.status).toBe(503);
+  });
+
+  it("regras: formato do pedido, lotes e segredo", () => {
+    expect(parseRecoveryRequest(JSON.stringify({ webhooks: Array(101).fill({}) }))).toBeNull();
+    expect(parseRecoveryRequest(JSON.stringify({ webhooks: [1] }))).toBeNull();
+    expect(parseRecoveryRequest(JSON.stringify({ webhooks: [{}] }))).toEqual([{}]);
+    const msg = (n: number): QueuedWebhook => ({ target: "evolution-in", search: "", headers: {}, body: "x".repeat(n), receivedAt: "" });
+    expect(chunkForQueue([msg(10), msg(10), msg(10)], 2).map((c) => c.length)).toEqual([2, 1]);
+    expect(chunkForQueue([msg(100), msg(100)], 100, 250).map((c) => c.length)).toEqual([1, 1]);
+    expect(safeEqual("abc", "abc")).toBe(true);
+    expect(safeEqual("abc", "abd")).toBe(false);
+    expect(safeEqual("abc", "abcd")).toBe(false);
+    expect(safeEqual("", "")).toBe(false);
   });
 });

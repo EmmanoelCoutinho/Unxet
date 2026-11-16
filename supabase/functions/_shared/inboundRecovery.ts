@@ -169,7 +169,9 @@ export const fetchStoredMessages = async (
 // procurado em outras mensagens do mesmo contato guardadas na Evolution.
 
 /** Máximo de contatos com @lid procurados na Evolution por rodada. */
-export const RECOVERY_MAX_LID_LOOKUPS = 30;
+export const RECOVERY_MAX_LID_LOOKUPS = 100;
+/** Quantos contatos com @lid são procurados ao mesmo tempo. */
+export const RECOVERY_LID_LOOKUP_CONCURRENCY = 10;
 
 const PHONE_JID = /^\d{8,15}@s\.whatsapp\.net$/;
 
@@ -266,4 +268,32 @@ export const importOutcome = (status: number, bodyText: string) => {
     // Resposta sem JSON: tratada como entregue
   }
   return "imported";
+};
+
+// ── Fila de entrada ─────────────────────────────────────────────────────────
+// Com INBOUND_GATEWAY_URL, as mensagens recuperadas vão em lotes para o
+// Worker da fila de entrada (cloudflare/webhook-gateway, /evolution-recovery),
+// que entrega ao evolution-in no ritmo da fila.
+
+/** Mensagens por pedido ao Worker (o teto dele). */
+export const RECOVERY_GATEWAY_BATCH = 100;
+
+/**
+ * Resposta do Worker a um lote: quantas entraram na fila e os índices das
+ * que ficaram de fora (grandes demais). Null quando o lote não entrou.
+ */
+export const gatewayQueueOutcome = (status: number, bodyText: string, sent: number) => {
+  if (status < 200 || status >= 300) return null;
+  let json;
+  try {
+    json = JSON.parse(bodyText);
+  } catch {
+    return null;
+  }
+  const queued = Number(json?.queued);
+  if (!Number.isInteger(queued) || queued < 0) return null;
+  const rejected = Array.isArray(json?.rejected)
+    ? json.rejected.filter((index) => Number.isInteger(index) && index >= 0 && index < sent)
+    : [];
+  return { queued, rejected };
 };
