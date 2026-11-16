@@ -45,8 +45,8 @@ Código em `cloudflare/webhook-gateway`. Testes rodam no `npm test`.
 `unxet-entrada.workers.dev` é o subdomínio da conta do Cloudflare (um por
 conta). Cada Worker fica em `<nome do worker>.unxet-entrada.workers.dev`.
 
-Caminhos aceitos: `/evolution-in`, `/meta-webhook`, `/meta-in` e `/health`
-(para o monitor). A query string vai junto: `/evolution-in?token=...` chega
+Caminhos aceitos: `/evolution-in`, `/meta-webhook`, `/meta-in`, `/health`
+(para o monitor) e `/evolution-recovery` (recuperação de mensagens, abaixo). A query string vai junto: `/evolution-in?token=...` chega
 em `.../functions/v1/evolution-in?token=...`.
 
 ## Configuração (uma vez)
@@ -92,6 +92,34 @@ Basta apontar os webhooks de novo direto para o Supabase
 (`https://karmtrldanuxqisgzlhk.supabase.co/functions/v1/<função>`). O Worker
 pode continuar publicado sem receber nada.
 
+## Recuperação de mensagens
+
+Quando um número do WhatsApp por QR Code volta depois de ficar fora, o
+`evolution-connection-sync` busca na Evolution as mensagens que não chegaram
+e manda para o Worker em lotes de até 100 (`POST /evolution-recovery`). O
+Worker coloca todas na fila de uma vez, como webhooks `messages.upsert`
+marcados como recuperados (sem bot nem respostas automáticas), e a fila
+entrega ao `evolution-in` com as mesmas regras de nova tentativa.
+
+Antes, o sync chamava o `evolution-in` uma mensagem por vez e esbarrava no
+limite de chamadas entre edge functions do Supabase ("Rate limit exceeded for
+function"): umas 50 mensagens a cada 5 minutos.
+
+Configuração (uma vez por ambiente):
+
+1. No Worker, o mesmo valor do `INTERNAL_BOT_SECRET` do Supabase daquele
+   ambiente (o Worker confere o cabeçalho `x-internal-secret`):
+   `npx wrangler secret put INTERNAL_BOT_SECRET --env production` (ou
+   `--env develop`), na pasta `cloudflare/webhook-gateway`.
+2. No Supabase, o secret `INBOUND_GATEWAY_URL` com o endereço do Worker
+   (`https://producao.unxet-entrada.workers.dev` ou
+   `https://develop.unxet-entrada.workers.dev`).
+
+Sem o `INBOUND_GATEWAY_URL`, ou com a fila fora, o sync volta ao caminho
+direto (mais lento). Cada mensagem recuperada gasta cerca de 3 operações da
+fila: uma recuperação de mil mensagens usa ~3 mil das 10 mil diárias do plano
+grátis.
+
 ## Acompanhar
 
 - Logs: painel do Cloudflare → Workers & Pages → `producao` → Logs, ou
@@ -100,6 +128,7 @@ pode continuar publicado sem receber nada.
   - `[GATEWAY_DELIVERED_LATE]`: entregue depois de alguma tentativa.
   - `[GATEWAY_REJECTED]`: a função recusou (token, assinatura, conexão).
   - `[GATEWAY_DIRECT_FAILED]`: fila e Supabase fora ao mesmo tempo.
+  - `[GATEWAY_RECOVERY_QUEUED]`: lote de mensagens recuperadas na fila.
 - Volume: painel do Cloudflare → Queues. O plano grátis tem 10 mil
   operações por dia (cerca de 3 mil webhooks). Acima disso, ou para guardar
   mensagens por mais de 24 horas, assinar o Workers Paid (US$ 5/mês) e subir a

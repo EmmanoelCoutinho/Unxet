@@ -24,7 +24,7 @@ import { reconcileConnectionStatus } from "../_shared/evolutionWebhook.ts";
 import { connectionRejectionReason, rejectConnection } from "../_shared/evolutionLimit.ts";
 import { ensureInstanceSettings } from "../_shared/evolutionSettings.ts";
 import { sendPushToUsers } from "../_shared/push.ts";
-import { RECOVERY_MAX_LID_LOOKUPS, fetchLidPhone, fetchStoredMessages, importOutcome, lidPhoneMap, pickRecoverable, recoveredWebhookBody, recoveryPhase, recoveryWindow, unresolvedLids, withPhone } from "../_shared/inboundRecovery.ts";
+import { RECOVERY_GATEWAY_BATCH, RECOVERY_LID_LOOKUP_CONCURRENCY, RECOVERY_MAX_LID_LOOKUPS, fetchLidPhone, fetchStoredMessages, importOutcome, isRateLimitError, gatewayQueueOutcome, lidPhoneMap, pickRecoverable, recoveredWebhookBody, recoveryExpired, recoveryPhase, recoveryWindow, unresolvedLids, withPhone } from "../_shared/inboundRecovery.ts";
 import { WATCHDOG_WINDOW_MINUTES, restartInstance, watchdogDecision, watchdogNotification } from "../_shared/whatsappWatchdog.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -32,6 +32,10 @@ const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
 const EVOLUTION_API_URL = Deno.env.get("EVOLUTION_API_URL") ?? "";
 const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY") ?? "";
 const EVOLUTION_WEBHOOK_SECRET = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") ?? "";
+// Worker da fila de entrada (docs/fila-de-entrada.md), ex.: https://producao.unxet-entrada.workers.dev
+// Sem ele, a recuperação chama o evolution-in direto (limitada pelo Supabase).
+const INBOUND_GATEWAY_URL = Deno.env.get("INBOUND_GATEWAY_URL") ?? "";
+const RECOVERY_GATEWAY_TIMEOUT_MS = 15_000;
 const REQUEST_TIMEOUT_MS = 8000;
 // Recuperação: tempo e quantidade por rodada (o que sobrar fica para a próxima)
 const RECOVERY_BUDGET_MS = 50_000;
@@ -193,12 +197,55 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
     });
     return importOutcome(response.status, await response.text().catch(()=>""));
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // Limite de chamadas entre funções: quem chamou para a rodada e loga uma vez só
+    if (isRateLimitError(message)) return "rate_limited";
     console.warn("[INBOUND_RECOVERY_IMPORT_ERROR]", {
       sessionName,
-      error: err instanceof Error ? err.message : String(err)
+      error: message
     });
     return "failed";
   }
+}
+/**
+ * Manda as mensagens recuperadas para a fila de entrada (Worker no
+ * Cloudflare), até 100 por pedido. A fila entrega ao evolution-in no ritmo
+ * dela e tenta de novo se ele falhar, sem o limite de chamadas entre edge
+ * functions. Devolve o que não entrou na fila (segue pelo caminho direto).
+ */ async function enqueueRecovered(sessionName, records, result) {
+  const url = `${INBOUND_GATEWAY_URL.replace(/\/$/, "")}/evolution-recovery`;
+  const leftover = [];
+  for(let i = 0; i < records.length; i += RECOVERY_GATEWAY_BATCH){
+    const chunk = records.slice(i, i + RECOVERY_GATEWAY_BATCH);
+    let outcome = null;
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": INTERNAL_BOT_SECRET,
+          "x-webhook-secret": EVOLUTION_WEBHOOK_SECRET
+        },
+        body: JSON.stringify({
+          webhooks: chunk.map((record)=>recoveredWebhookBody(sessionName, record))
+        }),
+        signal: AbortSignal.timeout(RECOVERY_GATEWAY_TIMEOUT_MS)
+      });
+      outcome = gatewayQueueOutcome(response.status, await response.text().catch(()=>""), chunk.length);
+      if (!outcome) console.warn("[INBOUND_RECOVERY_QUEUE_FAILED]", { sessionName, status: response.status });
+    } catch (err) {
+      console.warn("[INBOUND_RECOVERY_QUEUE_FAILED]", {
+        sessionName,
+        error: err instanceof Error ? err.message : String(err)
+      });
+    }
+    // Fila fora: este lote e os seguintes vão pelo caminho direto
+    if (!outcome) return leftover.concat(records.slice(i));
+    result.queued += outcome.queued;
+    // Grandes demais para a fila: também pelo caminho direto
+    for (const index of outcome.rejected)leftover.push(chunk[index]);
+  }
+  return leftover;
 }
 /**
  * Recupera as mensagens recebidas enquanto o número esteve fora. Roda nas
@@ -206,6 +253,8 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
  * "connected". Nunca lança erro.
  */ async function runInboundRecovery(supabase) {
   const results = [];
+  // Esbarrou no limite de chamadas entre funções: o resto fica para a próxima rodada
+  let rateLimited = false;
   try {
     const { data: connections, error } = await supabase.from("channel_connections").select("id, session_name, evolution_api_url, evolution_api_key, inbound_recovery_requested_at, inbound_recovery_from").eq("provider", "evolution").eq("status", "connected").is("archived_at", null).not("session_name", "is", null).not("inbound_recovery_requested_at", "is", null);
     if (error) {
@@ -229,9 +278,12 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
         ignored: {},
         // Sem o telefone do contato (@lid): não há como importar
         unresolved: 0,
+        // Entregues à fila de entrada (o evolution-in recebe pela fila)
+        queued: 0,
         failed: 0,
+        rateLimited: false,
         truncated: false,
-        done: phase === "last"
+        done: false
       };
       let complete = true;
       if (window && apiUrl && apiKey) {
@@ -246,25 +298,45 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
           result.truncated = stored.truncated;
           // Telefone das mensagens do histórico que vieram só com o @lid
           const lidMap = lidPhoneMap(stored.records);
-          for (const lid of unresolvedLids(missing, lidMap).slice(0, RECOVERY_MAX_LID_LOOKUPS)){
-            const phone = await fetchLidPhone(apiUrl, apiKey, connection.session_name, lid);
-            if (phone) lidMap.set(lid, phone);
+          const lids = unresolvedLids(missing, lidMap);
+          // Contatos que passaram do teto de buscas são procurados na próxima rodada
+          if (lids.length > RECOVERY_MAX_LID_LOOKUPS) complete = false;
+          // Em paralelo, poucos de cada vez (são consultas à Evolution)
+          const toLookUp = lids.slice(0, RECOVERY_MAX_LID_LOOKUPS);
+          for(let i = 0; i < toLookUp.length; i += RECOVERY_LID_LOOKUP_CONCURRENCY){
+            await Promise.all(toLookUp.slice(i, i + RECOVERY_LID_LOOKUP_CONCURRENCY).map(async (lid)=>{
+              const phone = await fetchLidPhone(apiUrl, apiKey, connection.session_name, lid);
+              if (phone) lidMap.set(lid, phone);
+            }));
           }
+          const ready = [];
           for (const record of missing){
-            if (imports >= RECOVERY_MAX_IMPORTS || Date.now() - startedAt > RECOVERY_BUDGET_MS) {
+            const withNumber = withPhone(record, lidMap);
+            if (withNumber) ready.push(withNumber);
+            else result.unresolved += 1;
+          }
+          // Caminho principal: tudo para a fila de entrada, em lotes. O que a
+          // fila não aceitou segue pelo caminho direto, mais lento.
+          const leftover = INBOUND_GATEWAY_URL ? await enqueueRecovered(connection.session_name, ready, result) : ready;
+          for (const record of leftover){
+            if (rateLimited || imports >= RECOVERY_MAX_IMPORTS || Date.now() - startedAt > RECOVERY_BUDGET_MS) {
               complete = false;
               break;
             }
-            const ready = withPhone(record, lidMap);
-            if (!ready) {
-              result.unresolved += 1;
-              continue;
-            }
             imports += 1;
-            const outcome = await importRecovered(connection.session_name, ready);
+            const outcome = await importRecovered(connection.session_name, record);
+            if (outcome === "rate_limited") {
+              rateLimited = true;
+              result.rateLimited = true;
+              complete = false;
+              break;
+            }
             if (outcome === "imported") result.imported += 1;
-            else if (outcome === "failed") result.failed += 1;
-            else {
+            else if (outcome === "failed") {
+              result.failed += 1;
+              // Tenta de novo na próxima rodada
+              complete = false;
+            } else {
               const reason = outcome.replace(/^ignored:/, "");
               result.ignored[reason] = (result.ignored[reason] ?? 0) + 1;
             }
@@ -273,18 +345,21 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
       }
       // Última rodada e nada ficou para trás: limpa a marca. A comparação com
       // a hora da marca evita apagar uma reconexão que aconteceu nesse meio-tempo.
-      if (phase === "last" && complete) {
+      const expired = recoveryExpired(connection.inbound_recovery_requested_at);
+      if (phase === "last" && (complete || expired)) {
         const { error: clearError } = await supabase.from("channel_connections").update({
           inbound_recovery_requested_at: null,
           inbound_recovery_from: null
         }).eq("id", connection.id).eq("inbound_recovery_requested_at", connection.inbound_recovery_requested_at);
         if (clearError) console.error("[INBOUND_RECOVERY_CLEAR_ERROR]", connection.id, clearError);
       }
+      result.done = phase === "last" && (complete || expired);
       if (result.missing > 0 || result.truncated || result.done) results.push(result);
     }
   } catch (err) {
     console.error("[INBOUND_RECOVERY_ERROR]", err);
   }
+  if (rateLimited) console.warn("[INBOUND_RECOVERY_RATE_LIMITED]", "limite de chamadas entre funções; o restante fica para a próxima rodada");
   if (results.length > 0) console.log("[INBOUND_RECOVERY]", JSON.stringify(results));
   return results;
 }

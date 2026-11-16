@@ -2,12 +2,15 @@ import { describe, expect, it, vi } from "vitest";
 import {
   fetchLidPhone,
   fetchStoredMessages,
+  gatewayQueueOutcome,
   importOutcome,
+  isRateLimitError,
   lidPhoneMap,
   unresolvedLids,
   withPhone,
   pickRecoverable,
   recoveredWebhookBody,
+  recoveryExpired,
   recoveryPhase,
   recoveryWindow,
 } from "./inboundRecovery";
@@ -184,5 +187,35 @@ describe("importOutcome", () => {
     expect(importOutcome(200, '{"ignored":true,"reason":"lid_unresolvable"}')).toBe("ignored:lid_unresolvable");
     expect(importOutcome(200, "OK")).toBe("imported");
     expect(importOutcome(502, "Upstream error")).toBe("failed");
+  });
+
+  it("reconhece o limite de chamadas entre funções", () => {
+    expect(importOutcome(429, "")).toBe("rate_limited");
+    expect(importOutcome(503, "Rate limit exceeded for function. Retry after 35469ms.")).toBe("rate_limited");
+    expect(isRateLimitError("Rate limit exceeded for function. Retry after 35469ms.")).toBe(true);
+    expect(isRateLimitError("offline")).toBe(false);
+    expect(isRateLimitError(undefined)).toBe(false);
+  });
+});
+
+describe("recoveryExpired", () => {
+  it("encerra a recuperação incompleta depois de 24 horas", () => {
+    expect(recoveryExpired(minutesAgo(60 * 23), now)).toBe(false);
+    expect(recoveryExpired(minutesAgo(60 * 24), now)).toBe(true);
+    expect(recoveryExpired("data inválida", now)).toBe(true);
+  });
+});
+
+describe("gatewayQueueOutcome", () => {
+  it("lê quantas entraram na fila e quais ficaram de fora", () => {
+    expect(gatewayQueueOutcome(200, '{"queued":99,"rejected":[3]}', 100)).toEqual({ queued: 99, rejected: [3] });
+    expect(gatewayQueueOutcome(200, '{"queued":2}', 2)).toEqual({ queued: 2, rejected: [] });
+    expect(gatewayQueueOutcome(200, '{"queued":1,"rejected":[7,"x",-1]}', 2)).toEqual({ queued: 1, rejected: [] });
+  });
+
+  it("devolve null quando o lote não entrou", () => {
+    expect(gatewayQueueOutcome(503, '{"error":"queue_unavailable"}', 2)).toBeNull();
+    expect(gatewayQueueOutcome(401, "", 2)).toBeNull();
+    expect(gatewayQueueOutcome(200, "OK", 2)).toBeNull();
   });
 });
