@@ -74,53 +74,58 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
-  {
-    kind: "improved",
-    text: "Mais segurança nos arquivos: documentos recebidos que poderiam conter código (como HTML ou SVG) abrem só como texto ou são baixados, e o envio de certificado PFX mostra um aviso sobre a chave privada.",
-  },
-  {
-    kind: "new",
-    text: "Tutoriais novos: Instalar a Unxet no celular (Android e iPhone, com notificações), Usar o Banco de arquivos, Pesquisa de satisfação e Grupos e mensagens enviadas pelo celular. Veja em Tutoriais, no menu lateral.",
-  },
-  {
-    kind: "new",
-    text: "Grupos do WhatsApp: cada número de QR Code pode receber as mensagens dos grupos (Configurações > Integrações > \"Receber mensagens de grupos\", desligado por padrão). Cada grupo vira uma conversa, com o nome de quem escreveu em cada mensagem, e você responde direto no grupo. Bot, IA e pesquisa de satisfação não atuam em grupos.",
-    adminOnly: true,
-  },
-  {
-    kind: "improved",
-    text: "Pesquisa de satisfação: a nota agora é sempre de 0 a 10 e não tem mais prazo para resposta. Se o cliente responder dias depois, a nota é registrada sem reabrir a conversa; notas com vírgula (como 9,5) são arredondadas. Avaliações antigas continuam nos relatórios, convertidas para 0 a 10.",
-    adminOnly: true,
-  },
-  {
-    kind: "new",
-    text: "Menu da mensagem: passe o mouse no balão (ou segure no celular) e clique na setinha para Responder citando a mensagem, Reagir com emoji, Copiar o texto ou Baixar o arquivo. As respostas citadas e as reações dos clientes também aparecem na conversa. Responder e Reagir valem para o WhatsApp.",
-  },
-  {
-    kind: "improved",
-    text: "Apagar mensagem agora é uma permissão dos cargos (\"Apagar mensagens\"). O administrador continua podendo apagar; para os demais, marque a permissão no cargo.",
-    adminOnly: true,
-  },
-  {
-    kind: "improved",
-    text: "Conversas: o texto formatado do WhatsApp agora aparece formatado no chat. *Negrito*, _itálico_, ~tachado~ e ```monoespaçado``` deixam de mostrar os símbolos.",
-  },
-  {
-    kind: "new",
-    text: "Ver contato: nos três pontinhos da conversa, a opção \"Ver contato\" abre a Carteira de Clientes já no cliente, com dados e notas.",
-  },
-  {
-    kind: "new",
-    text: "WhatsApp por QR Code: o sistema agora percebe quando um número conectado para de receber mensagens num horário em que costuma receber. Ele reinicia a conexão sozinho e avisa no sino; se as mensagens não voltarem, avisa de novo para ler o QR Code em Integrações.",
-    adminOnly: true,
-  },
-  {
-    kind: "new",
-    text: "WhatsApp por QR Code: as mensagens que os clientes mandaram enquanto o número esteve desconectado agora são recuperadas. Alguns minutos depois de ler o QR Code de novo, elas aparecem nas conversas com o horário em que foram enviadas, sem acionar o bot.",
-  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
+  {
+    date: "2026-11-15",
+    changes: [
+      {
+        kind: "improved",
+        text: "Mais segurança nos arquivos: documentos recebidos que poderiam conter código (como HTML ou SVG) abrem só como texto ou são baixados, e o envio de certificado PFX mostra um aviso sobre a chave privada.",
+      },
+      {
+        kind: "new",
+        text: "Tutoriais novos: Instalar a Unxet no celular (Android e iPhone, com notificações), Usar o Banco de arquivos, Pesquisa de satisfação e Grupos e mensagens enviadas pelo celular. Veja em Tutoriais, no menu lateral.",
+      },
+      {
+        kind: "new",
+        text: "Grupos do WhatsApp: cada número de QR Code pode receber as mensagens dos grupos (Configurações > Integrações > \"Receber mensagens de grupos\", desligado por padrão). Cada grupo vira uma conversa, com o nome de quem escreveu em cada mensagem, e você responde direto no grupo. Bot, IA e pesquisa de satisfação não atuam em grupos.",
+        adminOnly: true,
+      },
+      {
+        kind: "improved",
+        text: "Pesquisa de satisfação: a nota agora é sempre de 0 a 10 e não tem mais prazo para resposta. Se o cliente responder dias depois, a nota é registrada sem reabrir a conversa; notas com vírgula (como 9,5) são arredondadas. Avaliações antigas continuam nos relatórios, convertidas para 0 a 10.",
+        adminOnly: true,
+      },
+      {
+        kind: "new",
+        text: "Menu da mensagem: passe o mouse no balão (ou segure no celular) e clique na setinha para Responder citando a mensagem, Reagir com emoji, Copiar o texto ou Baixar o arquivo. As respostas citadas e as reações dos clientes também aparecem na conversa. Responder e Reagir valem para o WhatsApp.",
+      },
+      {
+        kind: "improved",
+        text: "Apagar mensagem agora é uma permissão dos cargos (\"Apagar mensagens\"). O administrador continua podendo apagar; para os demais, marque a permissão no cargo.",
+        adminOnly: true,
+      },
+      {
+        kind: "improved",
+        text: "Conversas: o texto formatado do WhatsApp agora aparece formatado no chat. *Negrito*, _itálico_, ~tachado~ e ```monoespaçado``` deixam de mostrar os símbolos.",
+      },
+      {
+        kind: "new",
+        text: "Ver contato: nos três pontinhos da conversa, a opção \"Ver contato\" abre a Carteira de Clientes já no cliente, com dados e notas.",
+      },
+      {
+        kind: "new",
+        text: "WhatsApp por QR Code: o sistema agora percebe quando um número conectado para de receber mensagens num horário em que costuma receber. Ele reinicia a conexão sozinho e avisa no sino; se as mensagens não voltarem, avisa de novo para ler o QR Code em Integrações.",
+        adminOnly: true,
+      },
+      {
+        kind: "new",
+        text: "WhatsApp por QR Code: as mensagens que os clientes mandaram enquanto o número esteve desconectado agora são recuperadas. Alguns minutos depois de ler o QR Code de novo, elas aparecem nas conversas com o horário em que foram enviadas, sem acionar o bot.",
+      },
+    ],
+  },
   {
     date: "2026-11-13",
     changes: [
