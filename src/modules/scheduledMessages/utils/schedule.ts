@@ -19,12 +19,19 @@ export const onlyDigits = (value: string | null | undefined) =>
   String(value ?? "").replace(/\D/g, "");
 
 /**
- * Número digitado na tela -> dígitos com DDI, ou null se não for um telefone.
- * DDD + número (10 ou 11 dígitos) é tratado como Brasil e recebe o 55.
+ * Número digitado -> dígitos com DDI, ou null se não parecer um telefone.
+ *  - Começou com + : já vem com o código do país (8 a 15 dígitos).
+ *  - DDD + número (10 dígitos, ou 11 com o 9 do celular) é Brasil e recebe o 55.
+ *  - 11 dígitos sem o 9 depois do DDD não é celular brasileiro: é número de
+ *    outro país com o código na frente (ex.: França 33 7 45 51 36 37).
+ *  - 12 ou 13 dígitos: já vem com o código do país.
  */
 export const normalizeTypedPhone = (input: string): string | null => {
-  const digits = onlyDigits(input).replace(/^0+/, "");
-  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+  const raw = String(input ?? "").trim();
+  const digits = onlyDigits(raw).replace(/^0+/, "");
+  if (raw.startsWith("+")) return digits.length >= 8 && digits.length <= 15 ? digits : null;
+  if (digits.length === 10) return `55${digits}`;
+  if (digits.length === 11) return digits[2] === "9" ? `55${digits}` : digits;
   if (digits.length === 12 || digits.length === 13) return digits;
   return null;
 };

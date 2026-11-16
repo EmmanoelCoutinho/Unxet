@@ -3,6 +3,10 @@
 import {
   MAX_QUEUE_MESSAGE_BYTES,
   buildQueuedWebhook,
+  buildRecoveredWebhook,
+  chunkForQueue,
+  parseRecoveryRequest,
+  safeEqual,
   deliveryOutcome,
   evolutionSkipReason,
   fromBase64,
@@ -18,6 +22,7 @@ import {
 // Tipos mínimos do runtime do Cloudflare (evita depender de @cloudflare/workers-types)
 export interface QueueProducer {
   send(message: QueuedWebhook): Promise<void>;
+  sendBatch(messages: { body: QueuedWebhook }[]): Promise<void>;
 }
 export interface QueueMessage {
   body: QueuedWebhook;
@@ -35,6 +40,11 @@ export interface Env {
   SUPABASE_FUNCTIONS_URL: string;
   /** "develop" ou "production", só para os logs */
   ENVIRONMENT?: string;
+  /**
+   * Mesmo valor do INTERNAL_BOT_SECRET do Supabase (wrangler secret put).
+   * Sem ele, a recuperação de mensagens (/evolution-recovery) fica desligada.
+   */
+  INTERNAL_BOT_SECRET?: string;
 }
 
 // Tempo máximo de cada repasse. Com fetch de mídia, o evolution-in pode demorar.
@@ -66,12 +76,51 @@ const forward = (
     signal: AbortSignal.timeout(FORWARD_TIMEOUT_MS),
   });
 
+/**
+ * Recuperação de mensagens: o evolution-connection-sync manda até 100
+ * webhooks por pedido e todos entram na fila de uma vez. Responde quantos
+ * entraram e quais ficaram de fora (grandes demais para a fila).
+ */
+const handleRecovery = async (request: Request, env: Env): Promise<Response> => {
+  if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+  if (!env.INTERNAL_BOT_SECRET) return json({ error: "not_configured" }, 503);
+  const internalSecret = request.headers.get("x-internal-secret") ?? "";
+  if (!safeEqual(internalSecret, env.INTERNAL_BOT_SECRET)) return json({ error: "unauthorized" }, 401);
+
+  const webhooks = parseRecoveryRequest(await request.text());
+  if (!webhooks) return json({ error: "invalid_body" }, 400);
+
+  const secrets = { webhookSecret: request.headers.get("x-webhook-secret") ?? "", internalSecret };
+  const rejected: number[] = [];
+  const messages: QueuedWebhook[] = [];
+  webhooks.forEach((webhook, index) => {
+    const message = buildRecoveredWebhook(webhook, secrets);
+    if (queuedSize(message) > MAX_QUEUE_MESSAGE_BYTES) rejected.push(index);
+    else messages.push(message);
+  });
+
+  let queued = 0;
+  try {
+    for (const chunk of chunkForQueue(messages)) {
+      await env.INBOUND.sendBatch(chunk.map((body) => ({ body })));
+      queued += chunk.length;
+    }
+  } catch (err) {
+    console.error("[GATEWAY_RECOVERY_QUEUE_FAILED]", { queued, error: String(err) });
+    return json({ error: "queue_unavailable", queued }, 503);
+  }
+  console.log("[GATEWAY_RECOVERY_QUEUED]", { queued, rejected: rejected.length });
+  return json({ queued, rejected });
+};
+
 export const handleRequest = async (
   request: Request,
   env: Env,
   fetchImpl: typeof fetch = fetch,
 ): Promise<Response> => {
   const url = new URL(request.url);
+
+  if (url.pathname === "/evolution-recovery") return handleRecovery(request, env);
 
   // Monitor da página de status
   if (url.pathname === "/health" && (request.method === "GET" || request.method === "HEAD")) {

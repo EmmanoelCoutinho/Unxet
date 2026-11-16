@@ -176,3 +176,86 @@ export const evolutionSkipReason = (body: Uint8Array): string | null => {
 
   return null;
 };
+
+// ── Recuperação de mensagens ────────────────────────────────────────────────
+// Depois que um número volta, o evolution-connection-sync acha na Evolution as
+// mensagens que não chegaram e manda para cá em lotes. Cada uma entra na fila
+// como um webhook messages.upsert e é entregue ao evolution-in no ritmo da
+// fila (sem esbarrar no limite de chamadas entre edge functions do Supabase).
+
+/** Mensagens por pedido de recuperação (o teto de um sendBatch). */
+export const RECOVERY_MAX_WEBHOOKS = 100;
+/** Tamanho de um sendBatch (o Cloudflare aceita até 256 KB). */
+export const MAX_QUEUE_BATCH_BYTES = 240 * 1024;
+
+/** Comparação em tempo constante (o segredo vem de fora). */
+export const safeEqual = (a: string, b: string) => {
+  const left = new TextEncoder().encode(a);
+  const right = new TextEncoder().encode(b);
+  if (left.length === 0 || right.length === 0) return false;
+  let diff = left.length ^ right.length;
+  for (let i = 0; i < Math.max(left.length, right.length); i++) diff |= (left[i] ?? 0) ^ (right[i] ?? 0);
+  return diff === 0;
+};
+
+/**
+ * Lista de webhooks do pedido, ou null se o formato estiver errado.
+ * Aceita { webhooks: [...] } com 1 a 100 itens.
+ */
+export const parseRecoveryRequest = (bodyText: string): unknown[] | null => {
+  let payload: { webhooks?: unknown };
+  try {
+    payload = JSON.parse(bodyText);
+  } catch {
+    return null;
+  }
+  const webhooks = payload?.webhooks;
+  if (!Array.isArray(webhooks) || webhooks.length === 0 || webhooks.length > RECOVERY_MAX_WEBHOOKS) return null;
+  if (!webhooks.every((item) => item && typeof item === "object")) return null;
+  return webhooks;
+};
+
+/**
+ * Webhook recuperado como mensagem da fila. Os cabeçalhos dizem ao
+ * evolution-in que é recuperada (sem bot nem respostas automáticas); ele
+ * confere os dois segredos.
+ */
+export const buildRecoveredWebhook = (
+  webhook: unknown,
+  secrets: { webhookSecret: string; internalSecret: string },
+  now = new Date(),
+): QueuedWebhook => ({
+  target: "evolution-in",
+  search: "",
+  headers: {
+    "content-type": "application/json",
+    "x-webhook-secret": secrets.webhookSecret,
+    "x-internal-secret": secrets.internalSecret,
+    "x-unxet-recovered": "1",
+  },
+  body: toBase64(new TextEncoder().encode(JSON.stringify(webhook))),
+  receivedAt: now.toISOString(),
+});
+
+/** Separa as mensagens em lotes que cabem num sendBatch. */
+export const chunkForQueue = (
+  messages: QueuedWebhook[],
+  maxCount = RECOVERY_MAX_WEBHOOKS,
+  maxBytes = MAX_QUEUE_BATCH_BYTES,
+) => {
+  const chunks: QueuedWebhook[][] = [];
+  let current: QueuedWebhook[] = [];
+  let bytes = 0;
+  for (const message of messages) {
+    const size = queuedSize(message);
+    if (current.length > 0 && (current.length >= maxCount || bytes + size > maxBytes)) {
+      chunks.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(message);
+    bytes += size;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+};

@@ -2,12 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import {
   fetchLidPhone,
   fetchStoredMessages,
+  gatewayQueueOutcome,
   importOutcome,
+  isRateLimitError,
+  knownLidPhones,
+  whatsappNumbersPhone,
   lidPhoneMap,
   unresolvedLids,
   withPhone,
   pickRecoverable,
   recoveredWebhookBody,
+  recoveryExpired,
   recoveryPhase,
   recoveryWindow,
 } from "./inboundRecovery";
@@ -176,6 +181,42 @@ describe("telefone das mensagens com @lid", () => {
     const offline = vi.fn().mockRejectedValue(new Error("offline"));
     expect(await fetchLidPhone("https://evo.test", "key", "loja", "111@lid", { fetchImpl: offline })).toBeNull();
   });
+
+  it("sem histórico, pergunta ao /chat/whatsappNumbers", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ messages: { records: [] } }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [{ exists: true, jid: "5511977776666@s.whatsapp.net", number: "111" }],
+      });
+    expect(await fetchLidPhone("https://evo.test", "key", "loja", "111@lid", { fetchImpl })).toBe(
+      "5511977776666@s.whatsapp.net",
+    );
+    expect(fetchImpl.mock.calls[1][0]).toBe("https://evo.test/chat/whatsappNumbers/loja");
+    expect(JSON.parse(fetchImpl.mock.calls[1][1].body)).toEqual({ numbers: ["111@lid"] });
+  });
+
+  it("só aceita telefone de verdade do /chat/whatsappNumbers", () => {
+    expect(whatsappNumbersPhone([{ jid: "111@lid" }])).toBeNull();
+    expect(whatsappNumbersPhone({ jid: "5511977776666@s.whatsapp.net" })).toBe("5511977776666@s.whatsapp.net");
+    expect(whatsappNumbersPhone(null)).toBeNull();
+  });
+
+  it("usa o telefone dos contatos que o Unxet já conhece", () => {
+    const map = knownLidPhones([
+      { lid: "111@lid", phone: "5511999998888" },
+      { lid: "222@lid", phone: "+55 (11) 98888-7777" },
+      { lid: "333@lid", phone: "123" },
+      { lid: "444@s.whatsapp.net", phone: "5511999998888" },
+    ]);
+    expect(Object.fromEntries(map)).toEqual({
+      "111@lid": "5511999998888@s.whatsapp.net",
+      "222@lid": "5511988887777@s.whatsapp.net",
+    });
+    expect(knownLidPhones(null).size).toBe(0);
+  });
 });
 
 describe("importOutcome", () => {
@@ -184,5 +225,35 @@ describe("importOutcome", () => {
     expect(importOutcome(200, '{"ignored":true,"reason":"lid_unresolvable"}')).toBe("ignored:lid_unresolvable");
     expect(importOutcome(200, "OK")).toBe("imported");
     expect(importOutcome(502, "Upstream error")).toBe("failed");
+  });
+
+  it("reconhece o limite de chamadas entre funções", () => {
+    expect(importOutcome(429, "")).toBe("rate_limited");
+    expect(importOutcome(503, "Rate limit exceeded for function. Retry after 35469ms.")).toBe("rate_limited");
+    expect(isRateLimitError("Rate limit exceeded for function. Retry after 35469ms.")).toBe(true);
+    expect(isRateLimitError("offline")).toBe(false);
+    expect(isRateLimitError(undefined)).toBe(false);
+  });
+});
+
+describe("recoveryExpired", () => {
+  it("encerra a recuperação incompleta depois de 24 horas", () => {
+    expect(recoveryExpired(minutesAgo(60 * 23), now)).toBe(false);
+    expect(recoveryExpired(minutesAgo(60 * 24), now)).toBe(true);
+    expect(recoveryExpired("data inválida", now)).toBe(true);
+  });
+});
+
+describe("gatewayQueueOutcome", () => {
+  it("lê quantas entraram na fila e quais ficaram de fora", () => {
+    expect(gatewayQueueOutcome(200, '{"queued":99,"rejected":[3]}', 100)).toEqual({ queued: 99, rejected: [3] });
+    expect(gatewayQueueOutcome(200, '{"queued":2}', 2)).toEqual({ queued: 2, rejected: [] });
+    expect(gatewayQueueOutcome(200, '{"queued":1,"rejected":[7,"x",-1]}', 2)).toEqual({ queued: 1, rejected: [] });
+  });
+
+  it("devolve null quando o lote não entrou", () => {
+    expect(gatewayQueueOutcome(503, '{"error":"queue_unavailable"}', 2)).toBeNull();
+    expect(gatewayQueueOutcome(401, "", 2)).toBeNull();
+    expect(gatewayQueueOutcome(200, "OK", 2)).toBeNull();
   });
 });

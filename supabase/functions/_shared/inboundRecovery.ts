@@ -15,6 +15,13 @@
 export const RECOVERY_WAIT_MINUTES = 2;
 /** Depois disso a recuperação é encerrada (a busca roda a cada 5 minutos). */
 export const RECOVERY_LAST_RUN_MINUTES = 30;
+/**
+ * A partir da última rodada, a marca só é limpa quando nada ficou para trás
+ * (falhas, limite de chamadas, @lid não procurados). Passado este prazo ela é
+ * limpa de qualquer jeito, para uma mensagem que sempre falha não prender a
+ * recuperação para sempre.
+ */
+export const RECOVERY_GIVE_UP_HOURS = 24;
 /** Folga antes da última mensagem recebida (relógios diferentes). */
 export const RECOVERY_MARGIN_MINUTES = 5;
 /** Não volta mais que isso, por mais tempo que o número tenha ficado fora. */
@@ -41,6 +48,13 @@ export const recoveryPhase = (requestedAt: unknown, now = new Date()) => {
   const minutes = (now.getTime() - requested) / 60000;
   if (minutes < RECOVERY_WAIT_MINUTES) return "wait";
   return minutes >= RECOVERY_LAST_RUN_MINUTES ? "last" : "run";
+};
+
+/** Passou do prazo: a recuperação é encerrada mesmo incompleta. */
+export const recoveryExpired = (requestedAt: unknown, now = new Date()) => {
+  const requested = new Date(requestedAt as string).getTime();
+  if (Number.isNaN(requested)) return true;
+  return now.getTime() - requested >= RECOVERY_GIVE_UP_HOURS * 60 * 60000;
 };
 
 /**
@@ -155,7 +169,9 @@ export const fetchStoredMessages = async (
 // procurado em outras mensagens do mesmo contato guardadas na Evolution.
 
 /** Máximo de contatos com @lid procurados na Evolution por rodada. */
-export const RECOVERY_MAX_LID_LOOKUPS = 30;
+export const RECOVERY_MAX_LID_LOOKUPS = 100;
+/** Quantos contatos com @lid são procurados ao mesmo tempo. */
+export const RECOVERY_LID_LOOKUP_CONCURRENCY = 10;
 
 const PHONE_JID = /^\d{8,15}@s\.whatsapp\.net$/;
 
@@ -197,7 +213,25 @@ export const withPhone = (record, map: Map<string, string>) => {
   return alt ? { ...record, key: { ...record.key, remoteJidAlt: alt } } : null;
 };
 
-/** Procura o telefone de um @lid nas mensagens mais recentes dele na Evolution. */
+const findMessagesRecords = (json) => {
+  const result = json?.messages ?? json;
+  return Array.isArray(result?.records) ? result.records : Array.isArray(result) ? result : [];
+};
+
+/** Telefone que o /chat/whatsappNumbers devolveu para o @lid, ou null. */
+export const whatsappNumbersPhone = (json: unknown) => {
+  const items = Array.isArray(json) ? json : [json];
+  for (const item of items) {
+    const jid = (item as { jid?: unknown })?.jid;
+    if (typeof jid === "string" && PHONE_JID.test(jid)) return jid;
+  }
+  return null;
+};
+
+/**
+ * Procura o telefone de um @lid na Evolution: primeiro nas mensagens mais
+ * recentes do contato, depois no /chat/whatsappNumbers (versões >= 2.3).
+ */
 export const fetchLidPhone = async (
   apiUrl: string,
   apiKey: string,
@@ -205,34 +239,58 @@ export const fetchLidPhone = async (
   lid: string,
   { fetchImpl = fetch, timeoutMs = 15000 } = {},
 ) => {
-  try {
-    const response = await fetchImpl(
-      `${apiUrl.replace(/\/$/, "")}/chat/findMessages/${encodeURIComponent(sessionName)}`,
-      {
+  const base = apiUrl.replace(/\/$/, "");
+  const post = async (path: string, body: unknown) => {
+    try {
+      const response = await fetchImpl(`${base}${path}/${encodeURIComponent(sessionName)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: apiKey },
-        body: JSON.stringify({ where: { key: { remoteJid: lid } }, page: 1, offset: 50 }),
+        body: JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
-      },
-    );
-    if (!response.ok) {
-      await response.body?.cancel?.();
+      });
+      if (!response.ok) {
+        await response.body?.cancel?.();
+        return null;
+      }
+      return await response.json();
+    } catch {
       return null;
     }
-    const json = await response.json();
-    const result = json?.messages ?? json;
-    const records = Array.isArray(result?.records) ? result.records : Array.isArray(result) ? result : [];
-    return lidPhoneMap(records).get(lid) ?? null;
-  } catch {
-    return null;
+  };
+  const history = await post("/chat/findMessages", { where: { key: { remoteJid: lid } }, page: 1, offset: 50 });
+  const fromHistory = lidPhoneMap(findMessagesRecords(history)).get(lid);
+  if (fromHistory) return fromHistory;
+  return whatsappNumbersPhone(await post("/chat/whatsappNumbers", { numbers: [lid] }));
+};
+
+/** Linhas do inbound_recovery_lid_phones como @lid -> telefone (JID). */
+export const knownLidPhones = (rows: unknown) => {
+  const map = new Map<string, string>();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const lid = row?.lid;
+    const phone = String(row?.phone ?? "").replace(/\D/g, "");
+    if (typeof lid !== "string" || !lid.endsWith("@lid") || !/^\d{10,15}$/.test(phone)) continue;
+    map.set(lid, `${phone}@s.whatsapp.net`);
   }
+  return map;
 };
 
 /**
- * Resultado da entrega ao evolution-in: "imported", "failed" ou
- * "ignored:<motivo>" (ele responde 200 também quando descarta a mensagem).
+ * O Supabase limita as chamadas de uma edge function para outra. Cada
+ * mensagem recuperada é uma chamada (e o evolution-in chama outras), então
+ * uma recuperação grande esbarra no limite. Ele chega como erro lançado pelo
+ * fetch ("Rate limit exceeded for function. Retry after 35469ms.") ou como
+ * resposta 429. Devolve se é esse erro.
+ */
+export const isRateLimitError = (message: unknown) =>
+  typeof message === "string" && /rate limit exceeded/i.test(message);
+
+/**
+ * Resultado da entrega ao evolution-in: "imported", "failed", "rate_limited"
+ * ou "ignored:<motivo>" (ele responde 200 também quando descarta a mensagem).
  */
 export const importOutcome = (status: number, bodyText: string) => {
+  if (status === 429 || ((status < 200 || status >= 300) && isRateLimitError(bodyText))) return "rate_limited";
   if (status < 200 || status >= 300) return "failed";
   try {
     const json = JSON.parse(bodyText);
@@ -241,4 +299,32 @@ export const importOutcome = (status: number, bodyText: string) => {
     // Resposta sem JSON: tratada como entregue
   }
   return "imported";
+};
+
+// ── Fila de entrada ─────────────────────────────────────────────────────────
+// Com INBOUND_GATEWAY_URL, as mensagens recuperadas vão em lotes para o
+// Worker da fila de entrada (cloudflare/webhook-gateway, /evolution-recovery),
+// que entrega ao evolution-in no ritmo da fila.
+
+/** Mensagens por pedido ao Worker (o teto dele). */
+export const RECOVERY_GATEWAY_BATCH = 100;
+
+/**
+ * Resposta do Worker a um lote: quantas entraram na fila e os índices das
+ * que ficaram de fora (grandes demais). Null quando o lote não entrou.
+ */
+export const gatewayQueueOutcome = (status: number, bodyText: string, sent: number) => {
+  if (status < 200 || status >= 300) return null;
+  let json;
+  try {
+    json = JSON.parse(bodyText);
+  } catch {
+    return null;
+  }
+  const queued = Number(json?.queued);
+  if (!Number.isInteger(queued) || queued < 0) return null;
+  const rejected = Array.isArray(json?.rejected)
+    ? json.rejected.filter((index) => Number.isInteger(index) && index >= 0 && index < sent)
+    : [];
+  return { queued, rejected };
 };

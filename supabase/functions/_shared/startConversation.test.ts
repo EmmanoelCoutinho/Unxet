@@ -16,6 +16,16 @@ describe("normalizeTypedPhone", () => {
   it("mantém número com DDI", () => {
     expect(normalizeTypedPhone("+55 11 98765-4321")).toBe("5511987654321");
   });
+  it("11 dígitos sem o 9 depois do DDD é número de outro país", () => {
+    expect(normalizeTypedPhone("33745513637")).toBe("33745513637");
+    expect(normalizeTypedPhone("+33 7 45 51 36 37")).toBe("33745513637");
+    // Normalizar de novo não acrescenta o 55
+    expect(normalizeTypedPhone(normalizeTypedPhone("33745513637"))).toBe("33745513637");
+  });
+  it("com + aceita até 15 dígitos", () => {
+    expect(normalizeTypedPhone("+491512345678901")).toBe("491512345678901");
+    expect(normalizeTypedPhone("+1234567")).toBeNull();
+  });
   it("recusa o que não é telefone", () => {
     expect(normalizeTypedPhone("123")).toBeNull();
     expect(normalizeTypedPhone("")).toBeNull();
