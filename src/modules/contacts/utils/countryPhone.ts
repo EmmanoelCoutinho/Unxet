@@ -112,3 +112,29 @@ export const buildCountryPhone = (input: string, iso: string): string | null => 
   // a fila de envio trata como identificador interno do WhatsApp)
   return full.length >= 10 && full.length <= 13 ? full : null;
 };
+
+// Códigos usados por mais de um país: fica o mais comum
+const PREFERRED_FOR_DIAL: Record<string, string> = { "1": "US", "7": "RU", "39": "IT", "262": "RE" };
+
+/**
+ * Telefone salvo (dígitos com o código do país) -> país + número local, para
+ * abrir o campo de edição já no país certo. Sem telefone, ou sem código
+ * conhecido, abre no Brasil com o que houver.
+ */
+export const splitCountryPhone = (phone: string | null | undefined): { iso: string; local: string } => {
+  const digits = onlyDigits(phone);
+  if (!digits) return { iso: DEFAULT_COUNTRY, local: "" };
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    return { iso: DEFAULT_COUNTRY, local: digits.slice(2) };
+  }
+  if (digits.length === 10 || digits.length === 11) {
+    // Antigo, sem o código do país: é do Brasil
+    if (normalizeTypedPhone(digits)?.startsWith("55")) return { iso: DEFAULT_COUNTRY, local: digits };
+  }
+  const matches = PHONE_COUNTRIES.filter((c) => digits.startsWith(c.dial) && digits.length > c.dial.length);
+  if (matches.length === 0) return { iso: DEFAULT_COUNTRY, local: digits };
+  const longest = Math.max(...matches.map((c) => c.dial.length));
+  const best = matches.filter((c) => c.dial.length === longest);
+  const pick = best.find((c) => c.iso === PREFERRED_FOR_DIAL[c.dial]) ?? best[0];
+  return { iso: pick.iso, local: digits.slice(pick.dial.length) };
+};

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCountryPhone, PHONE_COUNTRIES, searchPhoneCountries } from "./countryPhone";
+import { buildCountryPhone, PHONE_COUNTRIES, searchPhoneCountries, splitCountryPhone } from "./countryPhone";
 
 describe("buildCountryPhone", () => {
   it("Brasil segue a regra do DDD", () => {
@@ -36,5 +36,32 @@ describe("searchPhoneCountries", () => {
     expect(searchPhoneCountries("FR").map((c) => c.iso)).toContain("FR");
     expect(searchPhoneCountries("+33").map((c) => c.iso)).toEqual(["FR"]);
     expect(searchPhoneCountries("zzz")).toEqual([]);
+  });
+});
+
+describe("splitCountryPhone", () => {
+  it("Brasil fica com DDD + número", () => {
+    expect(splitCountryPhone("5511987654321")).toEqual({ iso: "BR", local: "11987654321" });
+    expect(splitCountryPhone("551133334444")).toEqual({ iso: "BR", local: "1133334444" });
+    // Número da França salvo errado, com 55: abre no Brasil para corrigir
+    expect(splitCountryPhone("5533745513637")).toEqual({ iso: "BR", local: "33745513637" });
+  });
+
+  it("outro país abre no país certo", () => {
+    expect(splitCountryPhone("33745513637")).toEqual({ iso: "FR", local: "745513637" });
+    expect(splitCountryPhone("351912345678")).toEqual({ iso: "PT", local: "912345678" });
+    expect(splitCountryPhone("12125551234")).toEqual({ iso: "US", local: "2125551234" });
+    expect(splitCountryPhone("18765551234")).toEqual({ iso: "JM", local: "5551234" });
+  });
+
+  it("sem telefone abre no Brasil vazio", () => {
+    expect(splitCountryPhone(null)).toEqual({ iso: "BR", local: "" });
+  });
+
+  it("ida e volta com buildCountryPhone", () => {
+    for (const phone of ["5511987654321", "33745513637", "351912345678", "12125551234"]) {
+      const { iso, local } = splitCountryPhone(phone);
+      expect(buildCountryPhone(local, iso)).toBe(phone);
+    }
   });
 });
