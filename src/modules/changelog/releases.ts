@@ -94,6 +94,11 @@ const RELEASE_ENTRIES: ReleaseEntry[] = [
         adminOnly: true,
       },
       {
+        kind: "new",
+        text: "Mensagens enviadas pelo celular: cada número de QR Code pode mostrar na conversa as mensagens que a empresa mandou direto pelo celular ou pelo WhatsApp Web (Configurações > Integrações > \"Mostrar mensagens enviadas pelo celular\", desligado por padrão). Elas aparecem como enviadas, com o nome \"Pelo celular\".",
+        adminOnly: true,
+      },
+      {
         kind: "improved",
         text: "Pesquisa de satisfação: a nota agora é sempre de 0 a 10 e não tem mais prazo para resposta. Se o cliente responder dias depois, a nota é registrada sem reabrir a conversa; notas com vírgula (como 9,5) são arredondadas. Avaliações antigas continuam nos relatórios, convertidas para 0 a 10.",
         adminOnly: true,
