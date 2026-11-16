@@ -74,13 +74,18 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
-  {
-    kind: "fixed",
-    text: "Clientes de outros países: no cadastro de cliente e no cadastro manual das Campanhas, escolha o país ao lado do número (o Brasil já vem selecionado) e digite só o número. Antes, um número estrangeiro podia ser confundido com DDD e não era salvo. O \"Editar cliente\" também ganhou o país, para corrigir números que ficaram errados.",
-  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
+  {
+    date: "2026-11-16",
+    changes: [
+      {
+        kind: "fixed",
+        text: "Clientes de outros países: no cadastro de cliente e no cadastro manual das Campanhas, escolha o país ao lado do número (o Brasil já vem selecionado) e digite só o número. Antes, um número estrangeiro podia ser confundido com DDD e não era salvo. O \"Editar cliente\" também ganhou o país, para corrigir números que ficaram errados.",
+      },
+    ],
+  },
   {
     date: "2026-11-15",
     changes: [
