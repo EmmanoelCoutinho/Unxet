@@ -6,6 +6,18 @@ import { findPhoneCountry, searchPhoneCountries } from "../utils/countryPhone";
 
 const PANEL_HEIGHT = 300;
 
+/** Bandeira em SVG (public/flags): emoji de bandeira não aparece no Windows. */
+const Flag: React.FC<{ iso: string }> = ({ iso }) => (
+  <img
+    src={`/flags/${iso}.svg`}
+    alt=""
+    width={20}
+    height={14}
+    loading="lazy"
+    className="h-3.5 w-5 shrink-0 rounded-[2px] object-cover ring-1 ring-black/10"
+  />
+);
+
 /**
  * Campo de telefone com o país na frente (Brasil por padrão). O país abre
  * uma lista com busca; o número é digitado sem o código do país.
@@ -113,7 +125,7 @@ export const CountryPhoneInput: React.FC<{
         title={selected.name}
         className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition hover:bg-slate-50 focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
       >
-        <span className="text-xs font-semibold text-slate-500">{selected.iso}</span>
+        <Flag iso={selected.iso} />
         <span>+{selected.dial}</span>
         <ChevronDownIcon className="h-4 w-4 text-slate-400" />
       </button>
@@ -169,12 +181,12 @@ export const CountryPhoneInput: React.FC<{
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => choose(c.iso)}
                       className={[
-                        "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm",
+                        "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm",
                         index === active ? "bg-slate-100" : "",
                         c.iso === selected.iso ? "font-semibold text-blue-600" : "text-slate-700",
                       ].join(" ")}
                     >
-                      <span className="w-6 shrink-0 text-xs font-semibold text-slate-400">{c.iso}</span>
+                      <Flag iso={c.iso} />
                       <span className="flex-1 truncate">{c.name}</span>
                       <span className="shrink-0 text-slate-500">+{c.dial}</span>
                     </li>
