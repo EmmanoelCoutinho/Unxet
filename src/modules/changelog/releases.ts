@@ -78,6 +78,15 @@ export const NEXT_RELEASE: ReleaseChange[] = [
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    date: "2026-11-17",
+    changes: [
+      {
+        kind: "fixed",
+        text: "Mensagem que o WhatsApp entrega com horas de atraso não aciona mais o bot: ela aparece na conversa no horário em que o cliente escreveu e só reabre a conversa finalizada se for a última mensagem do cliente, com o aviso \"chegou atrasada\". O bot também não manda mais as boas-vindas repetidas quando várias mensagens chegam ao mesmo tempo.",
+      },
+    ],
+  },
+  {
     date: "2026-11-16",
     changes: [
       {

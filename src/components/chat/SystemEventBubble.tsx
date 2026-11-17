@@ -70,6 +70,12 @@ const getEventText = (event: ConversationEvent) => {
     case "reopened_automatically": {
       const reason = meta.reason;
       if (reason === "incoming_message") {
+        // Mensagem que o WhatsApp entregou horas depois de o cliente escrever
+        const sentAt = meta.late ? new Date(String(meta.sent_at ?? "")) : null;
+        if (sentAt && !Number.isNaN(sentAt.getTime())) {
+          const day = sentAt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+          return `Sistema reabriu a conversa por mensagem do cliente que chegou atrasada (enviada em ${day} às ${formatTime(sentAt.toISOString())})`;
+        }
         return "Sistema reabriu a conversa automaticamente por nova mensagem do cliente";
       }
       return "Sistema reabriu a conversa automaticamente";
