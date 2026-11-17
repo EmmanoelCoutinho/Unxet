@@ -31,7 +31,7 @@ const minutesOf = (page, title) =>
     .locator("xpath=ancestor::div[.//input[@type='number']][1]")
     .getByRole("spinbutton");
 
-/** Liga (se estiver desligado) e ajusta os minutos */
+/** Liga (se estiver desligado) e ajusta os minutos (número) ou escolhe a opção (texto) */
 const setCard = async (page, d, title, minutes) => {
   const toggle = page.getByRole("switch", { name: title });
   await toggle.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "smooth" }));
@@ -41,7 +41,13 @@ const setCard = async (page, d, title, minutes) => {
   } else {
     await d.point(toggle, 900);
   }
-  if (minutes !== undefined) {
+  if (typeof minutes === "string") {
+    // Cartão com select (ex.: Fechamento automático): escolhe pelo rótulo
+    const select = page.getByRole("combobox", { name: `${title}:` });
+    await d.point(select, 700);
+    await select.selectOption({ label: minutes });
+    await d.wait(700);
+  } else if (minutes !== undefined) {
     const input = minutesOf(page, title);
     await input.fill(""); // apaga o valor antigo antes de digitar
     await d.type(input, String(minutes), { delay: 160 });
@@ -87,8 +93,8 @@ export async function run(page, d) {
     step: 4,
     hold: 300,
   });
-  await setCard(page, d, "Fechamento automático", 1440);
-  await d.caption("1440 minutos são 24 horas", { hold: 1600 });
+  await setCard(page, d, "Fechamento automático", "24 horas");
+  await d.caption("Escolha o tempo na lista: de 1 hora a 7 dias", { hold: 1600 });
 
   await d.caption("Reabrir: se o cliente voltar a escrever, a conversa volta com todo o histórico", {
     step: 5,

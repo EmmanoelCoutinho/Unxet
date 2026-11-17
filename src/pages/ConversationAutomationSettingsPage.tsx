@@ -87,6 +87,33 @@ const DEFAULT_SETTINGS: AutomationFormValues = {
   signAgentMessages: true,
 };
 
+type MinutesOption = { value: number; label: string };
+
+const AUTO_CLOSE_OPTIONS: MinutesOption[] = [
+  { value: 60, label: "1 hora" },
+  { value: 120, label: "2 horas" },
+  { value: 240, label: "4 horas" },
+  { value: 480, label: "8 horas" },
+  { value: 720, label: "12 horas" },
+  { value: 1440, label: "24 horas" },
+  { value: 2880, label: "2 dias" },
+  { value: 4320, label: "3 dias" },
+  { value: 10080, label: "7 dias" },
+];
+
+/** Rótulo legível para um valor salvo que não está na lista */
+const formatMinutes = (minutes: number) => {
+  if (minutes % 1440 === 0) {
+    const days = minutes / 1440;
+    return `${days} ${days === 1 ? "dia" : "dias"}`;
+  }
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours} ${hours === 1 ? "hora" : "horas"}`;
+  }
+  return `${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+};
+
 const parsePositiveInteger = (value: string) => {
   if (!value.trim()) return null;
   if (!/^\d+$/.test(value.trim())) return null;
@@ -171,6 +198,8 @@ const AutomationCard = ({
   minutesError,
   showMinutesInput = true,
   minMinutes = 1,
+  minutesOptions,
+  minutesLabel = "Tempo em minutos",
   locked = false,
 }: {
   title: string;
@@ -182,6 +211,9 @@ const AutomationCard = ({
   minutesError?: string;
   showMinutesInput?: boolean;
   minMinutes?: number;
+  /** Quando informado, mostra um select com essas opções em vez do campo numérico */
+  minutesOptions?: MinutesOption[];
+  minutesLabel?: string;
   /** Mostra o estado, mas não deixa mudar */
   locked?: boolean;
 }) => {
@@ -203,18 +235,50 @@ const AutomationCard = ({
 
         {showMinutesInput && onMinutesChange && minutesValue !== undefined ? (
           <div className="max-w-xs">
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={minMinutes}
-              step={1}
-              label="Tempo em minutos"
-              value={minutesValue}
-              onChange={(event) => onMinutesChange(event.target.value)}
-              disabled={!enabled}
-              error={minutesError}
-              placeholder="Ex: 60"
-            />
+            {minutesOptions ? (
+              <div className="w-full">
+                <label className="mb-1 block text-sm font-medium text-gray-900">
+                  {minutesLabel}
+                </label>
+                <select
+                  aria-label={`${title}: ${minutesLabel}`}
+                  value={minutesValue}
+                  onChange={(event) => onMinutesChange(event.target.value)}
+                  disabled={!enabled}
+                  className={`w-full rounded-lg border border-gray-200 bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] disabled:cursor-not-allowed disabled:opacity-60 ${minutesError ? "border-red-500" : ""}`}
+                >
+                  {/* Valor antigo digitado à mão continua aparecendo */}
+                  {!minutesOptions.some(
+                    (option) => String(option.value) === minutesValue,
+                  ) && parsePositiveInteger(minutesValue ?? "") ? (
+                    <option value={minutesValue}>
+                      {formatMinutes(Number(minutesValue))}
+                    </option>
+                  ) : null}
+                  {minutesOptions.map((option) => (
+                    <option key={option.value} value={String(option.value)}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {minutesError ? (
+                  <p className="mt-1 text-sm text-red-500">{minutesError}</p>
+                ) : null}
+              </div>
+            ) : (
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={minMinutes}
+                step={1}
+                label="Tempo em minutos"
+                value={minutesValue}
+                onChange={(event) => onMinutesChange(event.target.value)}
+                disabled={!enabled}
+                error={minutesError}
+                placeholder="Ex: 60"
+              />
+            )}
           </div>
         ) : null}
       </div>
@@ -517,6 +581,8 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
                 autoCloseEnabled: value,
               })
             }
+            minutesOptions={AUTO_CLOSE_OPTIONS}
+            minutesLabel="Fechar depois de"
             minutesValue={formValues.autoCloseAfterMinutes}
             onMinutesChange={(value) =>
               setFormValues((prev) => ({
@@ -529,7 +595,9 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
 
           <AutomationCard
             title="Nome do atendente nas mensagens"
-            description={'Ligado: o cliente recebe o nome de quem respondeu na primeira linha da mensagem (ex.: "Maria:" e, embaixo, o texto). Útil quando mais de um atendente responde a mesma conversa. No WhatsApp o nome vai em negrito.'}
+            description={
+              'Ligado: o cliente recebe o nome de quem respondeu na primeira linha da mensagem (ex.: "Maria:" e, embaixo, o texto). Útil quando mais de um atendente responde a mesma conversa. No WhatsApp o nome vai em negrito.'
+            }
             enabled={formValues.signAgentMessages}
             onEnabledChange={(value) =>
               handleToggleChange({
@@ -617,12 +685,11 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
 
               <p className="text-xs text-slate-500">
                 A pesquisa é enviada quando um atendente finaliza a conversa
-                (não no fechamento automático). Não há prazo: a nota vale
-                mesmo dias depois, e notas fracionadas (como 9,5) são
-                arredondadas. Se o cliente mandar outra mensagem que não seja
-                nota, a conversa reabre normalmente. No WhatsApp oficial, o
-                envio depende da janela de 24 horas desde a última mensagem
-                do cliente.
+                (não no fechamento automático). Não há prazo: a nota vale mesmo
+                dias depois, e notas fracionadas (como 9,5) são arredondadas. Se
+                o cliente mandar outra mensagem que não seja nota, a conversa
+                reabre normalmente. No WhatsApp oficial, o envio depende da
+                janela de 24 horas desde a última mensagem do cliente.
               </p>
             </div>
           </Card>
