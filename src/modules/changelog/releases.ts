@@ -74,6 +74,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
+  {
+    kind: "improved",
+    text: "Mensagem que o WhatsApp não conseguiu entregar ao cliente agora aparece com o aviso \"Não entregue\" em vermelho, em vez de ficar com um tique só. Clique em \"Reenviar\" para mandar de novo. Se várias mensagens não forem entregues, confira a conexão do número em Integrações.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

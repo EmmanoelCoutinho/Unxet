@@ -154,13 +154,19 @@ serve(async (req)=>{
     const statuses = (body.entry ?? []).flatMap((e)=>(e?.changes ?? []).flatMap((c)=>Array.isArray(c?.value?.statuses) ? c.value.statuses : []));
     if (statuses.length > 0) {
       for (const s of statuses){
-        const status = s?.status === "delivered" || s?.status === "read" ? s.status : null;
+        const status = s?.status === "delivered" || s?.status === "read" || s?.status === "failed" ? s.status : null;
         const providerMessageId = String(s?.id ?? "").trim();
         if (!status || !providerMessageId) continue;
         const ts = Number(s?.timestamp);
         const atIso = Number.isFinite(ts) && ts > 0 ? new Date(ts * 1000).toISOString() : new Date().toISOString();
+        // "failed": a Meta diz o motivo em errors[] (ex.: janela de 24 h fechada)
+        const metaError = status === "failed" ? s?.errors?.[0] : null;
+        const reason = metaError ? [
+          metaError.code,
+          metaError.error_data?.details ?? metaError.message ?? metaError.title
+        ].filter(Boolean).join(" - ") : null;
         try {
-          const result = await applyMessageStatus(supabase, providerMessageId, status, atIso);
+          const result = await applyMessageStatus(supabase, providerMessageId, status, atIso, reason);
           console.log("[MESSAGE_STATUS]", providerMessageId, status, result);
         } catch (err) {
           console.error("[MESSAGE_STATUS_ERROR]", providerMessageId, err);

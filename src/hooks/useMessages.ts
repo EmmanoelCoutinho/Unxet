@@ -25,6 +25,8 @@ type DbMessage = {
   deleted_for_everyone?: boolean | null;
   delivered_at?: string | null;
   read_at?: string | null;
+  failed_at?: string | null;
+  failure_reason?: string | null;
   sender_user_id?: string | null;
   sender_name?: string | null;
   reply_to_message_id?: string | null;
@@ -192,7 +194,13 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
           ? "read"
           : row.delivered_at
             ? "delivered"
-            : "sent"
+            : row.failed_at
+              ? "failed"
+              : "sent"
+        : undefined,
+    failureReason:
+      row.direction === "outbound" && row.failed_at && !row.delivered_at
+        ? (row.failure_reason ?? undefined)
         : undefined,
     createdAt: row.sent_at ?? row.created_at ?? new Date().toISOString(),
     senderUserId: row.sender_user_id ?? undefined,
@@ -230,6 +238,8 @@ const MESSAGE_COLUMNS = `
   deleted_for_everyone,
   delivered_at,
   read_at,
+  failed_at,
+  failure_reason,
   sender_user_id,
   sender_name,
   reply_to_message_id,

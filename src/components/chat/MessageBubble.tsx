@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
+  AlertCircle,
   Check,
   CheckCheck,
   ChevronDown,
@@ -32,6 +33,8 @@ interface MessageBubbleProps {
    * Você deve passar essa função a partir do Chat.tsx.
    */
   onRetry?: (message: UiMessage) => void;
+  /** Reenvia como mensagem nova o que o WhatsApp avisou que não entregou */
+  onResendUndelivered?: (message: UiMessage) => void;
   onRetryTranscript?: (message: UiMessage) => Promise<void> | void;
   onDeleteMessage?: (messageId: string) => Promise<void>;
   /**
@@ -190,6 +193,7 @@ const parseFilenameFromDocumentText = (text?: string): string | undefined => {
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   onRetry,
+  onResendUndelivered,
   onRetryTranscript,
   onDeleteMessage,
   deleteMode = "system",
@@ -352,8 +356,47 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     );
   }, [showStatusRow, localStatus, localError, canRetryFailedMessage]);
 
+  // O WhatsApp avisou que não entregou (mensagem já gravada, sem erro local)
+  const isUndelivered =
+    !isClient &&
+    !message.deletedAt &&
+    localStatus !== "failed" &&
+    localStatus !== "sending" &&
+    message.deliveryStatus === "failed";
+
+  const undeliveredNode = isUndelivered ? (
+    <div className="flex items-center justify-end gap-2 mt-1">
+      <span
+        className="flex items-center gap-1 text-xs text-red-600"
+        title={
+          message.failureReason
+            ? `O WhatsApp não entregou esta mensagem: ${message.failureReason}`
+            : "O WhatsApp não entregou esta mensagem ao cliente. Confira a conexão do número em Integrações e reenvie."
+        }
+      >
+        <AlertCircle className="h-3.5 w-3.5" aria-hidden />
+        Não entregue
+      </span>
+      {onResendUndelivered && (
+        <button
+          type="button"
+          onClick={() => onResendUndelivered(message)}
+          className="text-xs font-medium text-blue-600 hover:text-blue-700"
+        >
+          Reenviar
+        </button>
+      )}
+    </div>
+  ) : null;
+
   // Ticks como no WhatsApp: ✓ enviada, ✓✓ entregue, ✓✓ verde lida pelo cliente.
   const deliveryIcon = (() => {
+    if (isUndelivered) {
+      return (
+        <AlertCircle className="h-4 w-4 text-red-500" aria-label="Não entregue" />
+      );
+    }
+
     if (
       isClient ||
       message.deletedAt ||
@@ -848,6 +891,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
           {statusNode}
           {errorHintNode}
+          {undeliveredNode}
 
           <span
             className={`mt-1 flex items-center gap-1 text-xs text-gray-500 ${

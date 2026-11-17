@@ -127,10 +127,10 @@ const isIgnoredJid = (jid: unknown) =>
 // na própria Evolution (groupsIgnore) e conferida no evolution-in.
 const isGroupJid = (jid: unknown) => typeof jid === "string" && jid.endsWith("@g.us");
 
-// Status que o evolution-in não grava (só usa entregue e lido). Códigos da
-// Evolution v1: 0 ERROR, 1 PENDING, 2 SERVER_ACK. Status ausente ou
-// desconhecido segue para a função.
-const IGNORED_STATUSES = new Set<unknown>(["ERROR", "PENDING", "SERVER_ACK", 0, 1, 2]);
+// Status que o evolution-in não grava (usa entregue, lido e ERROR, que vira
+// "não entregue"). Códigos da Evolution v1: 1 PENDING, 2 SERVER_ACK.
+// Status ausente ou desconhecido segue para a função.
+const IGNORED_STATUSES = new Set<unknown>(["PENDING", "SERVER_ACK", 1, 2]);
 const isIgnoredStatus = (status: unknown) =>
   IGNORED_STATUSES.has(typeof status === "string" ? status.toUpperCase() : status);
 
