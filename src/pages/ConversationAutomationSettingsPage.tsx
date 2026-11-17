@@ -211,7 +211,7 @@ const AutomationCard = ({
   minutesError?: string;
   showMinutesInput?: boolean;
   minMinutes?: number;
-  /** Quando informado, mostra um select com essas opções em vez do campo numérico */
+  /** Quando informado, mostra botões com essas opções em vez do campo numérico */
   minutesOptions?: MinutesOption[];
   minutesLabel?: string;
   /** Mostra o estado, mas não deixa mudar */
@@ -234,33 +234,53 @@ const AutomationCard = ({
         </div>
 
         {showMinutesInput && onMinutesChange && minutesValue !== undefined ? (
-          <div className="max-w-xs">
+          <div className={minutesOptions ? "" : "max-w-xs"}>
             {minutesOptions ? (
               <div className="w-full">
-                <label className="mb-1 block text-sm font-medium text-gray-900">
+                <p className="mb-2 block text-sm font-medium text-gray-900">
                   {minutesLabel}
-                </label>
-                <select
+                </p>
+                <div
+                  role="radiogroup"
                   aria-label={`${title}: ${minutesLabel}`}
-                  value={minutesValue}
-                  onChange={(event) => onMinutesChange(event.target.value)}
-                  disabled={!enabled}
-                  className={`w-full rounded-lg border border-gray-200 bg-white px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF] disabled:cursor-not-allowed disabled:opacity-60 ${minutesError ? "border-red-500" : ""}`}
+                  className="flex flex-wrap gap-2"
                 >
-                  {/* Valor antigo digitado à mão continua aparecendo */}
-                  {!minutesOptions.some(
-                    (option) => String(option.value) === minutesValue,
-                  ) && parsePositiveInteger(minutesValue ?? "") ? (
-                    <option value={minutesValue}>
-                      {formatMinutes(Number(minutesValue))}
-                    </option>
-                  ) : null}
-                  {minutesOptions.map((option) => (
-                    <option key={option.value} value={String(option.value)}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  {[
+                    // Valor antigo digitado à mão continua aparecendo
+                    ...(!minutesOptions.some(
+                      (option) => String(option.value) === minutesValue,
+                    ) && parsePositiveInteger(minutesValue ?? "")
+                      ? [
+                          {
+                            value: Number(minutesValue),
+                            label: formatMinutes(Number(minutesValue)),
+                          },
+                        ]
+                      : []),
+                    ...minutesOptions,
+                  ].map((option) => {
+                    const selected = String(option.value) === minutesValue;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        disabled={!enabled}
+                        onClick={() => onMinutesChange(String(option.value))}
+                        className={[
+                          "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+                          selected
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600",
+                          enabled ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                        ].join(" ")}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 {minutesError ? (
                   <p className="mt-1 text-sm text-red-500">{minutesError}</p>
                 ) : null}

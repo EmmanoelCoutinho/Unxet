@@ -42,11 +42,11 @@ const setCard = async (page, d, title, minutes) => {
     await d.point(toggle, 900);
   }
   if (typeof minutes === "string") {
-    // Cartão com select (ex.: Fechamento automático): escolhe pelo rótulo
-    const select = page.getByRole("combobox", { name: `${title}:` });
-    await d.point(select, 700);
-    await select.selectOption({ label: minutes });
-    await d.wait(700);
+    // Cartão com botões de tempo (ex.: Fechamento automático): clica na opção
+    const option = page
+      .getByRole("radiogroup", { name: `${title}:` })
+      .getByRole("radio", { name: minutes });
+    await d.click(option, { before: 700, after: 700 });
   } else if (minutes !== undefined) {
     const input = minutesOf(page, title);
     await input.fill(""); // apaga o valor antigo antes de digitar
