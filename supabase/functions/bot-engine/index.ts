@@ -200,7 +200,10 @@ serve(async (req)=>{
         skipped: "human_attending"
       });
     }
-    const shouldResetSessionOnReopen = reopenedFromClosed && activeSession && !isInteractiveMessage;
+    // Só reinicia a sessão antiga, de antes de a conversa ser encerrada. Uma
+    // sessão que começou depois desta mensagem foi aberta agora há pouco por
+    // outra mensagem do mesmo lote: derrubá-la mandava boas-vindas em dobro.
+    const shouldResetSessionOnReopen = reopenedFromClosed && activeSession && !isInteractiveMessage && startedBefore(activeSession, inboundMessage);
     if (shouldResetSessionOnReopen) {
       logStep("resetting_session_on_reopen", {
         conversationId: body.conversationId,
@@ -257,6 +260,19 @@ serve(async (req)=>{
         channelConnectionId: body.channelConnectionId,
         currentNodeId: rootNode.id
       });
+      // Outra mensagem do mesmo lote abriu a sessão primeiro: ela já manda as
+      // boas-vindas e o menu. Esta não manda nada (antes dava erro 500).
+      if (!activeSession) {
+        logStep("session_start_skipped", {
+          conversationId: body.conversationId,
+          messageId: inboundMessage.id,
+          reason: "session_already_active"
+        });
+        return json(200, {
+          ok: true,
+          skipped: "session_already_active"
+        });
+      }
       await hideConversationWhileBotAnswers(supabase, body.conversationId);
       await insertBotEvent(supabase, {
         clinicId: body.clinicId,
@@ -518,6 +534,12 @@ function findOptionForCandidates(options, candidates) {
     });
   }) ?? null;
 }
+/** A sessão começou antes de a mensagem chegar? (data inválida: trata como antiga) */ function startedBefore(session, message) {
+  const started = new Date(session?.started_at).getTime();
+  const arrived = new Date(message?.created_at).getTime();
+  if (!Number.isFinite(started) || !Number.isFinite(arrived)) return true;
+  return started < arrived;
+}
 function sleep(ms) {
   return new Promise((resolve)=>setTimeout(resolve, ms));
 }
@@ -777,6 +799,11 @@ async function createSession(params) {
     last_interaction_at: now,
     updated_at: now
   }).select("id, clinic_id, conversation_id, bot_id, channel_connection_id, current_node_id, status, invalid_attempts_count, started_at, last_interaction_at, completed_at, ended_reason").maybeSingle();
+  // Já existe sessão ativa na conversa (ux_conversation_bot_sessions_one_active_per_conversation):
+  // outra execução chegou primeiro. Null em vez de erro.
+  if (error?.code === "23505") {
+    return null;
+  }
   if (error || !data) {
     throw new Error(`createSession failed: ${error?.message ?? "unknown"}`);
   }
