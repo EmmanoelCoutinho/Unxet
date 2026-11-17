@@ -24,6 +24,7 @@ import { findByProviderId, replyColumns } from "../_shared/messageReply.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/connectionDepartment.ts";
 import { groupPicKey, linkContactToGroup } from "../_shared/whatsappGroups.ts";
 import { safeStorageContentType } from "../_shared/storageContentType.ts";
+import { isLateInbound, unansweredSince } from "../_shared/lateInbound.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -74,6 +75,12 @@ serve(async (req)=>{
     // esteve fora): entra com o horário original, sem acionar bot nem IA, e
     // não pode fazer a conversa "voltar no tempo".
     const isRecovered = payload.recovered === true;
+    // Mensagem que o provedor entregou muito depois de o cliente escrever
+    // (ex.: a Evolution soltou de madrugada mensagens da tarde anterior):
+    // entra na conversa e volta para a fila, mas não aciona bot nem IA.
+    const isLate = !isRecovered && isLateInbound(timestampIso);
+    // Recuperada ou atrasada: chegou fora de hora
+    const arrivedLate = isRecovered || isLate;
     // Mensagem de grupo (Evolution): a conversa é do grupo e waId, quando
     // existe, é o telefone de quem escreveu. Sem bot, IA nem pesquisa.
     const group = payload.group?.id ? payload.group : null;
@@ -343,9 +350,24 @@ serve(async (req)=>{
       });
     }
     // ── 9. Atualização da conversa ────────────────────────────────────────
-    const shouldReopen = conversation.status === STATUS_CLOSED && automationSettings.reopen_on_inbound_enabled === true;
-    // Recuperada: pode ser mais antiga que a última mensagem da conversa
-    const latest = (current)=>isRecovered && current && new Date(current) > new Date(timestampIso) ? current : timestampIso;
+    // Recuperada ou atrasada só reabre se for a mensagem mais recente do
+    // cliente. Se ele já escreveu depois dela, ela chegou "no meio" de uma
+    // conversa que seguiu: fica no histórico sem reabrir.
+    const newerFromClient = wasClosed && arrivedLate ? await hasNewerInbound(supabase, conversation.id, insertedMsg.id, timestampIso) : false;
+    const shouldReopen = wasClosed && automationSettings.reopen_on_inbound_enabled === true && !newerFromClient;
+    if (arrivedLate) {
+      console.log("[LATE_INBOUND]", JSON.stringify({
+        conversationId: conversation.id,
+        providerMessageId,
+        sentAt: timestampIso,
+        recovered: isRecovered,
+        wasClosed,
+        newerFromClient,
+        reopen: shouldReopen
+      }));
+    }
+    // Recuperada ou atrasada: pode ser mais antiga que a última mensagem da conversa
+    const latest = (current)=>arrivedLate && current && new Date(current) > new Date(timestampIso) ? current : timestampIso;
     const conversationUpdates = {
       last_message_at: latest(conversation.last_message_at),
       last_inbound_at: latest(conversation.last_inbound_at),
@@ -354,38 +376,62 @@ serve(async (req)=>{
     if (!conversation.first_inbound_at) {
       conversationUpdates.first_inbound_at = timestampIso;
     }
-    if (!conversation.first_unanswered_inbound_at) {
-      conversationUpdates.first_unanswered_inbound_at = timestampIso;
+    // Atrasada: o "aguardando resposta" conta de quando chegou
+    const unansweredAt = unansweredSince(timestampIso, arrivedLate);
+    // Conversa que continua encerrada não passa a "aguardar resposta"
+    const staysClosed = wasClosed && !shouldReopen;
+    if (!conversation.first_unanswered_inbound_at && !staysClosed) {
+      conversationUpdates.first_unanswered_inbound_at = unansweredAt;
     }
     if (!conversation.department_id) {
       conversationUpdates.department_id = defaultDepartmentId;
     }
+    // Reabertura atômica: com várias mensagens chegando juntas, cada execução
+    // lia a conversa ainda encerrada e todas avisavam o bot que ela tinha sido
+    // reaberta (sessão iniciada em dobro, boas-vindas repetidas). Só a
+    // execução que de fato muda o status reabre; as outras seguem como
+    // mensagem comum.
+    let reopenedHere = false;
     if (shouldReopen) {
-      conversationUpdates.status = STATUS_PENDING;
-      conversationUpdates.status_changed_at = new Date().toISOString();
-      // Volta para a fila do setor: mantendo o antigo responsável, só ele (e os
-      // admins) enxergava a conversa e o cliente ficava sem resposta na ausência dele
-      conversationUpdates.assigned_user_id = null;
-      conversationUpdates.closed_at = null;
-      conversationUpdates.first_unanswered_inbound_at = timestampIso;
-      conversationUpdates.sla_breached_at = null;
-      conversationUpdates.reopened_count = (conversation.reopened_count ?? 0) + 1;
+      const { data: reopenedRows, error: reopenErr } = await supabase.from("conversations").update({
+        ...conversationUpdates,
+        status: STATUS_PENDING,
+        status_changed_at: new Date().toISOString(),
+        // Volta para a fila do setor: mantendo o antigo responsável, só ele (e os
+        // admins) enxergava a conversa e o cliente ficava sem resposta na ausência dele
+        assigned_user_id: null,
+        closed_at: null,
+        first_unanswered_inbound_at: unansweredAt,
+        sla_breached_at: null,
+        reopened_count: (conversation.reopened_count ?? 0) + 1
+      }).eq("id", conversation.id).eq("status", STATUS_CLOSED).select("id");
+      if (reopenErr) {
+        console.error("Erro ao reabrir conversa:", reopenErr);
+        return new Response("Conversation update error", {
+          status: 500
+        });
+      }
+      reopenedHere = (reopenedRows?.length ?? 0) > 0;
     }
-    const { error: convUpdErr } = await supabase.from("conversations").update(conversationUpdates).eq("id", conversation.id);
-    if (convUpdErr) {
-      console.error("Erro ao sincronizar conversa inbound:", convUpdErr);
-      return new Response("Conversation update error", {
-        status: 500
-      });
+    if (!reopenedHere) {
+      const { error: convUpdErr } = await supabase.from("conversations").update(conversationUpdates).eq("id", conversation.id);
+      if (convUpdErr) {
+        console.error("Erro ao sincronizar conversa inbound:", convUpdErr);
+        return new Response("Conversation update error", {
+          status: 500
+        });
+      }
     }
     // ── 10. Bot-engine ────────────────────────────────────────────────────
     // Mensagens interativas NUNCA devem sinalizar reopenedFromClosed=true:
     // isso faria o engine cancelar a sessão em curso e reiniciar o fluxo,
     // ignorando a opção selecionada pelo usuário.
     let botFailed = false;
-    // Grupo não passa pelo bot nem pela IA (responderiam para todo mundo)
-    if (!isRecovered && !group) try {
-      const reopenedFromClosed = wasClosed && !isInteractiveMessage;
+    // Grupo não passa pelo bot nem pela IA (responderiam para todo mundo).
+    // Recuperada ou atrasada também não: o cliente escreveu horas atrás e
+    // receberia boas-vindas e menu fora de hora.
+    if (!arrivedLate && !group) try {
+      const reopenedFromClosed = reopenedHere && !isInteractiveMessage;
       const botResp = await fetch(`${SUPABASE_URL}/functions/v1/bot-engine`, {
         method: "POST",
         headers: {
@@ -431,7 +477,7 @@ serve(async (req)=>{
       });
     }
     // ── 11. Evento de reabertura ──────────────────────────────────────────
-    if (shouldReopen) {
+    if (reopenedHere) {
       const { error: evErr } = await supabase.from("conversation_events").insert({
         conversation_id: conversation.id,
         event_type: "reopened_automatically",
@@ -442,7 +488,12 @@ serve(async (req)=>{
           provider,
           meta_message_id: providerMessageId,
           from_status: STATUS_CLOSED,
-          to_status: STATUS_PENDING
+          to_status: STATUS_PENDING,
+          // Chegou fora de hora: o aviso mostra quando o cliente escreveu
+          ...arrivedLate ? {
+            late: true,
+            sent_at: timestampIso
+          } : {}
         }
       });
       if (evErr) {
@@ -498,6 +549,18 @@ serve(async (req)=>{
   if (contentType.includes("pkcs12")) return "pfx";
   if (contentType.includes("xml")) return "xml";
   return "bin";
+}
+/**
+ * O cliente já mandou nesta conversa alguma mensagem escrita depois desta?
+ * Na dúvida (erro no banco) responde que não: melhor reabrir à toa do que
+ * esconder uma mensagem sem resposta.
+ */ async function hasNewerInbound(supabase, conversationId, messageId, sentAtIso) {
+  const { data, error } = await supabase.from("messages").select("id").eq("conversation_id", conversationId).eq("direction", DIRECTION_INBOUND).neq("id", messageId).gt("sent_at", sentAtIso).limit(1);
+  if (error) {
+    console.error("hasNewerInbound error:", error);
+    return false;
+  }
+  return (data?.length ?? 0) > 0;
 }
 async function getAutomationSettings(supabase, clinicId) {
   const { data, error } = await supabase.from("conversation_automation_settings").select("reopen_on_inbound_enabled").eq("clinic_id", clinicId).maybeSingle();
