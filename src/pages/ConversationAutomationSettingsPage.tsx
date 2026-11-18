@@ -3,6 +3,7 @@ import { toast } from "react-toastify";
 import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import { Button } from "../components/ui/Button";
+import { Input } from "../components/ui/Input";
 import { Textarea } from "../components/ui/Textarea";
 import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import { Card } from "../components/ui/Card";
@@ -122,19 +123,6 @@ const AUTO_CLOSE_OPTIONS: MinutesOption[] = [
   { value: 10080, label: "7 dias" },
 ];
 
-/** Rótulo legível para um valor salvo que não está na lista */
-const formatMinutes = (minutes: number) => {
-  if (minutes % 1440 === 0) {
-    const days = minutes / 1440;
-    return `${days} ${days === 1 ? "dia" : "dias"}`;
-  }
-  if (minutes % 60 === 0) {
-    const hours = minutes / 60;
-    return `${hours} ${hours === 1 ? "hora" : "horas"}`;
-  }
-  return `${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
-};
-
 const parsePositiveInteger = (value: string) => {
   if (!value.trim()) return null;
   if (!/^\d+$/.test(value.trim())) return null;
@@ -220,6 +208,7 @@ const AutomationCard = ({
   showMinutesInput = true,
   minutesOptions = [],
   minutesLabel = "Tempo",
+  minMinutes = 1,
   locked = false,
 }: {
   title: string;
@@ -233,9 +222,27 @@ const AutomationCard = ({
   /** Opções de tempo, mostradas como botões */
   minutesOptions?: MinutesOption[];
   minutesLabel?: string;
+  /** Menor tempo aceito no campo "Customizado" */
+  minMinutes?: number;
   /** Mostra o estado, mas não deixa mudar */
   locked?: boolean;
 }) => {
+  // Tempo salvo que não está nos botões abre direto no campo "Customizado"
+  const [customMinutes, setCustomMinutes] = useState(
+    () =>
+      minutesValue !== undefined &&
+      !minutesOptions.some((option) => String(option.value) === minutesValue),
+  );
+
+  const optionButtonClass = (selected: boolean) =>
+    [
+      "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+      selected
+        ? "border-blue-600 bg-blue-600 text-white"
+        : "border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600",
+      enabled ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+    ].join(" ");
+
   return (
     <Card className="p-4 sm:p-6">
       <div className="flex flex-col gap-5">
@@ -262,21 +269,9 @@ const AutomationCard = ({
               aria-label={`${title}: ${minutesLabel}`}
               className="flex flex-wrap gap-2"
             >
-              {[
-                // Valor antigo digitado à mão continua aparecendo
-                ...(!minutesOptions.some(
-                  (option) => String(option.value) === minutesValue,
-                ) && parsePositiveInteger(minutesValue ?? "")
-                  ? [
-                      {
-                        value: Number(minutesValue),
-                        label: formatMinutes(Number(minutesValue)),
-                      },
-                    ]
-                  : []),
-                ...minutesOptions,
-              ].map((option) => {
-                const selected = String(option.value) === minutesValue;
+              {minutesOptions.map((option) => {
+                const selected =
+                  !customMinutes && String(option.value) === minutesValue;
                 return (
                   <button
                     key={option.value}
@@ -284,22 +279,42 @@ const AutomationCard = ({
                     role="radio"
                     aria-checked={selected}
                     disabled={!enabled}
-                    onClick={() => onMinutesChange(String(option.value))}
-                    className={[
-                      "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
-                      selected
-                        ? "border-blue-600 bg-blue-600 text-white"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600",
-                      enabled ? "cursor-pointer" : "cursor-not-allowed opacity-60",
-                    ].join(" ")}
+                    onClick={() => {
+                      setCustomMinutes(false);
+                      onMinutesChange(String(option.value));
+                    }}
+                    className={optionButtonClass(selected)}
                   >
                     {option.label}
                   </button>
                 );
               })}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={customMinutes}
+                disabled={!enabled}
+                onClick={() => setCustomMinutes(true)}
+                className={optionButtonClass(customMinutes)}
+              >
+                Customizado
+              </button>
             </div>
-            {minutesError ? (
-              <p className="mt-1 text-sm text-red-500">{minutesError}</p>
+            {customMinutes ? (
+              <div className="mt-3 max-w-xs">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={minMinutes}
+                  step={1}
+                  label="Tempo em minutos"
+                  value={minutesValue}
+                  onChange={(event) => onMinutesChange(event.target.value)}
+                  disabled={!enabled}
+                  error={minutesError}
+                  placeholder="Ex: 90"
+                />
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -587,6 +602,7 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
             }
             minutesOptions={RETURN_TO_PENDING_OPTIONS}
             minutesLabel="Voltar para a fila depois de"
+            minMinutes={5}
             minutesValue={formValues.returnToPendingAfterMinutes}
             onMinutesChange={(value) =>
               setFormValues((prev) => ({

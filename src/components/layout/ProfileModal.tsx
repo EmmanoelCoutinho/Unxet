@@ -6,9 +6,14 @@ import { useAuth } from "../../contexts/AuthContext";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { CloseButton } from "../ui/CloseButton";
+import { Toggle } from "../ui/Toggle";
 import { LegalLinks } from "../LegalLinks";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
 import type { PushStatus } from "../../lib/pushNotifications";
+import {
+  readSoundsEnabled,
+  saveSoundsEnabled,
+} from "../../modules/notifications/notificationSounds";
 
 const PUSH_STATUS_TEXT: Record<PushStatus, string> = {
   enabled:
@@ -64,6 +69,27 @@ const PushNotificationsSection: React.FC = () => {
           </Button>
         </div>
       )}
+    </section>
+  );
+};
+
+const NotificationSoundsSection: React.FC = () => {
+  const [enabled, setEnabled] = useState(readSoundsEnabled);
+
+  const handleChange = (next: boolean) => {
+    setEnabled(next);
+    saveSoundsEnabled(next);
+  };
+
+  return (
+    <section className="space-y-3 border-t border-gray-200 pt-5">
+      <h4 className="text-sm font-semibold text-gray-900">Sons</h4>
+      <Toggle
+        checked={enabled}
+        onChange={handleChange}
+        label="Sons de notificação"
+        helper="Toca um som quando um cliente manda mensagem e quando uma conversa é transferida para você. Vale para este aparelho."
+      />
     </section>
   );
 };
@@ -168,6 +194,8 @@ export const ProfileModal: React.FC<{
           </section>
 
           <PushNotificationsSection />
+
+          <NotificationSoundsSection />
 
           <section className="space-y-3 border-t border-gray-200 pt-5">
             <h4 className="text-sm font-semibold text-gray-900">
