@@ -11,6 +11,7 @@ import { releaseNotice } from "../changelog/releases";
 import { IS_PRODUCTION } from "../../lib/environment";
 import { useNotifications, type UserNotification } from "./useNotifications";
 import { showTransferToast, TRANSFER_KIND } from "./TransferToast";
+import { playTransferSound } from "./notificationSounds";
 
 // Tela das novidades (só abre pelo aviso do sino)
 export const RELEASE_NOTES_PATH = "/inbox/novidades";
@@ -67,12 +68,13 @@ export const NotificationBell = ({ userId }: { userId?: string }) => {
   pathnameRef.current = location.pathname;
   const markReadRef = useRef<(ids: string[]) => Promise<void>>();
 
-  // Conversa transferida para a pessoa: além do sino, um aviso no canto da
-  // tela com atalho para abrir. Se ela já está na conversa, não precisa.
+  // Conversa transferida para a pessoa: além do sino, um som e um aviso no
+  // canto da tela com atalho para abrir. Se ela já está na conversa, não precisa.
   const onArrive = useCallback(
     (n: UserNotification) => {
       if (n.kind !== TRANSFER_KIND) return;
       if (n.url && pathnameRef.current === n.url) return;
+      playTransferSound(n.id);
       showTransferToast(n, () => {
         void markReadRef.current?.([n.id]);
         if (n.url) navigate(n.url);
