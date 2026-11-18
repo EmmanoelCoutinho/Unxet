@@ -80,11 +80,11 @@ export const NEXT_RELEASE: ReleaseChange[] = [
   },
   {
     kind: "new",
-    text: "Agora toca um som quando um cliente manda mensagem. Ele não toca na conversa que você está vendo, nas conversas de outros atendentes nem enquanto o bot está atendendo.",
+    text: "Agora toca um som quando um cliente manda mensagem. Ele não toca na conversa que você está vendo, nas conversas de outros atendentes nem enquanto o bot está atendendo. Para desligar os sons, abra \"Meu perfil\".",
   },
   {
     kind: "improved",
-    text: "Automações do chat: os tempos do SLA da primeira resposta, da volta para a fila de espera e do fechamento automático agora são escolhidos em botões (como \"30 minutos\" ou \"24 horas\"), sem precisar digitar e calcular minutos.",
+    text: "Automações do chat: os tempos do SLA da primeira resposta, da volta para a fila de espera e do fechamento automático agora são escolhidos em botões (como \"30 minutos\" ou \"24 horas\"). Para outro tempo, use a opção \"Customizado\" e informe os minutos.",
     adminOnly: true,
   },
   {
