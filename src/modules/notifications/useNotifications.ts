@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
 // Avisos do sistema para a pessoa logada (tabela user_notifications). O
@@ -16,8 +16,14 @@ export type UserNotification = {
 const LIMIT = 30;
 const COLUMNS = "id, kind, title, body, url, created_at, read_at";
 
-export const useNotifications = (userId: string | null | undefined) => {
+export const useNotifications = (
+  userId: string | null | undefined,
+  /** Chamado uma vez para cada aviso que chega em tempo real. */
+  onArrive?: (notification: UserNotification) => void,
+) => {
   const [items, setItems] = useState<UserNotification[]>([]);
+  const onArriveRef = useRef(onArrive);
+  onArriveRef.current = onArrive;
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -48,6 +54,7 @@ export const useNotifications = (userId: string | null | undefined) => {
           setItems((prev) =>
             prev.some((n) => n.id === row.id) ? prev : [row, ...prev].slice(0, LIMIT),
           );
+          onArriveRef.current?.(row);
         },
       )
       .subscribe();

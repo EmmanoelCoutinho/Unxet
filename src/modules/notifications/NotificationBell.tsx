@@ -1,9 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { BellIcon, RocketIcon, SparklesIcon, type LucideIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  ArrowRightLeftIcon,
+  BellIcon,
+  RocketIcon,
+  SparklesIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { releaseNotice } from "../changelog/releases";
 import { IS_PRODUCTION } from "../../lib/environment";
-import { useNotifications } from "./useNotifications";
+import { useNotifications, type UserNotification } from "./useNotifications";
+import { showTransferToast, TRANSFER_KIND } from "./TransferToast";
 
 // Tela das novidades (só abre pelo aviso do sino)
 export const RELEASE_NOTES_PATH = "/inbox/novidades";
@@ -22,6 +29,7 @@ const ICONS: Record<string, LucideIcon> = {
   release: RocketIcon,
   ai_usage_warn_80: SparklesIcon,
   ai_usage_exhausted: SparklesIcon,
+  [TRANSFER_KIND]: ArrowRightLeftIcon,
 };
 
 /** "há 5 min", "há 2 h", "ontem", "03/11" */
@@ -54,7 +62,27 @@ type BellItem = {
  */
 export const NotificationBell = ({ userId }: { userId?: string }) => {
   const navigate = useNavigate();
-  const { items, markRead } = useNotifications(userId);
+  const location = useLocation();
+  const pathnameRef = useRef(location.pathname);
+  pathnameRef.current = location.pathname;
+  const markReadRef = useRef<(ids: string[]) => Promise<void>>();
+
+  // Conversa transferida para a pessoa: além do sino, um aviso no canto da
+  // tela com atalho para abrir. Se ela já está na conversa, não precisa.
+  const onArrive = useCallback(
+    (n: UserNotification) => {
+      if (n.kind !== TRANSFER_KIND) return;
+      if (n.url && pathnameRef.current === n.url) return;
+      showTransferToast(n, () => {
+        void markReadRef.current?.([n.id]);
+        if (n.url) navigate(n.url);
+      });
+    },
+    [navigate],
+  );
+
+  const { items, markRead } = useNotifications(userId, onArrive);
+  markReadRef.current = markRead;
   const [open, setOpen] = useState(false);
   const [seenRelease, setSeenRelease] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);

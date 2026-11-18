@@ -75,6 +75,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "new",
+    text: "Quando alguém transfere uma conversa para você, aparece um aviso no canto da tela com quem transferiu e o cliente, e o botão \"Abrir conversa\" leva direto até ela. O aviso também continua no sino.",
+  },
+  {
     kind: "improved",
     text: "Mensagem que o WhatsApp não conseguiu entregar ao cliente agora aparece com o aviso \"Não entregue\" em vermelho, em vez de ficar com um tique só. Clique em \"Reenviar\" para mandar de novo. Se várias mensagens não forem entregues, confira a conexão do número em Integrações.",
   },
