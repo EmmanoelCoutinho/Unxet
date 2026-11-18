@@ -24,14 +24,7 @@ export async function restore(db, state) {
   }
 }
 
-/** Campo de minutos do mesmo cartão do interruptor */
-const minutesOf = (page, title) =>
-  page
-    .getByRole("switch", { name: title })
-    .locator("xpath=ancestor::div[.//input[@type='number']][1]")
-    .getByRole("spinbutton");
-
-/** Liga (se estiver desligado) e ajusta os minutos (número) ou escolhe a opção (texto) */
+/** Liga (se estiver desligado) e escolhe o tempo pelo rótulo do botão */
 const setCard = async (page, d, title, minutes) => {
   const toggle = page.getByRole("switch", { name: title });
   await toggle.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "smooth" }));
@@ -41,16 +34,11 @@ const setCard = async (page, d, title, minutes) => {
   } else {
     await d.point(toggle, 900);
   }
-  if (typeof minutes === "string") {
-    // Cartão com botões de tempo (ex.: Fechamento automático): clica na opção
+  if (minutes !== undefined) {
     const option = page
       .getByRole("radiogroup", { name: `${title}:` })
-      .getByRole("radio", { name: minutes });
+      .getByRole("radio", { name: minutes, exact: true });
     await d.click(option, { before: 700, after: 700 });
-  } else if (minutes !== undefined) {
-    const input = minutesOf(page, title);
-    await input.fill(""); // apaga o valor antigo antes de digitar
-    await d.type(input, String(minutes), { delay: 160 });
   }
 };
 
@@ -80,21 +68,21 @@ export async function run(page, d) {
     step: 2,
     hold: 300,
   });
-  await setCard(page, d, "SLA da primeira resposta", 5);
+  await setCard(page, d, "SLA da primeira resposta", "5 minutos");
   await d.caption("Quem passar desse tempo aparece em vermelho no Painel", { hold: 1800 });
 
   await d.caption("Voltar para a fila: se o atendente não responder, outra pessoa pode assumir", {
     step: 3,
     hold: 300,
   });
-  await setCard(page, d, "Voltar para fila de espera", 30);
+  await setCard(page, d, "Voltar para fila de espera", "30 minutos");
 
   await d.caption("Fechamento automático: encerra conversas paradas depois desse tempo", {
     step: 4,
     hold: 300,
   });
   await setCard(page, d, "Fechamento automático", "24 horas");
-  await d.caption("Escolha o tempo na lista: de 1 hora a 7 dias", { hold: 1600 });
+  await d.caption("É só clicar no tempo: de 1 hora a 7 dias", { hold: 1600 });
 
   await d.caption("Reabrir: se o cliente voltar a escrever, a conversa volta com todo o histórico", {
     step: 5,

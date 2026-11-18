@@ -3,7 +3,6 @@ import { toast } from "react-toastify";
 import { useClinic } from "../contexts/ClinicContext";
 import { supabase } from "../lib/supabaseClient";
 import { Button } from "../components/ui/Button";
-import { Input } from "../components/ui/Input";
 import { Textarea } from "../components/ui/Textarea";
 import { TutorialButton } from "../modules/tutorials/TutorialPlayer";
 import { Card } from "../components/ui/Card";
@@ -88,6 +87,28 @@ const DEFAULT_SETTINGS: AutomationFormValues = {
 };
 
 type MinutesOption = { value: number; label: string };
+
+const SLA_FIRST_RESPONSE_OPTIONS: MinutesOption[] = [
+  { value: 5, label: "5 minutos" },
+  { value: 10, label: "10 minutos" },
+  { value: 15, label: "15 minutos" },
+  { value: 30, label: "30 minutos" },
+  { value: 60, label: "1 hora" },
+  { value: 120, label: "2 horas" },
+  { value: 240, label: "4 horas" },
+];
+
+// Mínimo de 5 minutos (validado ao salvar)
+const RETURN_TO_PENDING_OPTIONS: MinutesOption[] = [
+  { value: 5, label: "5 minutos" },
+  { value: 10, label: "10 minutos" },
+  { value: 15, label: "15 minutos" },
+  { value: 30, label: "30 minutos" },
+  { value: 60, label: "1 hora" },
+  { value: 120, label: "2 horas" },
+  { value: 240, label: "4 horas" },
+  { value: 480, label: "8 horas" },
+];
 
 const AUTO_CLOSE_OPTIONS: MinutesOption[] = [
   { value: 60, label: "1 hora" },
@@ -197,9 +218,8 @@ const AutomationCard = ({
   onMinutesChange,
   minutesError,
   showMinutesInput = true,
-  minMinutes = 1,
-  minutesOptions,
-  minutesLabel = "Tempo em minutos",
+  minutesOptions = [],
+  minutesLabel = "Tempo",
   locked = false,
 }: {
   title: string;
@@ -210,8 +230,7 @@ const AutomationCard = ({
   onMinutesChange?: (value: string) => void;
   minutesError?: string;
   showMinutesInput?: boolean;
-  minMinutes?: number;
-  /** Quando informado, mostra botões com essas opções em vez do campo numérico */
+  /** Opções de tempo, mostradas como botões */
   minutesOptions?: MinutesOption[];
   minutesLabel?: string;
   /** Mostra o estado, mas não deixa mudar */
@@ -234,71 +253,54 @@ const AutomationCard = ({
         </div>
 
         {showMinutesInput && onMinutesChange && minutesValue !== undefined ? (
-          <div className={minutesOptions ? "" : "max-w-xs"}>
-            {minutesOptions ? (
-              <div className="w-full">
-                <p className="mb-2 block text-sm font-medium text-gray-900">
-                  {minutesLabel}
-                </p>
-                <div
-                  role="radiogroup"
-                  aria-label={`${title}: ${minutesLabel}`}
-                  className="flex flex-wrap gap-2"
-                >
-                  {[
-                    // Valor antigo digitado à mão continua aparecendo
-                    ...(!minutesOptions.some(
-                      (option) => String(option.value) === minutesValue,
-                    ) && parsePositiveInteger(minutesValue ?? "")
-                      ? [
-                          {
-                            value: Number(minutesValue),
-                            label: formatMinutes(Number(minutesValue)),
-                          },
-                        ]
-                      : []),
-                    ...minutesOptions,
-                  ].map((option) => {
-                    const selected = String(option.value) === minutesValue;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        disabled={!enabled}
-                        onClick={() => onMinutesChange(String(option.value))}
-                        className={[
-                          "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
-                          selected
-                            ? "border-blue-600 bg-blue-600 text-white"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600",
-                          enabled ? "cursor-pointer" : "cursor-not-allowed opacity-60",
-                        ].join(" ")}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {minutesError ? (
-                  <p className="mt-1 text-sm text-red-500">{minutesError}</p>
-                ) : null}
-              </div>
-            ) : (
-              <Input
-                type="number"
-                inputMode="numeric"
-                min={minMinutes}
-                step={1}
-                label="Tempo em minutos"
-                value={minutesValue}
-                onChange={(event) => onMinutesChange(event.target.value)}
-                disabled={!enabled}
-                error={minutesError}
-                placeholder="Ex: 60"
-              />
-            )}
+          <div className="w-full">
+            <p className="mb-2 block text-sm font-medium text-gray-900">
+              {minutesLabel}
+            </p>
+            <div
+              role="radiogroup"
+              aria-label={`${title}: ${minutesLabel}`}
+              className="flex flex-wrap gap-2"
+            >
+              {[
+                // Valor antigo digitado à mão continua aparecendo
+                ...(!minutesOptions.some(
+                  (option) => String(option.value) === minutesValue,
+                ) && parsePositiveInteger(minutesValue ?? "")
+                  ? [
+                      {
+                        value: Number(minutesValue),
+                        label: formatMinutes(Number(minutesValue)),
+                      },
+                    ]
+                  : []),
+                ...minutesOptions,
+              ].map((option) => {
+                const selected = String(option.value) === minutesValue;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={!enabled}
+                    onClick={() => onMinutesChange(String(option.value))}
+                    className={[
+                      "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+                      selected
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600",
+                      enabled ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                    ].join(" ")}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            {minutesError ? (
+              <p className="mt-1 text-sm text-red-500">{minutesError}</p>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -562,6 +564,8 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
                 slaFirstResponseEnabled: value,
               })
             }
+            minutesOptions={SLA_FIRST_RESPONSE_OPTIONS}
+            minutesLabel="Alertar depois de"
             minutesValue={formValues.slaFirstResponseAfterMinutes}
             onMinutesChange={(value) =>
               setFormValues((prev) => ({
@@ -581,7 +585,8 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
                 returnToPendingEnabled: value,
               })
             }
-            minMinutes={5}
+            minutesOptions={RETURN_TO_PENDING_OPTIONS}
+            minutesLabel="Voltar para a fila depois de"
             minutesValue={formValues.returnToPendingAfterMinutes}
             onMinutesChange={(value) =>
               setFormValues((prev) => ({
