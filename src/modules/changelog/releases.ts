@@ -75,6 +75,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "new",
+    text: "Quando alguém transfere uma conversa para você, aparece um aviso no canto da tela com quem transferiu e o cliente, e o botão \"Abrir conversa\" leva direto até ela. O aviso também continua no sino.",
+  },
+  {
     kind: "improved",
     text: "Automações do chat: os tempos do SLA da primeira resposta, da volta para a fila de espera e do fechamento automático agora são escolhidos em botões (como \"30 minutos\" ou \"24 horas\"), sem precisar digitar e calcular minutos.",
     adminOnly: true,
