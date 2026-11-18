@@ -223,6 +223,29 @@ function normalizeInput(input: SendableInput) {
   };
 }
 
+/**
+ * O que reenviar de uma mensagem que o WhatsApp não entregou: texto ou a
+ * mesma mídia (mesmo arquivo do Storage). Null quando não dá para refazer
+ * (ex.: contato compartilhado, modelo da Meta, mensagem do bot).
+ */
+export function resendInputFor(msg: Message): SendableInput | null {
+  if (msg.deliveryStatus !== "failed" || msg.deletedAt) return null;
+  const text = (msg.text ?? "").trim();
+  const type = msg.type ?? "text";
+  if (type === "text") return text ? text : null;
+  if ((type === "image" || type === "audio" || type === "document") && msg.mediaUrl) {
+    return {
+      type,
+      text: text || undefined,
+      mediaUrl: msg.mediaUrl,
+      mediaMimeType: msg.mediaMimeType,
+      filename: msg.filename,
+      fileSize: msg.fileSize,
+    };
+  }
+  return null;
+}
+
 export type ConversationViewProps = {
   conversationId: string;
   /** "page": tela cheia (rota do chat); "floating": caixa flutuante. */
@@ -1533,6 +1556,14 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     [id, enqueueSend, sendNow],
   );
 
+  // O WhatsApp avisou que não entregou: manda de novo como mensagem nova
+  // (a original fica marcada "Não entregue" no histórico)
+  const handleResendUndelivered = (msg: Message) => {
+    const input = resendInputFor(msg);
+    if (!input) return;
+    void handleSendMessage(input);
+  };
+
   const handleRetryAudioTranscript = useCallback(
     async (message: Message) => {
       if (!id) return;
@@ -1828,6 +1859,11 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
                     contactName={conversation?.contactName ?? ""}
                     isGroup={conversation?.isGroup === true}
                     onRetry={handleRetryLocalMessage}
+                    onResendUndelivered={
+                      canReply && conversation?.status === "open" && resendInputFor(item.message)
+                        ? handleResendUndelivered
+                        : undefined
+                    }
                     onRetryTranscript={handleRetryAudioTranscript}
                     onDeleteMessage={
                       canDeleteMessages ? handleDeleteMessage : undefined

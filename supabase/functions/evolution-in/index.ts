@@ -141,11 +141,15 @@ const PROFILE_PIC_BUCKET = "whatsapp-media";
 // ---------------------------------------------------------------------------
 // Evolution v2: data = { keyId, fromMe, status: "DELIVERY_ACK" | "READ" | ... }
 // Evolution v1: data = [{ key: { id, fromMe }, update: { status: 3 } }]
+// (ERROR / 0 vira "failed": mensagem não entregue)
 // Códigos numéricos: 0 ERROR, 1 PENDING, 2 SERVER_ACK, 3 DELIVERY_ACK, 4 READ, 5 PLAYED
 function mapEvolutionStatus(raw) {
   const value = typeof raw === "number" ? raw : String(raw ?? "").toUpperCase();
   if (value === 3 || value === "DELIVERY_ACK") return "delivered";
   if (value === 4 || value === 5 || value === "READ" || value === "PLAYED") return "read";
+  // O WhatsApp recusou a mensagem que a Evolution aceitou no envio
+  // (ex.: Evolution 2.3.7 depois de ler o QR de novo): vira "não entregue"
+  if (value === 0 || value === "ERROR") return "failed";
   return null;
 }
 async function handleMessagesUpdate(body) {

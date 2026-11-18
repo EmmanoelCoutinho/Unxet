@@ -87,6 +87,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     text: "Automações do chat: os tempos do SLA da primeira resposta, da volta para a fila de espera e do fechamento automático agora são escolhidos em botões (como \"30 minutos\" ou \"24 horas\"), sem precisar digitar e calcular minutos.",
     adminOnly: true,
   },
+  {
+    kind: "improved",
+    text: "Mensagem que o WhatsApp não conseguiu entregar ao cliente agora aparece com o aviso \"Não entregue\" em vermelho, em vez de ficar com um tique só. Clique em \"Reenviar\" para mandar de novo. Se várias mensagens não forem entregues, confira a conexão do número em Integrações.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
