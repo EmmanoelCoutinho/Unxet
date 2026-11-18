@@ -16,6 +16,10 @@ import {
   conversationConnectionLabel,
   isConnectionRemoved,
 } from "../lib/whatsappConnections";
+import { playMessageSound } from "../modules/notifications/notificationSounds";
+
+// Quanto tempo esperar a conversa nova aparecer na lista para tocar o som
+const NEW_CONVERSATION_SOUND_WINDOW_MS = 10000;
 
 type UseConversationsOptions = {
   status?: string;
@@ -54,6 +58,11 @@ export function useConversations(options: UseConversationsOptions = {}) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<any>(null);
+
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+  // Primeira mensagem de conversas que ainda não estão na lista
+  const newConversationSoundsRef = useRef(new Map<string, number>());
 
   const lastRefetchAtRef = useRef(0);
   const refetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -462,6 +471,15 @@ export function useConversations(options: UseConversationsOptions = {}) {
         // Uma busca mais nova já foi disparada: este resultado está defasado
         if (fetchSeq !== fetchSeqRef.current) return;
 
+        newConversationSoundsRef.current.forEach((arrivedAt, conversationId) => {
+          if (mapped.some((c) => c.id === conversationId && c.unreadCount > 0)) {
+            playMessageSound();
+            newConversationSoundsRef.current.delete(conversationId);
+          } else if (Date.now() - arrivedAt > NEW_CONVERSATION_SOUND_WINDOW_MS) {
+            newConversationSoundsRef.current.delete(conversationId);
+          }
+        });
+
         setConversations((prev) => {
           const prevById = new Map(prev.map((c) => [c.id, c]));
 
@@ -745,6 +763,16 @@ export function useConversations(options: UseConversationsOptions = {}) {
           const isInbound = msg.direction === "inbound";
           // Mensagem chegando na conversa que está aberta na tela já nasce lida
           const viewing = isInbound && isViewing(msg.conversation_id);
+
+          // Toca nas mesmas mensagens que contam como não lidas
+          if (isInbound && !viewing) {
+            const known = conversationsRef.current.find((c) => c.id === msg.conversation_id);
+            if (!known) {
+              newConversationSoundsRef.current.set(msg.conversation_id, Date.now());
+            } else if (!known.inBotFlow && !isAssignedToOther(known, authUser.id)) {
+              playMessageSound();
+            }
+          }
 
           setConversations((current) => {
             const idx = current.findIndex((c) => c.id === msg.conversation_id);

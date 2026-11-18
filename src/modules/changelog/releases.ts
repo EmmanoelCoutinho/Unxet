@@ -76,7 +76,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
-    text: "Quando alguém transfere uma conversa para você, aparece um aviso no canto da tela com quem transferiu e o cliente, e o botão \"Abrir conversa\" leva direto até ela. O aviso também continua no sino.",
+    text: "Quando alguém transfere uma conversa para você, toca um som e aparece um aviso no canto da tela com quem transferiu e o cliente, e o botão \"Abrir conversa\" leva direto até ela. O aviso também continua no sino.",
+  },
+  {
+    kind: "new",
+    text: "Agora toca um som quando um cliente manda mensagem. Ele não toca na conversa que você está vendo, nas conversas de outros atendentes nem enquanto o bot está atendendo.",
   },
 ];
 
