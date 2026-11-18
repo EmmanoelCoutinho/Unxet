@@ -69,11 +69,16 @@ export const NotificationBell = ({ userId }: { userId?: string }) => {
   const markReadRef = useRef<(ids: string[]) => Promise<void>>();
 
   // Conversa transferida para a pessoa: além do sino, um som e um aviso no
-  // canto da tela com atalho para abrir. Se ela já está na conversa, não precisa.
+  // canto da tela com atalho para abrir. Só dispensa quando ela está vendo a
+  // conversa: aberta em aba de fundo ou com o navegador minimizado, ainda avisa.
   const onArrive = useCallback(
     (n: UserNotification) => {
       if (n.kind !== TRANSFER_KIND) return;
-      if (n.url && pathnameRef.current === n.url) return;
+      const viewing =
+        !!n.url &&
+        pathnameRef.current === n.url &&
+        document.visibilityState === "visible";
+      if (viewing) return;
       playTransferSound(n.id);
       showTransferToast(n, () => {
         void markReadRef.current?.([n.id]);
