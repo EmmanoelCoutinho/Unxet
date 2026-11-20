@@ -1,9 +1,9 @@
 import React from "react";
-import { FileTextIcon, XIcon } from "lucide-react";
+import { FileTextIcon, FilmIcon, XIcon } from "lucide-react";
 
 export type PendingAttachment = {
   id: string;
-  kind: "image" | "document";
+  kind: "image" | "video" | "document";
   file: File;
   mimeType: string;
   extension: string;
@@ -61,7 +61,11 @@ export const AttachmentTray: React.FC<AttachmentTrayProps> = ({
               title={item.file.name}
             >
               <div className="flex h-10 w-9 flex-shrink-0 flex-col items-center justify-center rounded-md bg-[#0A84FF] text-white">
-                <FileTextIcon className="h-4 w-4" />
+                {item.kind === "video" ? (
+                  <FilmIcon className="h-4 w-4" />
+                ) : (
+                  <FileTextIcon className="h-4 w-4" />
+                )}
                 <span className="mt-0.5 max-w-full truncate px-0.5 text-[8px] font-bold leading-none">
                   {item.extension.toUpperCase()}
                 </span>

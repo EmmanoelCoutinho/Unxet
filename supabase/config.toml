@@ -452,6 +452,12 @@ verify_jwt = true
 [functions.delete-message]
 verify_jwt = true
 
+[functions.edit-message]
+verify_jwt = true
+
+[functions.sticker-library]
+verify_jwt = true
+
 [functions.react-message]
 verify_jwt = true
 

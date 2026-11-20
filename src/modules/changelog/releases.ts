@@ -91,6 +91,30 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "improved",
     text: "Mensagem que o WhatsApp não conseguiu entregar ao cliente agora aparece com o aviso \"Não entregue\" em vermelho, em vez de ficar com um tique só. Clique em \"Reenviar\" para mandar de novo. Se várias mensagens não forem entregues, confira a conexão do número em Integrações.",
   },
+  {
+    kind: "improved",
+    text: "Conversas do WhatsApp por QR Code: fotos enviadas em álbum, figurinhas, vídeos redondos, mensagens temporárias e de visualização única agora aparecem na conversa. Listas de opções, botões e modelos que chegam de outras empresas mostram o texto e as opções, e enquetes mostram as alternativas. Antes, vários desses formatos apareciam como \"Mensagem em um formato que o Unxet ainda não exibe\".",
+  },
+  {
+    kind: "improved",
+    text: "Mensagem que o cliente editou no WhatsApp agora aparece com \"Editada\" ao lado da hora. Clique em \"Editada\" para ver o texto de antes. Edição de legenda de foto, vídeo e documento também passa a aparecer.",
+  },
+  {
+    kind: "new",
+    text: "WhatsApp por QR Code: agora dá para editar uma mensagem de texto enviada por engano. Na setinha da mensagem, clique em \"Editar\" (vale por até 15 minutos depois do envio, como no WhatsApp). O cliente vê o texto novo com a marca \"Editada\".",
+  },
+  {
+    kind: "new",
+    text: "WhatsApp por QR Code: o clipe ganhou \"Localização\". Cole o link do Google Maps (ou use a localização do aparelho) e o cliente recebe o mapa, que abre no aplicativo de mapas dele.",
+  },
+  {
+    kind: "improved",
+    text: "WhatsApp por QR Code: vídeos MP4 (até 64 MB) podem ser enviados em \"Fotos e vídeos\" e chegam ao cliente como vídeo, não como arquivo. Na conversa, os vídeos enviados e recebidos tocam direto na mensagem.",
+  },
+  {
+    kind: "new",
+    text: "WhatsApp por QR Code: agora dá para enviar figurinhas. No clipe, clique em \"Figurinha\" para escolher uma das que a empresa já recebeu ou enviou, ou crie uma a partir de uma imagem. Na conversa, as figurinhas aparecem soltas, sem balão, como no WhatsApp.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

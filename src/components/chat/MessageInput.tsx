@@ -11,6 +11,8 @@ import {
   ContactIcon,
   FolderOpenIcon,
   Trash2Icon,
+  MapPinIcon,
+  StickerIcon,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button } from "../ui/Button";
@@ -28,6 +30,9 @@ import { compressImageFile } from "../../lib/imageUtils";
 import { storageContentType, storageFile } from "../../services/fileLibrary";
 import type { SharedContact } from "../../lib/sharedContact";
 import { ShareContactModal } from "./ShareContactModal";
+import { ShareLocationModal } from "./ShareLocationModal";
+import { StickerPicker } from "./StickerPicker";
+import type { SharedLocation } from "../../lib/sharedLocation";
 import { AttachmentTray, type PendingAttachment } from "./AttachmentTray";
 import { FileLibraryPicker, type PickedFile } from "./FileLibraryPicker";
 import { QuotedMessage } from "./QuotedMessage";
@@ -38,23 +43,40 @@ const MAX_AUDIO_FILE_BYTES = 16 * 1024 * 1024;
 // Limite de documento do WhatsApp
 const MAX_DOCUMENT_FILE_BYTES = 100 * 1024 * 1024;
 const MAX_ATTACHMENTS = 10;
+// Vídeo vai como vídeo pelo WhatsApp via QR Code (a Evolution baixa o arquivo)
+const MAX_VIDEO_FILE_BYTES = 64 * 1024 * 1024;
+const VIDEO_EXTENSIONS: Record<string, string> = { mp4: "video/mp4", m4v: "video/mp4", "3gp": "video/3gpp" };
+
+/** MP4/3GP: "ftyp" nos bytes 4 a 7 (formato ISO de mídia). */
+const looksLikeIsoVideo = (header: Uint8Array) =>
+  header.length >= 8 &&
+  header[4] === 0x66 &&
+  header[5] === 0x74 &&
+  header[6] === 0x79 &&
+  header[7] === 0x70;
 
 type SendableInput =
   | string
   | {
-      type: "text" | "image" | "audio" | "document" | "contact";
+      type: "text" | "image" | "audio" | "document" | "contact" | "location" | "sticker";
       text?: string;
       mediaUrl?: string;
       mediaMimeType?: string;
       filename?: string;
       fileSize?: number;
       contact?: SharedContact;
+      location?: SharedLocation;
     };
 
 interface MessageInputProps {
   onSend: (input: SendableInput) => void;
   // envio de cartão de contato (só WhatsApp)
   allowContacts?: boolean;
+  // vídeo e localização (só WhatsApp via QR Code)
+  allowVideos?: boolean;
+  allowLocation?: boolean;
+  // figurinhas (só WhatsApp via QR Code)
+  allowStickers?: boolean;
   // Canal aceita legenda em imagem e documento (WhatsApp). Nos outros, o
   // texto vai como mensagem separada depois dos arquivos
   captionsSupported?: boolean;
@@ -101,6 +123,9 @@ type AllowedDocumentMime =
 export const MessageInput: React.FC<MessageInputProps> = ({
   onSend,
   allowContacts = false,
+  allowVideos = false,
+  allowLocation = false,
+  allowStickers = false,
   captionsSupported = true,
   disabled = false,
   disabledReason,
@@ -121,6 +146,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [showAttachments, setShowAttachments] = useState(false);
   const [showQuickMessages, setShowQuickMessages] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [showFileLibrary, setShowFileLibrary] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
@@ -541,6 +568,17 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     return text.toUpperCase() === "OFXHEADER";
   };
 
+  // Vídeo MP4/3GP pela extensão e pela assinatura do arquivo
+  const detectVideoMimeType = async (file: File): Promise<string | null> => {
+    const extension = getExtension(file.name);
+    const fromExtension = VIDEO_EXTENSIONS[extension];
+    const declared = normalizeMimeType(file.type);
+    if (!fromExtension && declared !== "video/mp4" && declared !== "video/3gpp") return null;
+    const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    if (!looksLikeIsoVideo(header)) return null;
+    return fromExtension ?? declared;
+  };
+
   const validateDocumentFile = async (
     file: File,
   ): Promise<{ mimeType: AllowedDocumentMime; extension: string } | null> => {
@@ -939,6 +977,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     const accepted: PendingAttachment[] = [];
     let rejected = 0;
+    let rejectedLargeVideos = 0;
 
     for (const file of files.slice(0, room)) {
       const imageMime = await detectRealImageMimeType(file);
@@ -951,6 +990,22 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           mimeType: compressed.mimeType,
           extension: compressed.extension,
           previewUrl: URL.createObjectURL(compressed.file),
+        });
+        continue;
+      }
+
+      const videoMime = allowVideos ? await detectVideoMimeType(file) : null;
+      if (videoMime) {
+        if (file.size > MAX_VIDEO_FILE_BYTES) {
+          rejectedLargeVideos += 1;
+          continue;
+        }
+        accepted.push({
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          kind: "video",
+          file,
+          mimeType: videoMime,
+          extension: getExtension(file.name) || "mp4",
         });
         continue;
       }
@@ -981,11 +1036,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       );
     }
 
+    if (rejectedLargeVideos > 0) {
+      toast.info("O vídeo deve ter no máximo 64 MB.");
+    }
+
     if (rejected > 0) {
+      const accepts = allowVideos
+        ? "imagens JPG ou PNG, vídeos MP4 ou 3GP (até 64 MB) e documentos TXT, PDF, XML, OFX, CSV, PFX, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB)"
+        : "imagens JPG ou PNG e documentos TXT, PDF, XML, OFX, CSV, PFX, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB)";
       toast.info(
         rejected === 1
-          ? "Um arquivo foi ignorado. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, XML, OFX, CSV, PFX, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB)."
-          : `${rejected} arquivos foram ignorados. Aceitamos imagens JPG ou PNG e documentos TXT, PDF, XML, OFX, CSV, PFX, DOC, DOCX, XLS, XLSX, PPT ou PPTX (até 100 MB).`,
+          ? `Um arquivo foi ignorado. Aceitamos ${accepts}.`
+          : `${rejected} arquivos foram ignorados. Aceitamos ${accepts}.`,
       );
     }
 
@@ -1018,7 +1080,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     try {
       for (const [index, item] of items.entries()) {
         const caption = captionsSupported && index === 0 ? text || undefined : undefined;
-        const { publicUrl } = await uploadFileToSupabase(item.file, item.kind, {
+        const { publicUrl } = await uploadFileToSupabase(item.file, item.kind === "image" ? "image" : "document", {
           contentType: item.mimeType,
           extension: item.extension,
         });
@@ -1267,7 +1329,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 >
                   <span className="flex items-center gap-2 text-gray-800">
                     <ImageIcon className="w-4 h-4" />
-                    Imagens
+                    {allowVideos ? "Fotos e vídeos" : "Imagens"}
                   </span>
                   <span className="text-xs text-gray-500">Selecionar</span>
                 </button>
@@ -1333,6 +1395,44 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                       Contato
                     </span>
                     <span className="text-xs text-gray-500">Selecionar</span>
+                  </button>
+                )}
+
+                {allowStickers && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (disabled) return;
+                      setShowAttachments(false);
+                      setShowStickerPicker(true);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-gray-100 transition-colors sm:py-2"
+                  >
+                    <span className="flex items-center gap-2 text-gray-800">
+                      <StickerIcon className="w-4 h-4" />
+                      Figurinha
+                    </span>
+                    <span className="text-xs text-gray-500">Escolher</span>
+                  </button>
+                )}
+
+                {allowLocation && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (disabled) return;
+                      setShowAttachments(false);
+                      setShowLocationModal(true);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-gray-100 transition-colors sm:py-2"
+                  >
+                    <span className="flex items-center gap-2 text-gray-800">
+                      <MapPinIcon className="w-4 h-4" />
+                      Localização
+                    </span>
+                    <span className="text-xs text-gray-500">Enviar</span>
                   </button>
                 )}
               </div>
@@ -1441,7 +1541,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         style={{ display: "none" }}
         ref={fileInputRef}
         type="file"
-        accept="image/jpeg,image/png"
+        accept={
+          allowVideos
+            ? "image/jpeg,image/png,video/mp4,video/3gpp,.mp4,.m4v,.3gp"
+            : "image/jpeg,image/png"
+        }
         multiple
         className="invisible"
         onChange={handleFileChange}
@@ -1492,6 +1596,30 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           onConfirm={(contact) => {
             setShowContactModal(false);
             onSend({ type: "contact", contact });
+          }}
+        />
+      )}
+
+      {allowStickers && (
+        <StickerPicker
+          open={showStickerPicker && !disabled}
+          clinicId={clinicId}
+          onClose={() => setShowStickerPicker(false)}
+          onSelect={(stickerUrl) => {
+            setShowStickerPicker(false);
+            onSend({ type: "sticker", mediaUrl: stickerUrl, mediaMimeType: "image/webp" });
+          }}
+        />
+      )}
+
+      {allowLocation && (
+        <ShareLocationModal
+          open={showLocationModal && !disabled}
+          clinicId={clinicId}
+          onClose={() => setShowLocationModal(false)}
+          onConfirm={(location) => {
+            setShowLocationModal(false);
+            onSend({ type: "location", location });
           }}
         />
       )}

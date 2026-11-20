@@ -120,6 +120,12 @@ export type Message = {
   transcriptText?: string;
   deletedAt?: string;
   deletedForEveryone?: boolean;
+  /** Editada no WhatsApp (última edição) */
+  editedAt?: string;
+  /** Texto antes da primeira edição */
+  originalText?: string;
+  /** A edição chegou, mas o texto novo não pôde ser lido */
+  editUnreadable?: boolean;
   deliveryStatus?: MessageDeliveryStatus;
   /** Motivo que o provedor deu para não entregar (deliveryStatus "failed") */
   failureReason?: string;
@@ -136,13 +142,14 @@ export type Message = {
   localStatus?: MessageSendStatus;
   localError?: string | null;
   localPayload?: {
-    type: "text" | "image" | "audio" | "document" | "contact";
+    type: "text" | "image" | "audio" | "document" | "contact" | "location" | "sticker";
     text?: string;
     mediaUrl?: string;
     mediaMimeType?: string;
     filename?: string;
     fileSize?: number;
     contact?: { name: string; phone: string };
+    location?: { latitude: number; longitude: number; name?: string; address?: string };
     replyToMessageId?: string;
   };
 };
