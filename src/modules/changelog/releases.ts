@@ -91,6 +91,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "improved",
     text: "Mensagem que o WhatsApp não conseguiu entregar ao cliente agora aparece com o aviso \"Não entregue\" em vermelho, em vez de ficar com um tique só. Clique em \"Reenviar\" para mandar de novo. Se várias mensagens não forem entregues, confira a conexão do número em Integrações.",
   },
+  {
+    kind: "improved",
+    text: "Conversas do WhatsApp por QR Code: fotos enviadas em álbum, figurinhas, vídeos redondos, mensagens temporárias e de visualização única agora aparecem na conversa. Listas de opções, botões e modelos que chegam de outras empresas mostram o texto e as opções, e enquetes mostram as alternativas. Antes, vários desses formatos apareciam como \"Mensagem em um formato que o Unxet ainda não exibe\".",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

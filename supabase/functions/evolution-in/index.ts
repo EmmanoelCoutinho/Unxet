@@ -31,6 +31,7 @@ import { safeStorageContentType } from "../_shared/storageContentType.ts";
 import { applyReaction, evolutionQuotedId, evolutionReaction } from "../_shared/messageReply.ts";
 import { savePhoneSentMessage, waitForKnownMessage } from "../_shared/phoneSentMessages.ts";
 import { queueTranscription } from "../_shared/transcription.ts";
+import { isProtocolOnlyMessage, mediaFilename, mediaMimeType, parseEvolutionContent, unwrapEvolutionMessage } from "../_shared/evolutionContent.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -192,18 +193,14 @@ async function handleMessagesUpdate(body) {
 // ---------------------------------------------------------------------------
 // Mensagens que não são conteúdo novo
 // ---------------------------------------------------------------------------
-// Campos de controle que acompanham qualquer mensagem
-const ENVELOPE_KEYS = [
-  "messageContextInfo",
-  "senderKeyDistributionMessage"
-];
-const PROTOCOL_KEYS = [
-  "protocolMessage",
-  "pollUpdateMessage",
-  "keepInChatMessage",
-  "pinInChatMessage",
-  "encReactionMessage"
-];
+/** data do webhook com a mensagem desembrulhada (ver _shared/evolutionContent.ts). */ function evolutionData(body) {
+  const data = body?.data;
+  if (!data?.message) return data;
+  return {
+    ...data,
+    message: unwrapEvolutionMessage(data.message)
+  };
+}
 /**
  * Edição de uma mensagem já enviada pelo cliente. O WhatsApp manda em dois
  * formatos, conforme a versão: editedMessage.message.protocolMessage ou
@@ -216,11 +213,6 @@ const PROTOCOL_KEYS = [
     originalId: String(protocol.key?.id ?? "").trim(),
     text: String(edited.conversation ?? edited.extendedTextMessage?.text ?? "").trim()
   };
-}
-/** Evento sem conteúdo para o atendente (apagar mensagem, voto em enquete...). */ function isProtocolOnlyMessage(message) {
-  const keys = Object.keys(message ?? {}).filter((key)=>!ENVELOPE_KEYS.includes(key));
-  if (keys.length === 0) return true;
-  return keys.every((key)=>PROTOCOL_KEYS.includes(key));
 }
 // ---------------------------------------------------------------------------
 // Handler
@@ -316,10 +308,13 @@ serve(async (req)=>{
       participant,
       rawWaId: waId
     });
+    // ── Conteúdo desembrulhado (mensagem temporária, visualização única, foto
+    // de álbum...). O payload gravado continua o original (body). ─────────
+    const data = evolutionData(body);
     // ── Reações: gravam o emoji na mensagem reagida ───────────────────────
     // (fromMe: reação da empresa, feita pelo celular ou eco da enviada pelo Unxet)
-    const reaction = evolutionReaction(body?.data);
-    if (reaction || body?.data?.message?.reactionMessage) {
+    const reaction = evolutionReaction(data);
+    if (reaction || data?.message?.reactionMessage) {
       if (reaction && !isRecovered) {
         const applied = await applyReaction(createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY), {
           targetProviderId: reaction.targetId,
@@ -339,22 +334,13 @@ serve(async (req)=>{
         status: 200
       });
     }
-    // ── Ignora stickers ───────────────────────────────────────────────────
-    if (body?.data?.message?.stickerMessage) {
-      return new Response(JSON.stringify({
-        ignored: true,
-        reason: "sticker"
-      }), {
-        status: 200
-      });
-    }
     // ── Supabase client ───────────────────────────────────────────────────
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     // ── Edição de mensagem: corrige o texto da original ───────────────────
     // (antes virava uma mensagem vazia e o bot respondia "não entendi")
     // (só para mensagens: eventos de conexão e QR Code não têm data.message)
     const isMessageEvent = body?.event === "messages.upsert";
-    const edit = isMessageEvent ? extractMessageEdit(body?.data?.message) : null;
+    const edit = isMessageEvent ? extractMessageEdit(body?.data?.message) ?? extractMessageEdit(data?.message) : null;
     if (edit) {
       if (edit.originalId && edit.text) {
         const { error: editError } = await supabase.from("messages").update({
@@ -370,7 +356,7 @@ serve(async (req)=>{
       });
     }
     // ── Eventos de protocolo (mensagem apagada, voto em enquete, fixar etc.) ─
-    if (isMessageEvent && isProtocolOnlyMessage(body?.data?.message)) {
+    if (isMessageEvent && isProtocolOnlyMessage(data?.message)) {
       return new Response(JSON.stringify({
         ignored: true,
         reason: "protocol_message"
@@ -636,13 +622,15 @@ serve(async (req)=>{
     const timestampRaw = body?.data?.messageTimestamp;
     const timestamp = timestampRaw ? new Date(Number(timestampRaw) * 1000).toISOString() : new Date().toISOString();
     // ── Conteúdo (tipo, texto, mídia) ─────────────────────────────────────
-    const content = parseEvolutionContent(body?.data?.message ?? {}, providerMessageId);
+    const content = parseEvolutionContent(data?.message ?? {}, providerMessageId);
+    if (content.unsupported) console.warn("[UNSUPPORTED_MESSAGE_TYPE]", content.unsupported);
     const { messageType, interactive } = content;
     let text = content.text;
     const media = content.needsMediaFetch ? await fetchEvolutionMedia({
       connection,
       instanceName,
-      data: body.data,
+      data,
+      mediaMessage: content.mediaMessage,
       fallbackFilename: content.fallbackFilename,
       fallbackMimeType: content.fallbackMimeType
     }) : undefined;
@@ -656,7 +644,7 @@ serve(async (req)=>{
           groupId: group.id,
           groupJid,
           // A v2 manda o contextInfo em data.contextInfo; o texto é o reserva
-          jids: mentionedJids(body?.data, text)
+          jids: mentionedJids(data, text)
         });
         text = replaceMentions(text, names);
       } catch (err) {
@@ -676,7 +664,7 @@ serve(async (req)=>{
       messageType,
       text,
       // Cliente respondeu citando uma mensagem
-      replyToProviderId: evolutionQuotedId(body?.data),
+      replyToProviderId: evolutionQuotedId(data),
       ...media ? {
         media
       } : {},
@@ -768,13 +756,15 @@ async function handleOwnMessage(params) {
   if (known !== false) return; // enviada pelo Unxet (ou banco fora: na dúvida, nada muda)
   if (sessions.length) await endBotSessions(supabase, sessions, providerMessageId);
   if (!saveEnabled) return;
-  const content = parseEvolutionContent(body?.data?.message ?? {}, providerMessageId, {
+  const data = evolutionData(body);
+  const content = parseEvolutionContent(data?.message ?? {}, providerMessageId, {
     fromMe: true
   });
   const media = content.needsMediaFetch ? await fetchEvolutionMedia({
     connection,
     instanceName,
-    data: body.data,
+    data,
+    mediaMessage: content.mediaMessage,
     fallbackFilename: content.fallbackFilename,
     fallbackMimeType: content.fallbackMimeType
   }) : undefined;
@@ -789,7 +779,7 @@ async function handleOwnMessage(params) {
     messageType: content.messageType,
     text: content.text,
     media: media ?? null,
-    replyToProviderId: evolutionQuotedId(body?.data),
+    replyToProviderId: evolutionQuotedId(data),
     rawPayload: body
   });
   // Áudio enviado pelo celular também ganha transcrição
@@ -866,101 +856,11 @@ async function endBotSessions(supabase, sessions, providerMessageId) {
 // ---------------------------------------------------------------------------
 // Conteúdo da mensagem
 // ---------------------------------------------------------------------------
-/**
- * Tipo, texto e se precisa baixar mídia. fromMe: mensagem enviada pelo
- * celular da empresa (o aviso de formato não pede para o cliente reenviar).
- */ function parseEvolutionContent(msgData, providerMessageId, { fromMe = false } = {}) {
-  let messageType = "text";
-  let text = "";
-  let interactive;
-  let needsMediaFetch = false;
-  let fallbackFilename;
-  let fallbackMimeType;
-  if (msgData.conversation || msgData.extendedTextMessage) {
-    messageType = "text";
-    text = msgData.conversation ?? msgData.extendedTextMessage?.text ?? "";
-  } else if (msgData.imageMessage) {
-    messageType = "image";
-    text = msgData.imageMessage.caption ?? "";
-    needsMediaFetch = true;
-  } else if (msgData.audioMessage || msgData.pttMessage) {
-    messageType = "audio";
-    needsMediaFetch = true;
-  } else if (msgData.documentMessage || msgData.documentWithCaptionMessage) {
-    messageType = "document";
-    const docMsg = msgData.documentMessage ?? msgData.documentWithCaptionMessage?.message?.documentMessage;
-    text = docMsg?.caption ?? "";
-    needsMediaFetch = true;
-  } else if (msgData.buttonsResponseMessage) {
-    messageType = "interactive";
-    interactive = {
-      kind: "button_reply",
-      selectedId: msgData.buttonsResponseMessage.selectedButtonId ?? null,
-      selectedTitle: msgData.buttonsResponseMessage.selectedDisplayText ?? null
-    };
-    text = interactive.selectedTitle ?? interactive.selectedId ?? "";
-  } else if (msgData.listResponseMessage) {
-    messageType = "interactive";
-    interactive = {
-      kind: "list_reply",
-      selectedId: msgData.listResponseMessage.singleSelectReply?.selectedRowId ?? null,
-      selectedTitle: msgData.listResponseMessage.title ?? null
-    };
-    text = interactive.selectedTitle ?? interactive.selectedId ?? "";
-  } else if (msgData.templateButtonReplyMessage) {
-    messageType = "interactive";
-    interactive = {
-      kind: "button_reply",
-      selectedId: String(msgData.templateButtonReplyMessage.selectedIndex ?? ""),
-      selectedTitle: msgData.templateButtonReplyMessage.selectedDisplayText ?? null
-    };
-    text = interactive.selectedTitle ?? interactive.selectedId ?? "";
-  } else if (msgData.videoMessage) {
-    // Vídeo chega como anexo (o chat exibe/baixa pelo tipo do arquivo)
-    messageType = "document";
-    text = msgData.videoMessage.caption ?? "";
-    needsMediaFetch = true;
-    fallbackFilename = `video-${providerMessageId}.mp4`;
-    fallbackMimeType = msgData.videoMessage.mimetype ?? "video/mp4";
-  } else if (msgData.locationMessage || msgData.liveLocationMessage) {
-    const loc = msgData.locationMessage ?? msgData.liveLocationMessage;
-    const place = [
-      loc.name,
-      loc.address
-    ].filter(Boolean).join(" - ");
-    const hasCoords = Number.isFinite(Number(loc.degreesLatitude)) && Number.isFinite(Number(loc.degreesLongitude));
-    text = [
-      "📍 Localização" + (place ? `: ${place}` : ""),
-      hasCoords ? `https://maps.google.com/?q=${loc.degreesLatitude},${loc.degreesLongitude}` : ""
-    ].filter(Boolean).join("\n");
-  } else if (msgData.contactMessage || msgData.contactsArrayMessage) {
-    const contacts = msgData.contactMessage ? [
-      msgData.contactMessage
-    ] : msgData.contactsArrayMessage?.contacts ?? [];
-    text = contacts.map((c)=>{
-      const phone = String(c?.vcard ?? "").match(/TEL[^:]*:([+\d\s().-]+)/i)?.[1]?.trim();
-      return `👤 Contato: ${c?.displayName ?? "sem nome"}` + (phone ? ` - ${phone}` : "");
-    }).join("\n") || "👤 Contato compartilhado";
-  } else if (msgData.pollCreationMessage || msgData.pollCreationMessageV2 || msgData.pollCreationMessageV3) {
-    const poll = msgData.pollCreationMessage ?? msgData.pollCreationMessageV2 ?? msgData.pollCreationMessageV3;
-    text = `📊 Enquete: ${poll?.name ?? ""}`.trim();
-  } else {
-    // Tipo que ainda não tratamos: o atendente precisa saber que chegou algo
-    console.warn("[UNSUPPORTED_MESSAGE_TYPE]", Object.keys(msgData));
-    text = fromMe ? "[Mensagem enviada pelo celular em um formato que o Unxet ainda não exibe. Veja no WhatsApp do celular.]" : "[Mensagem em um formato que o Unxet ainda não exibe. Peça ao cliente para reenviar como texto, foto ou documento.]";
-  }
-  return {
-    messageType,
-    text,
-    interactive,
-    needsMediaFetch,
-    fallbackFilename,
-    fallbackMimeType
-  };
-}
 /** Baixa a mídia da mensagem pela Evolution (base64). Sem credenciais ou com erro: undefined. */ async function fetchEvolutionMedia(params) {
   const { connection, instanceName, data, fallbackFilename, fallbackMimeType } = params;
-  const msgData = data?.message ?? {};
+  // Só o conteúdo da mídia (sem embrulho): a Evolution não abre todos os
+  // embrulhos (ex.: foto de álbum) na hora de baixar
+  const mediaMessage = params.mediaMessage ?? data?.message ?? {};
   const providerMessageId = data?.key?.id;
   if (!connection.evolution_api_url || !connection.evolution_api_key) {
     console.warn("Mensagem de mídia recebida mas evolution_api_url/key não configurados na connection:", connection.id);
@@ -976,7 +876,7 @@ async function endBotSessions(supabase, sessions, providerMessageId) {
       body: JSON.stringify({
         message: {
           key: data.key,
-          message: data.message
+          message: mediaMessage
         },
         convertToMp4: false
       })
@@ -987,7 +887,7 @@ async function endBotSessions(supabase, sessions, providerMessageId) {
     }
     const base64Json = await base64Resp.json();
     const base64Data = base64Json?.base64 ?? null;
-    const mimeType = base64Json?.mimeType ?? base64Json?.mimetype ?? msgData.imageMessage?.mimetype ?? msgData.audioMessage?.mimetype ?? msgData.pttMessage?.mimetype ?? msgData.documentMessage?.mimetype ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.mimetype ?? fallbackMimeType ?? "application/octet-stream";
+    const mimeType = base64Json?.mimeType ?? base64Json?.mimetype ?? mediaMimeType(mediaMessage) ?? fallbackMimeType ?? "application/octet-stream";
     console.log("[MEDIA_MIME_RESOLVED]", {
       mimeType,
       providerMessageId
@@ -996,7 +896,7 @@ async function endBotSessions(supabase, sessions, providerMessageId) {
       console.warn("getBase64FromMediaMessage retornou sem base64 para:", providerMessageId);
       return undefined;
     }
-    const filename = msgData.documentMessage?.fileName ?? msgData.documentWithCaptionMessage?.message?.documentMessage?.fileName ?? fallbackFilename ?? undefined;
+    const filename = mediaFilename(mediaMessage) ?? fallbackFilename ?? undefined;
     return {
       base64: base64Data,
       mimeType,
