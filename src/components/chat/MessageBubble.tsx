@@ -309,6 +309,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const hasMedia = Boolean(rawMediaUrl);
 
   const onlyAudio = mediaType === "audio";
+  // Figurinha aparece solta, sem balão (como no WhatsApp)
+  const isSticker = mediaType === "sticker";
   const onlyDocument =
     mediaType === "document" && (!displayText || !displayText.trim());
 
@@ -316,7 +318,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const bubblePadding = hasMedia ? "p-2" : "px-4 py-3";
 
   const bubbleClass =
-    onlyAudio || onlyDocument
+    onlyAudio || onlyDocument || isSticker
       ? bubbleBase
       : `${bubbleBase} ${
           isClient
@@ -700,6 +702,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     <FilmIcon className="h-8 w-8" aria-hidden />
                     <span className="text-xs font-medium">Carregando vídeo...</span>
                   </div>
+                ) : isSticker ? (
+                  <div
+                    className="h-32 w-32 animate-pulse rounded-2xl bg-gray-200"
+                    aria-label="Carregando figurinha"
+                  />
                 ) : (
                   <div
                     className="h-12 w-48 max-w-full animate-pulse rounded-lg bg-black/10"
@@ -826,7 +833,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     <img
                       src={mediaUrl}
                       alt="Figurinha"
-                      className="h-24 w-24 rounded-lg object-cover"
+                      className="h-32 w-32 cursor-zoom-in object-contain drop-shadow-sm"
+                      onClick={() => setPreviewSrc(mediaUrl)}
                     />
                   )}
                 </>
@@ -887,7 +895,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     title="Opções da mensagem"
                     aria-label="Opções da mensagem"
                     className={`absolute flex items-center opacity-0 transition-opacity duration-150 focus-visible:opacity-100 [@media(hover:hover)]:group-hover/bubble:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:pointer-events-none ${
-                      onlyAudio || onlyDocument || mediaType === "image" || mediaType === "video"
+                      onlyAudio || onlyDocument || isSticker || mediaType === "image" || mediaType === "video"
                         ? "right-1 top-1 h-6 w-6 justify-center rounded-full bg-white/90 text-gray-600 shadow-sm"
                         : isClient
                           ? "right-0 top-0 h-7 w-10 justify-end rounded-tr-lg bg-gradient-to-l from-gray-200 from-60% to-transparent pr-1.5 text-gray-600"

@@ -98,7 +98,8 @@ serve(async (req)=>{
       });
     }
     const isTextMessage = messageType === MESSAGE_TYPE_TEXT;
-    const isImageMessage = messageType === MESSAGE_TYPE_IMAGE;
+    // Figurinha é uma imagem webp com tipo próprio (a conversa mostra sem balão)
+    const isImageMessage = messageType === MESSAGE_TYPE_IMAGE || messageType === "sticker";
     const isAudioMessage = messageType === MESSAGE_TYPE_AUDIO;
     const isDocumentMessage = messageType === MESSAGE_TYPE_DOCUMENT;
     const isInteractiveMessage = messageType === MESSAGE_TYPE_INTERACTIVE;

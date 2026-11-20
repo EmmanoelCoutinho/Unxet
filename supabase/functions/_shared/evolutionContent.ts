@@ -69,7 +69,7 @@ export function isProtocolOnlyMessage(message: any): boolean {
 }
 
 export interface EvolutionContent {
-  messageType: "text" | "image" | "audio" | "document" | "interactive";
+  messageType: "text" | "image" | "sticker" | "audio" | "document" | "interactive";
   text: string;
   interactive?: { kind: string; selectedId: string | null; selectedTitle: string | null };
   needsMediaFetch: boolean;
@@ -220,8 +220,8 @@ export function parseEvolutionContent(
   }
   if (msg.imageMessage) return media("image", msg.imageMessage.caption);
   if (msg.stickerMessage) {
-    // Figurinha: imagem webp (a animada também abre no navegador)
-    return media("image", "", {
+    // Figurinha: webp (a animada também abre no navegador), sem balão na conversa
+    return media("sticker", "", {
       fallbackFilename: `figurinha-${providerMessageId}.webp`,
       fallbackMimeType: msg.stickerMessage.mimetype ?? "image/webp",
       stickerHash: stickerHash(msg.stickerMessage),

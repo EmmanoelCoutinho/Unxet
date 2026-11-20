@@ -68,7 +68,7 @@ type UiTag = { id: string; name: string; color: string };
 type SendableInput =
   | string
   | {
-      type: "text" | "image" | "audio" | "document" | "contact" | "location";
+      type: "text" | "image" | "audio" | "document" | "contact" | "location" | "sticker";
       text?: string;
       mediaUrl?: string;
       mediaMimeType?: string;
@@ -81,7 +81,7 @@ type SendableInput =
 type LocalSendStatus = "sending" | "failed" | "sent";
 
 type LocalPayload = {
-  type: "text" | "image" | "audio" | "document" | "contact" | "location";
+  type: "text" | "image" | "audio" | "document" | "contact" | "location" | "sticker";
   text?: string;
   mediaUrl?: string;
   mediaMimeType?: string;
@@ -185,7 +185,7 @@ function replyPreviewOf(message: Message): MessageReplyPreview {
 
 function normalizeInput(input: SendableInput) {
   let bodyText = "";
-  let outboundType: "text" | "image" | "audio" | "document" | "contact" | "location" =
+  let outboundType: "text" | "image" | "audio" | "document" | "contact" | "location" | "sticker" =
     "text";
   let mediaUrl: string | undefined;
   let mediaMimeType: string | undefined;
@@ -223,7 +223,8 @@ function normalizeInput(input: SendableInput) {
       | "text"
       | "image"
       | "audio"
-      | "document",
+      | "document"
+      | "sticker",
     mediaUrl,
     mediaMimeType,
     filename,
@@ -243,6 +244,9 @@ export function resendInputFor(msg: Message): SendableInput | null {
   const text = (msg.text ?? "").trim();
   const type = msg.type ?? "text";
   if (type === "text") return text ? text : null;
+  if (type === "sticker" && msg.mediaUrl) {
+    return { type: "sticker", mediaUrl: msg.mediaUrl, mediaMimeType: msg.mediaMimeType };
+  }
   if ((type === "image" || type === "audio" || type === "document") && msg.mediaUrl) {
     return {
       type,
@@ -2164,6 +2168,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           allowContacts={conversation.channel === "whatsapp"}
           allowVideos={conversation.channel === "whatsapp" && conversation.provider === "evolution"}
           allowLocation={conversation.channel === "whatsapp" && conversation.provider === "evolution"}
+          allowStickers={conversation.channel === "whatsapp" && conversation.provider === "evolution"}
           disabled={!canReply}
           draft={draftMessage}
           onDraftChange={setDraftMessage}

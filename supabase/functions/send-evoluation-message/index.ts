@@ -306,15 +306,18 @@ serve(async (req)=>{
      * =========================================================
      */ const mime = finalMimeType.toLowerCase();
     const lowerFile = (fileName || "").toLowerCase();
-    const isAudio = mime.startsWith("audio/");
-    const isImage = type === "image" || mime.startsWith("image/") || lowerFile.endsWith(".jpg") || lowerFile.endsWith(".jpeg") || lowerFile.endsWith(".png") || lowerFile.endsWith(".webp");
+    // Figurinha: vai pela rota própria (a Evolution converte a imagem em webp)
+    const isSticker = type === "sticker" && !!mediaUrl;
+    const isAudio = !isSticker && mime.startsWith("audio/");
+    const isImage = !isSticker && (type === "image" || mime.startsWith("image/") || lowerFile.endsWith(".jpg") || lowerFile.endsWith(".jpeg") || lowerFile.endsWith(".png") || lowerFile.endsWith(".webp"));
     // Vídeo vai como vídeo (toca na conversa do cliente). No Unxet continua
     // com o tipo "document" e o tipo do arquivo video/*, como o recebido.
     const isVideo = !isAudio && !isImage && (mime.startsWith("video/") || lowerFile.endsWith(".mp4") || lowerFile.endsWith(".3gp"));
-    const isDocument = !!mediaUrl && !isAudio && !isImage;
+    const isDocument = !!mediaUrl && !isAudio && !isImage && !isSticker;
     let outboundType = "text";
     if (mediaUrl) {
-      if (isAudio) outboundType = "audio";
+      if (isSticker) outboundType = "sticker";
+      else if (isAudio) outboundType = "audio";
       else if (isImage) outboundType = "image";
       else outboundType = "document";
     }
@@ -390,6 +393,34 @@ serve(async (req)=>{
         console.error("[EVOLUTION_CONTACT_ERROR]", evolutionResponse);
         return new Response(JSON.stringify({
           error: "Failed to send contact",
+          details: evolutionResponse
+        }), {
+          status: 500,
+          headers: corsHeaders
+        });
+      }
+    } else if (isSticker) {
+      console.log("[EVOLUTION_SEND_STICKER]", JSON.stringify({
+        number,
+        mediaUrl
+      }));
+      const resp = await fetch(`${baseUrl}/message/sendSticker/${session}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: apiKey
+        },
+        body: JSON.stringify({
+          number,
+          ...quotedFields,
+          sticker: providerMediaUrl
+        })
+      });
+      evolutionResponse = await resp.json().catch(()=>null);
+      if (!resp.ok) {
+        console.error("[EVOLUTION_STICKER_ERROR]", evolutionResponse);
+        return new Response(JSON.stringify({
+          error: "Failed to send sticker",
           details: evolutionResponse
         }), {
           status: 500,

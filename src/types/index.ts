@@ -142,7 +142,7 @@ export type Message = {
   localStatus?: MessageSendStatus;
   localError?: string | null;
   localPayload?: {
-    type: "text" | "image" | "audio" | "document" | "contact" | "location";
+    type: "text" | "image" | "audio" | "document" | "contact" | "location" | "sticker";
     text?: string;
     mediaUrl?: string;
     mediaMimeType?: string;

@@ -111,6 +111,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "improved",
     text: "WhatsApp por QR Code: vídeos MP4 (até 64 MB) podem ser enviados em \"Fotos e vídeos\" e chegam ao cliente como vídeo, não como arquivo. Na conversa, os vídeos enviados e recebidos tocam direto na mensagem.",
   },
+  {
+    kind: "new",
+    text: "WhatsApp por QR Code: agora dá para enviar figurinhas. No clipe, clique em \"Figurinha\" para escolher uma das que a empresa já recebeu ou enviou, ou crie uma a partir de uma imagem. Na conversa, as figurinhas aparecem soltas, sem balão, como no WhatsApp.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

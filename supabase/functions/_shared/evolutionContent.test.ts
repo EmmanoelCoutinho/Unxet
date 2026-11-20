@@ -53,10 +53,10 @@ describe("parseEvolutionContent", () => {
     });
   });
 
-  it("figurinha vira imagem webp", () => {
+  it("figurinha vira figurinha webp", () => {
     const content = parseEvolutionContent({ stickerMessage: { mimetype: "image/webp" } }, "ID2");
     expect(content).toMatchObject({
-      messageType: "image",
+      messageType: "sticker",
       needsMediaFetch: true,
       fallbackFilename: "figurinha-ID2.webp",
       fallbackMimeType: "image/webp",

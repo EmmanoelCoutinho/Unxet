@@ -12,6 +12,7 @@ import {
   FolderOpenIcon,
   Trash2Icon,
   MapPinIcon,
+  StickerIcon,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button } from "../ui/Button";
@@ -30,6 +31,7 @@ import { storageContentType, storageFile } from "../../services/fileLibrary";
 import type { SharedContact } from "../../lib/sharedContact";
 import { ShareContactModal } from "./ShareContactModal";
 import { ShareLocationModal } from "./ShareLocationModal";
+import { StickerPicker } from "./StickerPicker";
 import type { SharedLocation } from "../../lib/sharedLocation";
 import { AttachmentTray, type PendingAttachment } from "./AttachmentTray";
 import { FileLibraryPicker, type PickedFile } from "./FileLibraryPicker";
@@ -56,7 +58,7 @@ const looksLikeIsoVideo = (header: Uint8Array) =>
 type SendableInput =
   | string
   | {
-      type: "text" | "image" | "audio" | "document" | "contact" | "location";
+      type: "text" | "image" | "audio" | "document" | "contact" | "location" | "sticker";
       text?: string;
       mediaUrl?: string;
       mediaMimeType?: string;
@@ -73,6 +75,8 @@ interface MessageInputProps {
   // vídeo e localização (só WhatsApp via QR Code)
   allowVideos?: boolean;
   allowLocation?: boolean;
+  // figurinhas (só WhatsApp via QR Code)
+  allowStickers?: boolean;
   // Canal aceita legenda em imagem e documento (WhatsApp). Nos outros, o
   // texto vai como mensagem separada depois dos arquivos
   captionsSupported?: boolean;
@@ -121,6 +125,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   allowContacts = false,
   allowVideos = false,
   allowLocation = false,
+  allowStickers = false,
   captionsSupported = true,
   disabled = false,
   disabledReason,
@@ -142,6 +147,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [showQuickMessages, setShowQuickMessages] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [showFileLibrary, setShowFileLibrary] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
@@ -1392,6 +1398,25 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                   </button>
                 )}
 
+                {allowStickers && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (disabled) return;
+                      setShowAttachments(false);
+                      setShowStickerPicker(true);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-3 text-sm hover:bg-gray-100 transition-colors sm:py-2"
+                  >
+                    <span className="flex items-center gap-2 text-gray-800">
+                      <StickerIcon className="w-4 h-4" />
+                      Figurinha
+                    </span>
+                    <span className="text-xs text-gray-500">Escolher</span>
+                  </button>
+                )}
+
                 {allowLocation && (
                   <button
                     type="button"
@@ -1571,6 +1596,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           onConfirm={(contact) => {
             setShowContactModal(false);
             onSend({ type: "contact", contact });
+          }}
+        />
+      )}
+
+      {allowStickers && (
+        <StickerPicker
+          open={showStickerPicker && !disabled}
+          clinicId={clinicId}
+          onClose={() => setShowStickerPicker(false)}
+          onSelect={(stickerUrl) => {
+            setShowStickerPicker(false);
+            onSend({ type: "sticker", mediaUrl: stickerUrl, mediaMimeType: "image/webp" });
           }}
         />
       )}

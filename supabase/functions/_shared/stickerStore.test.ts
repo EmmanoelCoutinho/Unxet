@@ -38,11 +38,11 @@ describe("caminho da figurinha", () => {
 describe("parser", () => {
   it("figurinha leva o hash junto", () => {
     expect(parseEvolutionContent({ stickerMessage: { mimetype: "image/webp", fileSha256: shaObj } }, "S1"))
-      .toMatchObject({ messageType: "image", stickerHash: hex });
+      .toMatchObject({ messageType: "sticker", stickerHash: hex });
   });
 
   it("figurinha animada (lottie) também", () => {
     expect(parseEvolutionContent({ lottieStickerMessage: { message: { stickerMessage: { fileSha256: sha } } } }, "S2"))
-      .toMatchObject({ messageType: "image", stickerHash: hex });
+      .toMatchObject({ messageType: "sticker", stickerHash: hex });
   });
 });

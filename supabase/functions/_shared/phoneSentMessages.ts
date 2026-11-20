@@ -253,7 +253,7 @@ export async function savePhoneSentMessage(
     ...replyColumns(await findByProviderId(supabase, conversation.id, params.replyToProviderId)),
   };
   if (mediaUrl) {
-    if (messageType === "image") row.image_url = mediaUrl;
+    if (messageType === "image" || messageType === "sticker") row.image_url = mediaUrl;
     else row.media_url = mediaUrl;
     if (mimeType) row.media_mime_type = mimeType;
     if (messageType === "document" && media?.filename) row.filename = media.filename;
