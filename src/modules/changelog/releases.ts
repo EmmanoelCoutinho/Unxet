@@ -95,6 +95,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "improved",
     text: "Conversas do WhatsApp por QR Code: fotos enviadas em álbum, figurinhas, vídeos redondos, mensagens temporárias e de visualização única agora aparecem na conversa. Listas de opções, botões e modelos que chegam de outras empresas mostram o texto e as opções, e enquetes mostram as alternativas. Antes, vários desses formatos apareciam como \"Mensagem em um formato que o Unxet ainda não exibe\".",
   },
+  {
+    kind: "improved",
+    text: "Mensagem que o cliente editou no WhatsApp agora aparece com \"Editada\" ao lado da hora. Clique em \"Editada\" para ver o texto de antes. Edição de legenda de foto, vídeo e documento também passa a aparecer.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
