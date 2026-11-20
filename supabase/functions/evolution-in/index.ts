@@ -249,6 +249,9 @@ async function handleMessagesUpdate(body) {
     }
   }
   if (text && text === original.text) return;
+  // Eco da edição feita pelo Unxet (edit-message): chega com o nome do
+  // atendente na 1ª linha, e o banco já tem o texto novo sem o nome
+  if (isFromMe && text && original.text && text.endsWith("\n" + original.text)) return;
   const editedAt = new Date().toISOString();
   const update = text ? {
     text,

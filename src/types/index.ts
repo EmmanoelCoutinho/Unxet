@@ -142,13 +142,14 @@ export type Message = {
   localStatus?: MessageSendStatus;
   localError?: string | null;
   localPayload?: {
-    type: "text" | "image" | "audio" | "document" | "contact";
+    type: "text" | "image" | "audio" | "document" | "contact" | "location";
     text?: string;
     mediaUrl?: string;
     mediaMimeType?: string;
     filename?: string;
     fileSize?: number;
     contact?: { name: string; phone: string };
+    location?: { latitude: number; longitude: number; name?: string; address?: string };
     replyToMessageId?: string;
   };
 };

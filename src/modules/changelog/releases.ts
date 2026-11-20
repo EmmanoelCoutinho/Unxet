@@ -99,6 +99,18 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "improved",
     text: "Mensagem que o cliente editou no WhatsApp agora aparece com \"Editada\" ao lado da hora. Clique em \"Editada\" para ver o texto de antes. Edição de legenda de foto, vídeo e documento também passa a aparecer.",
   },
+  {
+    kind: "new",
+    text: "WhatsApp por QR Code: agora dá para editar uma mensagem de texto enviada por engano. Na setinha da mensagem, clique em \"Editar\" (vale por até 15 minutos depois do envio, como no WhatsApp). O cliente vê o texto novo com a marca \"Editada\".",
+  },
+  {
+    kind: "new",
+    text: "WhatsApp por QR Code: o clipe ganhou \"Localização\". Cole o link do Google Maps (ou use a localização do aparelho) e o cliente recebe o mapa, que abre no aplicativo de mapas dele.",
+  },
+  {
+    kind: "improved",
+    text: "WhatsApp por QR Code: vídeos MP4 (até 64 MB) podem ser enviados em \"Fotos e vídeos\" e chegam ao cliente como vídeo, não como arquivo. Na conversa, os vídeos enviados e recebidos tocam direto na mensagem.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

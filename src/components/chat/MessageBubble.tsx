@@ -11,6 +11,7 @@ import {
   Reply,
   ExternalLinkIcon,
   FileTextIcon,
+  Pencil,
   Trash2,
 } from "lucide-react";
 import type { Message as UiMessage } from "../../types";
@@ -20,6 +21,8 @@ import { WhatsappText } from "./WhatsappText";
 import { QuotedMessage } from "./QuotedMessage";
 import { toast } from "react-toastify";
 import { useMediaUrl } from "../../lib/mediaUrls";
+import { MAX_EDIT_TEXT_LENGTH } from "../../lib/messageEdit";
+import { CloseButton } from "../ui/CloseButton";
 
 interface MessageBubbleProps {
   message: UiMessage;
@@ -42,6 +45,8 @@ interface MessageBubbleProps {
    * "system": a API não permite (Meta); a mensagem some apenas do Unxet.
    */
   deleteMode?: "everyone" | "system";
+  /** Editar o texto (só quando pode: WhatsApp QR Code, quem enviou, até 15 min). true = editou */
+  onEditMessage?: (messageId: string, text: string) => Promise<boolean>;
   /** Responder citando (só WhatsApp e quem pode responder a conversa) */
   onReply?: (message: UiMessage) => void;
   /** Reagir com emoji; null remove a reação da empresa */
@@ -197,6 +202,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onRetryTranscript,
   onDeleteMessage,
   deleteMode = "system",
+  onEditMessage,
   onReply,
   onReact,
   onQuotedClick,
@@ -211,6 +217,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showOriginalText, setShowOriginalText] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editDraft, setEditDraft] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
 
@@ -231,8 +240,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const mediaUrl = useMediaUrl(rawMediaUrl);
   const mediaLoading = Boolean(rawMediaUrl) && !mediaUrl;
 
-  const mediaType =
-    message.type ??
+  // Vídeo fica gravado como documento com tipo video/*: toca na conversa
+  const isVideoFile =
+    message.type === "document" &&
+    (message.mediaMimeType ?? "").toLowerCase().startsWith("video/");
+  const mediaType = isVideoFile
+    ? "video"
+    : message.type ??
     (payload.image
       ? "image"
       : payload.audio
@@ -465,6 +479,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const deleteLabel =
     deleteMode === "everyone" ? "Apagar para todos" : "Remover do Unxet";
 
+  const openEditDialog = () => {
+    setEditDraft(message.text ?? "");
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!onEditMessage) return;
+    const text = editDraft.trim();
+    if (!text) return;
+    if (text === (message.text ?? "").trim()) {
+      setIsEditDialogOpen(false);
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      const ok = await onEditMessage(message.id, text);
+      if (ok) setIsEditDialogOpen(false);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!onDeleteMessage) return;
     setIsDeleting(true);
@@ -516,9 +552,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const canCopy = !message.deletedAt && !!displayText.trim();
   const canDownload = !message.deletedAt && !!mediaUrl;
   const canReplyHere = !!onReply && isPersisted;
+  const canEdit = !isClient && !!onEditMessage && isPersisted && localStatus !== "sending";
   const canReactHere = !!onReact && isPersisted;
   const hasMenu =
-    canCopy || canDownload || canReplyHere || canReactHere || canDelete;
+    canCopy || canDownload || canReplyHere || canReactHere || canEdit || canDelete;
 
   const handleCopy = async () => {
     let copied = false;
@@ -683,7 +720,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   {mediaType === "video" && (
                     <video
                       controls
-                      className="h-48 w-48 rounded-lg object-cover"
+                      preload="metadata"
+                      className="max-h-80 w-72 max-w-full rounded-lg bg-black"
                       src={mediaUrl}
                     />
                   )}
@@ -835,7 +873,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     title="Opções da mensagem"
                     aria-label="Opções da mensagem"
                     className={`absolute flex items-center opacity-0 transition-opacity duration-150 focus-visible:opacity-100 [@media(hover:hover)]:group-hover/bubble:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:pointer-events-none ${
-                      onlyAudio || onlyDocument || mediaType === "image"
+                      onlyAudio || onlyDocument || mediaType === "image" || mediaType === "video"
                         ? "right-1 top-1 h-6 w-6 justify-center rounded-full bg-white/90 text-gray-600 shadow-sm"
                         : isClient
                           ? "right-0 top-0 h-7 w-10 justify-end rounded-tr-lg bg-gradient-to-l from-gray-200 from-60% to-transparent pr-1.5 text-gray-600"
@@ -907,9 +945,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         Baixar
                       </DropdownMenu.Item>
                     )}
+                    {canEdit && (
+                      <DropdownMenu.Item
+                        onSelect={openEditDialog}
+                        className={MENU_ITEM_CLASS}
+                      >
+                        <Pencil className="h-4 w-4 text-gray-500" />
+                        Editar
+                      </DropdownMenu.Item>
+                    )}
                     {canDelete && (
                       <>
-                        {(canReplyHere || canCopy || canDownload) && (
+                        {(canReplyHere || canCopy || canDownload || canEdit) && (
                           <DropdownMenu.Separator className="my-1 h-px bg-gray-200" />
                         )}
                         <DropdownMenu.Item
@@ -943,6 +990,69 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </span>
         </div>
       </div>
+
+      {canEdit && (
+        <Dialog.Root
+          open={isEditDialogOpen}
+          onOpenChange={(open) => {
+            if (!isSavingEdit) setIsEditDialogOpen(open);
+          }}
+        >
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/40" />
+            <Dialog.Content className="fixed left-1/2 top-1/2 z-[80] w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-xl sm:p-6">
+              <div className="flex items-start justify-between gap-3">
+                <Dialog.Title className="text-base font-semibold text-gray-900">
+                  Editar mensagem
+                </Dialog.Title>
+                <CloseButton
+                  className="-mr-2 -mt-1"
+                  onClick={() => {
+                    if (!isSavingEdit) setIsEditDialogOpen(false);
+                  }}
+                />
+              </div>
+              <Dialog.Description className="mt-1 text-sm text-gray-600">
+                O cliente vê o texto novo com a marca "Editada". O WhatsApp só permite editar até 15 minutos depois do envio.
+              </Dialog.Description>
+              <textarea
+                value={editDraft}
+                onChange={(event) => setEditDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void handleSaveEdit();
+                  }
+                }}
+                maxLength={MAX_EDIT_TEXT_LENGTH}
+                rows={4}
+                autoFocus
+                aria-label="Texto da mensagem"
+                className="mt-4 w-full resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+              />
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    disabled={isSavingEdit}
+                    className="rounded-full border border-gray-300 px-5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </Dialog.Close>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveEdit()}
+                  disabled={isSavingEdit || !editDraft.trim()}
+                  className="rounded-full bg-[#0A84FF] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:opacity-50"
+                >
+                  {isSavingEdit ? "Salvando..." : "Salvar"}
+                </button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
 
       {canDelete && (
         <Dialog.Root

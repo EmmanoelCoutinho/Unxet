@@ -820,7 +820,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
           }
         },
       )
-      // Mensagem apagada: se era a última da conversa, a prévia deixa de mostrar o texto
+      // Mensagem apagada ou editada: se era a última da conversa, a prévia acompanha
       .on(
         "postgres_changes",
         {
@@ -829,8 +829,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
           table: "messages",
         },
         (payload) => {
-          const msg = payload.new as DbMessage;
-          if (!msg?.deleted_at) return;
+          const msg = payload.new as DbMessage & { edited_at?: string | null };
+          if (!msg?.deleted_at && !msg?.edited_at) return;
 
           setConversations((current) => {
             const idx = current.findIndex(

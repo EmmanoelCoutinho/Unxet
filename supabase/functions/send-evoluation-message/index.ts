@@ -10,6 +10,7 @@ import { loadAgentSender, signText } from "../_shared/agentSignature.ts";
 import { isConversationParticipant } from "../_shared/conversationParticipants.ts";
 import { evolutionQuoted, loadReplyTarget, replyColumns } from "../_shared/messageReply.ts";
 import { isGroupJid } from "../_shared/whatsappGroups.ts";
+import { parseSharedLocation, sharedLocationText, toEvolutionLocation } from "../_shared/sharedLocation.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -126,6 +127,16 @@ serve(async (req)=>{
     if (type === "contact" && !sharedContact) {
       return new Response(JSON.stringify({
         error: "Contato inválido: informe nome e telefone com DDD"
+      }), {
+        status: 400,
+        headers: corsHeaders
+      });
+    }
+    // Localização: vai pela rota própria e fica no histórico como texto com o link do mapa
+    const sharedLocation = type === "location" ? parseSharedLocation(body.location) : null;
+    if (type === "location" && !sharedLocation) {
+      return new Response(JSON.stringify({
+        error: "Localização inválida: informe latitude e longitude"
       }), {
         status: 400,
         headers: corsHeaders
@@ -297,6 +308,9 @@ serve(async (req)=>{
     const lowerFile = (fileName || "").toLowerCase();
     const isAudio = mime.startsWith("audio/");
     const isImage = type === "image" || mime.startsWith("image/") || lowerFile.endsWith(".jpg") || lowerFile.endsWith(".jpeg") || lowerFile.endsWith(".png") || lowerFile.endsWith(".webp");
+    // Vídeo vai como vídeo (toca na conversa do cliente). No Unxet continua
+    // com o tipo "document" e o tipo do arquivo video/*, como o recebido.
+    const isVideo = !isAudio && !isImage && (mime.startsWith("video/") || lowerFile.endsWith(".mp4") || lowerFile.endsWith(".3gp"));
     const isDocument = !!mediaUrl && !isAudio && !isImage;
     let outboundType = "text";
     if (mediaUrl) {
@@ -325,7 +339,34 @@ serve(async (req)=>{
     const quotedFields = replyTarget ? {
       quoted: evolutionQuoted(replyTarget, remoteJid)
     } : {};
-    if (sharedContact) {
+    if (sharedLocation) {
+      console.log("[EVOLUTION_SEND_LOCATION]", JSON.stringify({
+        number
+      }));
+      const resp = await fetch(`${baseUrl}/message/sendLocation/${session}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: apiKey
+        },
+        body: JSON.stringify({
+          number,
+          ...quotedFields,
+          ...toEvolutionLocation(sharedLocation)
+        })
+      });
+      evolutionResponse = await resp.json().catch(()=>null);
+      if (!resp.ok) {
+        console.error("[EVOLUTION_LOCATION_ERROR]", evolutionResponse);
+        return new Response(JSON.stringify({
+          error: "Failed to send location",
+          details: evolutionResponse
+        }), {
+          status: 500,
+          headers: corsHeaders
+        });
+      }
+    } else if (sharedContact) {
       console.log("[EVOLUTION_SEND_CONTACT]", JSON.stringify({
         number,
         contact: sharedContact
@@ -418,7 +459,8 @@ serve(async (req)=>{
       console.log("[EVOLUTION_SEND_DOCUMENT]", JSON.stringify({
         number,
         mediaUrl,
-        fileName
+        fileName,
+        isVideo
       }));
       const resp = await fetch(`${baseUrl}/message/sendMedia/${session}`, {
         method: "POST",
@@ -429,10 +471,13 @@ serve(async (req)=>{
         body: JSON.stringify({
           number,
           ...quotedFields,
-          mediatype: "document",
+          mediatype: isVideo ? "video" : "document",
           media: providerMediaUrl,
           caption: outboundText,
-          fileName: fileName ?? `file-${Date.now()}`
+          fileName: fileName ?? `file-${Date.now()}`,
+          ...isVideo ? {
+            mimetype: mime.startsWith("video/") ? mime : "video/mp4"
+          } : {}
         })
       });
       evolutionResponse = await resp.json().catch(()=>null);
@@ -489,7 +534,7 @@ serve(async (req)=>{
       meta_message_id: evolutionResponse?.key?.id ?? null,
       sender: session,
       receiver: number,
-      text: sharedContact ? sharedContactText(sharedContact) : text ?? "",
+      text: sharedLocation ? sharedLocationText(sharedLocation) : sharedContact ? sharedContactText(sharedContact) : text ?? "",
       media_url: mediaUrl ?? null,
       media_mime_type: finalMimeType || null,
       filename: fileName ?? null,

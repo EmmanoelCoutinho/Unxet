@@ -50,6 +50,8 @@ import { OtherNumbersBanner } from "./OtherNumbersBanner";
 import { GENERIC_SEND_ERROR, sendErrorMessage } from "../../lib/sendError";
 import { useConversationParticipants } from "../../hooks/useConversationParticipants";
 import { sharedContactText, type SharedContact } from "../../lib/sharedContact";
+import { sharedLocationText, type SharedLocation } from "../../lib/sharedLocation";
+import { canEditMessage } from "../../lib/messageEdit";
 import {
   conversationConnectionLabel,
   isConnectionRemoved,
@@ -66,25 +68,27 @@ type UiTag = { id: string; name: string; color: string };
 type SendableInput =
   | string
   | {
-      type: "text" | "image" | "audio" | "document" | "contact";
+      type: "text" | "image" | "audio" | "document" | "contact" | "location";
       text?: string;
       mediaUrl?: string;
       mediaMimeType?: string;
       filename?: string;
       fileSize?: number;
       contact?: SharedContact;
+      location?: SharedLocation;
     };
 
 type LocalSendStatus = "sending" | "failed" | "sent";
 
 type LocalPayload = {
-  type: "text" | "image" | "audio" | "document" | "contact";
+  type: "text" | "image" | "audio" | "document" | "contact" | "location";
   text?: string;
   mediaUrl?: string;
   mediaMimeType?: string;
   filename?: string;
   fileSize?: number;
   contact?: SharedContact;
+  location?: SharedLocation;
   replyToMessageId?: string;
 };
 
@@ -181,13 +185,14 @@ function replyPreviewOf(message: Message): MessageReplyPreview {
 
 function normalizeInput(input: SendableInput) {
   let bodyText = "";
-  let outboundType: "text" | "image" | "audio" | "document" | "contact" =
+  let outboundType: "text" | "image" | "audio" | "document" | "contact" | "location" =
     "text";
   let mediaUrl: string | undefined;
   let mediaMimeType: string | undefined;
   let filename: string | undefined;
   let fileSize: number | undefined;
   let contact: SharedContact | undefined;
+  let location: SharedLocation | undefined;
 
   if (typeof input === "string") {
     bodyText = input.trim();
@@ -200,17 +205,21 @@ function normalizeInput(input: SendableInput) {
     filename = input.filename;
     fileSize = input.fileSize;
     contact = input.contact;
-    // contato vira texto no histórico (a edge function grava no mesmo formato)
+    location = input.location;
+    // contato e localização viram texto no histórico (a edge function grava no mesmo formato)
     if (outboundType === "contact" && contact) {
       bodyText = sharedContactText(contact);
+    }
+    if (outboundType === "location" && location) {
+      bodyText = sharedLocationText(location);
     }
   }
 
   return {
     bodyText,
     outboundType,
-    // tipo exibido na bolha: não existe bolha própria de contato
-    displayType: (outboundType === "contact" ? "text" : outboundType) as
+    // tipo exibido na bolha: não existe bolha própria de contato nem de localização
+    displayType: (outboundType === "contact" || outboundType === "location" ? "text" : outboundType) as
       | "text"
       | "image"
       | "audio"
@@ -220,6 +229,7 @@ function normalizeInput(input: SendableInput) {
     filename,
     fileSize,
     contact,
+    location,
   };
 }
 
@@ -1306,6 +1316,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         filename,
         fileSize,
         contact,
+        location,
       } = normalizeInput(input);
 
       if (!bodyText && !mediaUrl) {
@@ -1356,6 +1367,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           contact: contact
             ? { name: contact.name, phone: `+${contact.phone}` }
             : undefined,
+          location,
           replyToMessageId,
         },
       });
@@ -1488,6 +1500,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       filename,
       fileSize,
       contact,
+      location,
     } = normalizeInput(input);
 
     if (!bodyText && !mediaUrl) return;
@@ -1527,6 +1540,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         filename,
         fileSize,
         contact,
+        location,
         replyToMessageId,
       },
     };
@@ -1601,6 +1615,50 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       toast.info("Transcrição solicitada novamente.");
     },
     [id, setMessages],
+  );
+
+  // Editar mensagem de texto enviada (só WhatsApp via QR Code, até 15 min)
+  const editRules = useMemo(
+    () => ({ provider: conversation?.provider ?? null, currentUserId: authUser?.id ?? null }),
+    [conversation?.provider, authUser?.id],
+  );
+  const isMessageEditable = useCallback(
+    (message: Message) => canReply && canEditMessage(message, { ...editRules, now: Date.now() }),
+    [canReply, editRules],
+  );
+
+  const handleEditMessage = useCallback(
+    async (messageId: string, text: string) => {
+      const { data, error } = await supabase.functions.invoke("edit-message", {
+        body: { messageId, text },
+      });
+
+      if (error) {
+        const response = (error as { context?: Response }).context;
+        const payload = await response?.json?.().catch(() => null);
+        console.error("Erro ao editar mensagem:", error);
+        toast.error(payload?.error ?? "Não foi possível editar a mensagem.");
+        return false;
+      }
+      if (data?.unchanged) return true;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                text: data?.text ?? text,
+                editedAt: data?.edited_at ?? new Date().toISOString(),
+                originalText: data?.original_text ?? m.originalText ?? m.text,
+                editUnreadable: false,
+              }
+            : m,
+        ),
+      );
+      toast.success("Mensagem editada.");
+      return true;
+    },
+    [setMessages],
   );
 
   // 🔥 ADICIONADO: Função para deletar a mensagem física no Supabase e atualizar a interface localmente
@@ -1869,6 +1927,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
                       canDeleteMessages ? handleDeleteMessage : undefined
                     }
                     deleteMode={deleteMode}
+                    onEditMessage={
+                      isMessageEditable(item.message) ? handleEditMessage : undefined
+                    }
                     onReply={canReplyAndReact ? handleStartReply : undefined}
                     onReact={canReplyAndReact ? handleReact : undefined}
                     onQuotedClick={scrollToQuotedMessage}
@@ -2101,6 +2162,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           captionsSupported={conversation.channel === "whatsapp"}
           onSend={handleSendMessage}
           allowContacts={conversation.channel === "whatsapp"}
+          allowVideos={conversation.channel === "whatsapp" && conversation.provider === "evolution"}
+          allowLocation={conversation.channel === "whatsapp" && conversation.provider === "evolution"}
           disabled={!canReply}
           draft={draftMessage}
           onDraftChange={setDraftMessage}
