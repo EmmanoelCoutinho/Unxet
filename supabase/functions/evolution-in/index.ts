@@ -31,6 +31,7 @@ import { safeStorageContentType } from "../_shared/storageContentType.ts";
 import { applyReaction, evolutionQuotedId, evolutionReaction } from "../_shared/messageReply.ts";
 import { savePhoneSentMessage, waitForKnownMessage } from "../_shared/phoneSentMessages.ts";
 import { queueTranscription } from "../_shared/transcription.ts";
+import { decryptSecretEdit, extractMessageEdit, extractSecretEdit, originalMessageSecret, senderJidCandidates } from "../_shared/messageEdit.ts";
 import { isProtocolOnlyMessage, mediaFilename, mediaMimeType, parseEvolutionContent, unwrapEvolutionMessage } from "../_shared/evolutionContent.ts";
 // ---------------------------------------------------------------------------
 // Env
@@ -201,18 +202,127 @@ async function handleMessagesUpdate(body) {
     message: unwrapEvolutionMessage(data.message)
   };
 }
+// ---------------------------------------------------------------------------
+// Edição de mensagem
+// ---------------------------------------------------------------------------
 /**
- * Edição de uma mensagem já enviada pelo cliente. O WhatsApp manda em dois
- * formatos, conforme a versão: editedMessage.message.protocolMessage ou
- * protocolMessage com type MESSAGE_EDIT.
- */ function extractMessageEdit(message) {
-  const protocol = message?.editedMessage?.message?.protocolMessage ?? (message?.protocolMessage?.editedMessage ? message.protocolMessage : null);
-  if (!protocol) return null;
-  const edited = protocol.editedMessage ?? {};
-  return {
-    originalId: String(protocol.key?.id ?? "").trim(),
-    text: String(edited.conversation ?? edited.extendedTextMessage?.text ?? "").trim()
+ * Grava a edição na mensagem original: texto novo, quando foi editada e o
+ * texto de antes da primeira edição. Sem conseguir ler o texto novo (edição
+ * criptografada sem o LID do cliente), marca edit_unreadable para a conversa
+ * avisar que a mensagem foi editada no WhatsApp.
+ */ async function applyMessageEdit(supabase, params) {
+  const { body, data, isFromMe, plainEdit, secretEdit } = params;
+  const originalId = (plainEdit ?? secretEdit)?.originalId;
+  if (!originalId) return;
+  const { data: original, error } = await supabase.from("messages").select("id, conversation_id, text, original_text, payload").eq("meta_message_id", originalId).eq("direction", isFromMe ? "outbound" : "inbound").order("created_at", {
+    ascending: false
+  }).limit(1).maybeSingle();
+  if (error) throw error;
+  if (!original) {
+    console.log("[MESSAGE_EDIT_ORIGINAL_NOT_FOUND]", originalId);
+    return;
+  }
+  let text = plainEdit?.text ?? "";
+  if (secretEdit) {
+    const messageSecret = originalMessageSecret(original.payload);
+    if (messageSecret) {
+      const senderJids = await editSenderJids(supabase, {
+        body,
+        data,
+        original,
+        isFromMe
+      });
+      const result = await decryptSecretEdit({
+        edit: secretEdit,
+        messageSecret,
+        senderJids
+      });
+      text = result?.text ?? "";
+      console.log("[MESSAGE_EDIT_DECRYPT]", JSON.stringify({
+        originalId,
+        decrypted: !!result,
+        tried: senderJids.length,
+        senderJid: result?.senderJid ?? null
+      }));
+    } else {
+      console.log("[MESSAGE_EDIT_NO_SECRET]", originalId);
+    }
+  }
+  if (text && text === original.text) return;
+  const editedAt = new Date().toISOString();
+  const update = text ? {
+    text,
+    edited_at: editedAt,
+    edit_unreadable: false,
+    original_text: original.original_text ?? original.text ?? null
+  } : {
+    edited_at: editedAt,
+    edit_unreadable: true
   };
+  const { error: updateError } = await supabase.from("messages").update(update).eq("id", original.id);
+  if (updateError) throw updateError;
+}
+/**
+ * JIDs possíveis de quem escreveu a mensagem editada. A chave usa o LID, que
+ * a Evolution troca pelo telefone no webhook: procura no próprio webhook, nas
+ * mensagens já gravadas da conversa e, por fim, na Evolution.
+ */ async function editSenderJids(supabase, { body, data, original, isFromMe }) {
+  const key = data?.key ?? {};
+  const originalKey = original.payload?.data?.key ?? {};
+  const values = [
+    key.senderLid,
+    key.participantLid,
+    key.participant,
+    originalKey.senderLid,
+    originalKey.participant,
+    key.remoteJid,
+    originalKey.remoteJid
+  ];
+  if (isFromMe) {
+    values.push(body?.sender, key.participantAlt);
+  } else if (!senderJidCandidates(values).some((jid)=>jid.endsWith("@lid"))) {
+    const { data: rows } = await supabase.from("messages").select("payload->data->key->>remoteJid").eq("conversation_id", original.conversation_id).eq("direction", "inbound").like("payload->data->key->>remoteJid", "%@lid").limit(1);
+    const lid = rows?.[0]?.remoteJid ?? await lookupLid(String(body?.instance ?? "").trim(), key.remoteJidAlt ?? key.remoteJid);
+    if (lid) values.unshift(lid);
+  }
+  values.push(key.remoteJidAlt, key.participantPn, key.participantAlt);
+  return senderJidCandidates(values);
+}
+/** LID de um telefone pela Evolution (/chat/whatsappNumbers, versões 2.3+). */ async function lookupLid(instanceName, jid) {
+  const phone = String(jid ?? "").split("@")[0].replace(/\D/g, "");
+  if (!instanceName || !phone || String(jid).endsWith("@lid")) return null;
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: connection } = await supabase.from("channel_connections").select("evolution_api_url, evolution_api_key").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
+    if (!connection?.evolution_api_url || !connection?.evolution_api_key) return null;
+    const resp = await fetch(`${connection.evolution_api_url.replace(/\/$/, "")}/chat/whatsappNumbers/${instanceName}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: connection.evolution_api_key
+      },
+      body: JSON.stringify({
+        numbers: [
+          phone
+        ]
+      })
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const items = Array.isArray(json) ? json : [
+      json
+    ];
+    for (const item of items){
+      const lid = [
+        item?.lid,
+        item?.jid
+      ].find((v)=>typeof v === "string" && v.endsWith("@lid"));
+      if (lid) return lid;
+    }
+  } catch (err) {
+    console.warn("[MESSAGE_EDIT_LID_LOOKUP_ERROR]", err);
+  }
+  return null;
 }
 // ---------------------------------------------------------------------------
 // Handler
@@ -336,17 +446,24 @@ serve(async (req)=>{
     }
     // ── Supabase client ───────────────────────────────────────────────────
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    // ── Edição de mensagem: corrige o texto da original ───────────────────
-    // (antes virava uma mensagem vazia e o bot respondia "não entendi")
+    // ── Edição de mensagem: corrige o texto (ou a legenda) da original ─────
+    // e marca como editada. A edição criptografada é decifrada com o
+    // messageSecret da original (ver _shared/messageEdit.ts).
     // (só para mensagens: eventos de conexão e QR Code não têm data.message)
     const isMessageEvent = body?.event === "messages.upsert";
-    const edit = isMessageEvent ? extractMessageEdit(body?.data?.message) ?? extractMessageEdit(data?.message) : null;
-    if (edit) {
-      if (edit.originalId && edit.text) {
-        const { error: editError } = await supabase.from("messages").update({
-          text: edit.text
-        }).eq("meta_message_id", edit.originalId).eq("direction", isFromMe ? "outbound" : "inbound");
-        if (editError) console.error("[MESSAGE_EDIT_ERROR]", editError);
+    const plainEdit = isMessageEvent ? extractMessageEdit(body?.data?.message) ?? extractMessageEdit(data?.message) : null;
+    const secretEdit = isMessageEvent && !plainEdit ? extractSecretEdit(data?.message) : null;
+    if (plainEdit || secretEdit) {
+      try {
+        await applyMessageEdit(supabase, {
+          body,
+          data,
+          isFromMe,
+          plainEdit,
+          secretEdit
+        });
+      } catch (err) {
+        console.error("[MESSAGE_EDIT_ERROR]", err);
       }
       return new Response(JSON.stringify({
         ignored: true,

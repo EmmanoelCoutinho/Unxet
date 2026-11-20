@@ -120,6 +120,12 @@ export type Message = {
   transcriptText?: string;
   deletedAt?: string;
   deletedForEveryone?: boolean;
+  /** Editada no WhatsApp (última edição) */
+  editedAt?: string;
+  /** Texto antes da primeira edição */
+  originalText?: string;
+  /** A edição chegou, mas o texto novo não pôde ser lido */
+  editUnreadable?: boolean;
   deliveryStatus?: MessageDeliveryStatus;
   /** Motivo que o provedor deu para não entregar (deliveryStatus "failed") */
   failureReason?: string;

@@ -33,6 +33,9 @@ type DbMessage = {
   reply_preview?: any;
   client_reaction?: string | null;
   agent_reaction?: string | null;
+  edited_at?: string | null;
+  original_text?: string | null;
+  edit_unreadable?: boolean | null;
 };
 
 // Citação gravada na resposta (reply_preview) + id da original
@@ -208,6 +211,9 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
     replyTo: isDeleted ? undefined : mapReplyPreview(row),
     clientReaction: row.client_reaction ?? undefined,
     agentReaction: row.agent_reaction ?? undefined,
+    editedAt: isDeleted ? undefined : (row.edited_at ?? undefined),
+    originalText: isDeleted ? undefined : (row.original_text ?? undefined),
+    editUnreadable: isDeleted ? undefined : (row.edit_unreadable ?? undefined),
   };
 };
 
@@ -245,7 +251,10 @@ const MESSAGE_COLUMNS = `
   reply_to_message_id,
   reply_preview,
   client_reaction,
-  agent_reaction
+  agent_reaction,
+  edited_at,
+  original_text,
+  edit_unreadable
 `;
 
 const oldestPersistedTime = (list: UiMessage[]) => {

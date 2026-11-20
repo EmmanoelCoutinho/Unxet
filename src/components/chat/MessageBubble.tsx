@@ -210,6 +210,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showOriginalText, setShowOriginalText] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
 
@@ -363,6 +364,43 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     localStatus !== "failed" &&
     localStatus !== "sending" &&
     message.deliveryStatus === "failed";
+
+  // Editada no WhatsApp: "Editada" ao lado da hora mostra o texto de antes
+  const isEdited = !!message.editedAt && !message.deletedAt;
+  const canShowOriginal = isEdited && !!message.originalText?.trim();
+  const editedLabel = isEdited ? (
+    canShowOriginal ? (
+      <button
+        type="button"
+        onClick={() => setShowOriginalText((v) => !v)}
+        className="italic hover:underline"
+        title={showOriginalText ? "Esconder o texto de antes" : "Ver o texto de antes da edição"}
+        aria-expanded={showOriginalText}
+      >
+        Editada
+      </button>
+    ) : (
+      <span className="italic" title="Mensagem editada no WhatsApp">
+        Editada
+      </span>
+    )
+  ) : null;
+  const editNoticeNode = isEdited ? (
+    <>
+      {canShowOriginal && showOriginalText && (
+        <div className="mt-1 border-l-2 border-gray-300 pl-2 text-xs text-gray-500">
+          <span className="font-medium">Antes da edição: </span>
+          <span className="whitespace-pre-wrap break-words">{message.originalText}</span>
+        </div>
+      )}
+      {message.editUnreadable && (
+        <div className="mt-1 flex items-start gap-1 text-xs text-amber-600">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>Mensagem editada no WhatsApp. O texto novo não chegou ao Unxet: veja no celular.</span>
+        </div>
+      )}
+    </>
+  ) : null;
 
   const undeliveredNode = isUndelivered ? (
     <div className="flex items-center justify-end gap-2 mt-1">
@@ -889,6 +927,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             )}
           </div>
 
+          {editNoticeNode}
           {statusNode}
           {errorHintNode}
           {undeliveredNode}
@@ -898,6 +937,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               isClient ? "justify-start" : "justify-end"
             }`}
           >
+            {editedLabel}
             {formatTime(message.createdAt)}
             {deliveryIcon}
           </span>
