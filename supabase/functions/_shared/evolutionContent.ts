@@ -106,8 +106,61 @@ function headerMedia(holder: any): Pick<EvolutionContent, "messageType" | "media
 }
 
 /** Botões nativos (quick_reply, cta_url, cta_copy, cta_call...). Pagamento fica de fora. */
+// Botões de pagamento (Pix): o conteúdo sai em pixText, não como botão
+const isPaymentButton = (button: any) => /^(payment_|review_)/.test(clean(button?.name));
+
+const PIX_KEY_TYPES: Record<string, string> = {
+  CPF: "CPF",
+  CNPJ: "CNPJ",
+  PHONE: "Telefone",
+  EMAIL: "E-mail",
+  EVP: "Chave aleatória",
+};
+
+/**
+ * Pix enviado pelo WhatsApp (botão nativo payment_request/payment_info):
+ * - código copia e cola (pix_dynamic_code / copy_code): só o código, para o
+ *   "Copiar" da mensagem pegar exatamente o que se cola no banco;
+ * - chave (pix_static_code): "Chave Pix (CNPJ): ..." e o nome do recebedor.
+ * O valor vai junto quando vier.
+ */
+function pixText(buttons: any[]): { code?: string; text: string } | null {
+  for (const button of buttons ?? []) {
+    if (!isPaymentButton(button)) continue;
+    const params = parseJson(button?.buttonParamsJson) ?? {};
+    const settings = [
+      params.payment_setting,
+      ...(Array.isArray(params.payment_settings) ? params.payment_settings : []),
+    ].filter(Boolean);
+    const amount = Number(params.total_amount?.value);
+    const offset = Number(params.total_amount?.offset ?? 100);
+    const value = Number.isFinite(amount) && amount > 0 && offset > 0
+      ? moneyText((amount / offset) * 1000, params.currency ?? "BRL")
+      : "";
+    const valueLine = value ? "Valor: " + value : "";
+
+    const dynamic = settings.find((item: any) => item?.pix_dynamic_code?.code)?.pix_dynamic_code;
+    const code = clean(dynamic?.code ?? params.copy_code);
+    if (code) return { code, text: joinLines([valueLine, code]) };
+
+    const pixKey = settings.find((item: any) => item?.pix_static_code?.key)?.pix_static_code;
+    if (pixKey) {
+      const type = PIX_KEY_TYPES[clean(pixKey.key_type).toUpperCase()];
+      return {
+        text: joinLines([
+          "Chave Pix" + (type ? " (" + type + ")" : "") + ": " + clean(pixKey.key),
+          clean(pixKey.merchant_name),
+          valueLine,
+        ]),
+      };
+    }
+  }
+  return null;
+}
+
 function nativeFlowButtons(buttons: any[]): string[] {
   return (buttons ?? []).flatMap((button) => {
+    if (isPaymentButton(button)) return [];
     const params = parseJson(button?.buttonParamsJson) ?? {};
     const label = clean(params.display_text ?? params.title);
     if (!label) return [];
@@ -148,9 +201,13 @@ function listText(list: any): string {
 }
 
 function interactiveText(msg: any): string {
+  const pix = pixText(msg?.nativeFlowMessage?.buttons);
+  const body = clean(msg?.body?.text);
   return [
     joinLines([bold(msg?.header?.title), msg?.header?.subtitle]),
-    clean(msg?.body?.text),
+    // O corpo do Pix copia e cola costuma ser o próprio código: não repete
+    pix?.code && body === pix.code ? "" : body,
+    pix?.text ?? "",
     joinLines(nativeFlowButtons(msg?.nativeFlowMessage?.buttons)),
     italic(msg?.footer?.text),
   ].filter(Boolean).join("\n\n");
