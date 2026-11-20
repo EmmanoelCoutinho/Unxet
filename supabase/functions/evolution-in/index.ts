@@ -32,6 +32,7 @@ import { applyReaction, evolutionQuotedId, evolutionReaction } from "../_shared/
 import { savePhoneSentMessage, waitForKnownMessage } from "../_shared/phoneSentMessages.ts";
 import { queueTranscription } from "../_shared/transcription.ts";
 import { decryptSecretEdit, extractMessageEdit, extractSecretEdit, originalMessageSecret, senderJidCandidates } from "../_shared/messageEdit.ts";
+import { stickerExists, stickerStoragePath } from "../_shared/stickerStore.ts";
 import { isProtocolOnlyMessage, mediaFilename, mediaMimeType, parseEvolutionContent, unwrapEvolutionMessage } from "../_shared/evolutionContent.ts";
 // ---------------------------------------------------------------------------
 // Env
@@ -746,14 +747,12 @@ serve(async (req)=>{
     if (content.unsupported) console.warn("[UNSUPPORTED_MESSAGE_TYPE]", content.unsupported);
     const { messageType, interactive } = content;
     let text = content.text;
-    const media = content.needsMediaFetch ? await fetchEvolutionMedia({
+    const media = await loadMessageMedia(supabase, {
       connection,
       instanceName,
       data,
-      mediaMessage: content.mediaMessage,
-      fallbackFilename: content.fallbackFilename,
-      fallbackMimeType: content.fallbackMimeType
-    }) : undefined;
+      content
+    });
     // ── Menções (@) no grupo: "@27307469193361" vira "@Nome" ──────────────
     if (group && text) {
       try {
@@ -880,14 +879,12 @@ async function handleOwnMessage(params) {
   const content = parseEvolutionContent(data?.message ?? {}, providerMessageId, {
     fromMe: true
   });
-  const media = content.needsMediaFetch ? await fetchEvolutionMedia({
+  const media = await loadMessageMedia(supabase, {
     connection,
     instanceName,
     data,
-    mediaMessage: content.mediaMessage,
-    fallbackFilename: content.fallbackFilename,
-    fallbackMimeType: content.fallbackMimeType
-  }) : undefined;
+    content
+  });
   const timestampRaw = body?.data?.messageTimestamp;
   const saved = await savePhoneSentMessage(supabase, {
     clinicId: connection.clinic_id,
@@ -976,6 +973,33 @@ async function endBotSessions(supabase, sessions, providerMessageId) {
 // ---------------------------------------------------------------------------
 // Conteúdo da mensagem
 // ---------------------------------------------------------------------------
+/**
+ * Mídia da mensagem. Figurinha já guardada pela empresa não é baixada de novo:
+ * volta só o caminho (storagePath) do arquivo existente. Figurinha nova é
+ * baixada e vai para esse caminho fixo (ver _shared/stickerStore.ts).
+ */ async function loadMessageMedia(supabase, { connection, instanceName, data, content }) {
+  if (!content.needsMediaFetch) return undefined;
+  const stickerPath = content.stickerHash ? stickerStoragePath(connection.clinic_id, content.stickerHash) : null;
+  if (stickerPath && await stickerExists(supabase, stickerPath)) {
+    console.log("[STICKER_REUSED]", stickerPath);
+    return {
+      storagePath: stickerPath,
+      mimeType: "image/webp"
+    };
+  }
+  const media = await fetchEvolutionMedia({
+    connection,
+    instanceName,
+    data,
+    mediaMessage: content.mediaMessage,
+    fallbackFilename: content.fallbackFilename,
+    fallbackMimeType: content.fallbackMimeType
+  });
+  return media && stickerPath ? {
+    ...media,
+    storagePath: stickerPath
+  } : media;
+}
 /** Baixa a mídia da mensagem pela Evolution (base64). Sem credenciais ou com erro: undefined. */ async function fetchEvolutionMedia(params) {
   const { connection, instanceName, data, fallbackFilename, fallbackMimeType } = params;
   // Só o conteúdo da mídia (sem embrulho): a Evolution não abre todos os

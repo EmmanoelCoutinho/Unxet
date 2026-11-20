@@ -25,6 +25,7 @@ import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/co
 import { groupPicKey, linkContactToGroup } from "../_shared/whatsappGroups.ts";
 import { safeStorageContentType } from "../_shared/storageContentType.ts";
 import { isLateInbound, unansweredSince } from "../_shared/lateInbound.ts";
+import { isClinicStickerPath } from "../_shared/stickerStore.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -223,7 +224,13 @@ serve(async (req)=>{
     let documentFilename = media?.filename ?? null;
     let mediaMimeType = media?.mimeType ?? null;
     let audioStoragePath = null;
-    if (hasMedia && media) {
+    // Figurinha (Evolution): caminho fixo por empresa. Sem base64, o arquivo
+    // já está guardado e só é reaproveitado (ver _shared/stickerStore.ts).
+    const stickerPath = isClinicStickerPath(media?.storagePath, clinicId) ? media.storagePath : null;
+    if (hasMedia && media && stickerPath && !media.base64) {
+      imageUrl = supabase.storage.from(WHATSAPP_MEDIA_BUCKET).getPublicUrl(stickerPath).data?.publicUrl ?? null;
+      mediaMimeType = mediaMimeType ?? "image/webp";
+    } else if (hasMedia && media) {
       try {
         let fileBytes = null;
         let resolvedContentType = mediaMimeType ?? "application/octet-stream";
@@ -282,7 +289,7 @@ serve(async (req)=>{
           // não podem cair no mesmo caminho (o upsert trocava o arquivo antigo)
           const messageFolder = String(providerMessageId).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120);
           const ownerFolder = group ? groupPicKey(group.jid) : waId;
-          const path = `${clinicId}/${ownerFolder}/${folder}/${messageFolder}/${fileName}`;
+          const path = stickerPath ?? `${clinicId}/${ownerFolder}/${folder}/${messageFolder}/${fileName}`;
           const { error: uploadError } = await supabase.storage.from(WHATSAPP_MEDIA_BUCKET).upload(path, fileBytes, {
             contentType: safeStorageContentType(resolvedContentType),
             upsert: true

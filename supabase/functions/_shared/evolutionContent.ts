@@ -5,6 +5,7 @@
 // (associatedChildMessage), figurinha animada (lottieStickerMessage)... O
 // conteúdo de verdade fica em <embrulho>.message. Sem desembrulhar, a foto de
 // um álbum virava "[Mensagem em um formato que o Unxet ainda não exibe]".
+import { stickerHash } from "./stickerStore.ts";
 
 export const UNSUPPORTED_TEXT =
   "[Mensagem em um formato que o Unxet ainda não exibe. Peça ao cliente para reenviar como texto, foto ou documento.]";
@@ -76,6 +77,8 @@ export interface EvolutionContent {
   mediaMessage?: Record<string, any>;
   fallbackFilename?: string;
   fallbackMimeType?: string;
+  /** Figurinha: SHA-256 do arquivo, para guardar uma vez só (stickerStore.ts). */
+  stickerHash?: string | null;
   /** Tipo de mensagem não tratado (para o log). */
   unsupported?: string[];
 }
@@ -221,6 +224,7 @@ export function parseEvolutionContent(
     return media("image", "", {
       fallbackFilename: `figurinha-${providerMessageId}.webp`,
       fallbackMimeType: msg.stickerMessage.mimetype ?? "image/webp",
+      stickerHash: stickerHash(msg.stickerMessage),
     });
   }
   if (msg.audioMessage || msg.pttMessage) return media("audio", "");

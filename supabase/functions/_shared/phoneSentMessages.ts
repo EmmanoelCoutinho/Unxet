@@ -14,6 +14,7 @@ import { findContactByPhone } from "./startConversation.ts";
 import { findByProviderId, replyColumns } from "./messageReply.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "./connectionDepartment.ts";
 import { safeStorageContentType } from "./storageContentType.ts";
+import { isClinicStickerPath } from "./stickerStore.ts";
 // (sem transcription.ts aqui: ele lê Deno.env e o módulo é testado no Vitest;
 // quem chama cria a transcrição do áudio com o storagePath devolvido)
 
@@ -168,7 +169,8 @@ export async function savePhoneSentMessage(
     timestampIso: string;
     messageType: string;
     text: string;
-    media?: { base64: string; mimeType?: string | null; filename?: string | null } | null;
+    /** storagePath: figurinha da empresa (sem base64 = arquivo já guardado) */
+    media?: { base64?: string; mimeType?: string | null; filename?: string | null; storagePath?: string | null } | null;
     replyToProviderId?: string | null;
     rawPayload?: unknown;
   },
@@ -208,13 +210,17 @@ export async function savePhoneSentMessage(
   let mediaUrl: string | null = null;
   let storagePath: string | null = null;
   let mimeType = media?.mimeType ?? null;
-  if (media?.base64) {
+  const stickerPath = isClinicStickerPath(media?.storagePath, clinicId) ? media!.storagePath! : null;
+  if (stickerPath && !media?.base64) {
+    storagePath = stickerPath;
+    mediaUrl = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(stickerPath).data?.publicUrl ?? null;
+  } else if (media?.base64) {
     try {
       const bytes = decodeBase64(media.base64);
       const ext = mediaExtension(mimeType, media.filename);
       const messageFolder = providerMessageId.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120);
       const fileName = String(media.filename ?? "").trim() || `${messageFolder}.${ext}`;
-      storagePath = `${clinicId}/${waId}/phone-sent/${messageFolder}/${fileName}`;
+      storagePath = stickerPath ?? `${clinicId}/${waId}/phone-sent/${messageFolder}/${fileName}`;
       const { error: uploadErr } = await supabase.storage
         .from(MEDIA_BUCKET)
         .upload(storagePath, bytes, { contentType: safeStorageContentType(mimeType), upsert: true });
