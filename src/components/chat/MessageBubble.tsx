@@ -11,12 +11,15 @@ import {
   Reply,
   ExternalLinkIcon,
   FileTextIcon,
+  FilmIcon,
   Pencil,
   Trash2,
 } from "lucide-react";
 import type { Message as UiMessage } from "../../types";
 import { AudioTranscriptStatus } from "./AudioTranscriptStatus";
 import { AudioPlayer } from "./AudioPlayer";
+import { VideoPlayer } from "./VideoPlayer";
+import { isVideoFile as looksLikeVideo } from "../../lib/videoFile";
 import { WhatsappText } from "./WhatsappText";
 import { QuotedMessage } from "./QuotedMessage";
 import { toast } from "react-toastify";
@@ -240,10 +243,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const mediaUrl = useMediaUrl(rawMediaUrl);
   const mediaLoading = Boolean(rawMediaUrl) && !mediaUrl;
 
-  // Vídeo fica gravado como documento com tipo video/*: toca na conversa
+  // Vídeo fica gravado como documento (QR Code e Meta): toca na conversa.
+  // Vale o tipo do arquivo ou, sem ele, a extensão do nome.
   const isVideoFile =
-    message.type === "document" &&
-    (message.mediaMimeType ?? "").toLowerCase().startsWith("video/");
+    (message.type === "document" || message.type === "video") &&
+    looksLikeVideo(message.mediaMimeType, message.filename);
   const mediaType = isVideoFile
     ? "video"
     : message.type ??
@@ -685,12 +689,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   className={onlyAudio || onlyDocument ? "max-w-72" : ""}
                 />
               )}
-              {mediaLoading && (
-                <div
-                  className="h-12 w-48 max-w-full animate-pulse rounded-lg bg-black/10"
-                  aria-label="Carregando mídia"
-                />
-              )}
+              {mediaLoading &&
+                (mediaType === "video" ? (
+                  <div
+                    className={`flex aspect-video w-72 max-w-full animate-pulse flex-col items-center justify-center gap-2 rounded-xl ${
+                      isClient ? "bg-gray-200 text-gray-500" : "bg-[#fff]/15 text-white/90"
+                    }`}
+                    aria-label="Carregando vídeo"
+                  >
+                    <FilmIcon className="h-8 w-8" aria-hidden />
+                    <span className="text-xs font-medium">Carregando vídeo...</span>
+                  </div>
+                ) : (
+                  <div
+                    className="h-12 w-48 max-w-full animate-pulse rounded-lg bg-black/10"
+                    aria-label="Carregando mídia"
+                  />
+                ))}
               {mediaUrl && (
                 <>
                   {mediaType === "image" && (
@@ -718,11 +733,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   )}
 
                   {mediaType === "video" && (
-                    <video
-                      controls
-                      preload="metadata"
-                      className="max-h-80 w-72 max-w-full rounded-lg bg-black"
+                    <VideoPlayer
                       src={mediaUrl}
+                      outgoing={!isClient}
+                      filename={message.filename}
                     />
                   )}
 
