@@ -138,6 +138,61 @@ describe("parseEvolutionContent", () => {
     expect(content.text).toBe("Este é um número para envio de mensagens automáticas.\n\n🔘 Abrir site - https://site.example");
   });
 
+  describe("Pix", () => {
+    const code =
+      "00020101021226900014br.gov.bcb.pix2568pix.exemplo.com/loc/AbC123520400005303986" +
+      "5802BR5913LOJA EXEMPLO6009SAO PAULO62070503***6304ABCD";
+    const pixButton = (params: Record<string, unknown>) => ({
+      interactiveMessage: {
+        body: { text: code },
+        nativeFlowMessage: {
+          buttons: [{ name: "payment_request", buttonParamsJson: JSON.stringify(params) }],
+          messageVersion: 3,
+        },
+      },
+    });
+
+    it("copia e cola: mostra só o código, uma vez", () => {
+      const content = parseEvolutionContent(pixButton({
+        copy_code: code,
+        display_text: "‎Copiar código Pix",
+        payment_setting: { pix_dynamic_code: { code }, type: "pix_dynamic_code" },
+        payment_settings: [{ pix_dynamic_code: { code }, type: "pix_dynamic_code" }],
+        type: "PAYMENT_REQUEST",
+      }), "PIX1");
+      expect(content).toMatchObject({ messageType: "text", text: code });
+    });
+
+    it("copia e cola com valor", () => {
+      const content = parseEvolutionContent(pixButton({
+        currency: "BRL",
+        total_amount: { value: 5400, offset: 100 },
+        payment_settings: [{ pix_dynamic_code: { code }, type: "pix_dynamic_code" }],
+      }), "PIX2");
+      // O Intl separa "R$" do valor com espaço não separável
+      expect(content.text.replace(/ /g, " ")).toBe(`Valor: R$ 54,00\n${code}`);
+    });
+
+    it("chave Pix", () => {
+      const content = parseEvolutionContent({
+        interactiveMessage: {
+          nativeFlowMessage: {
+            buttons: [{
+              name: "payment_info",
+              buttonParamsJson: JSON.stringify({
+                payment_settings: [{
+                  type: "pix_static_code",
+                  pix_static_code: { key: "12.345.678/0001-90", key_type: "CNPJ", merchant_name: "Loja Exemplo" },
+                }],
+              }),
+            }],
+          },
+        },
+      }, "PIX3");
+      expect(content.text).toBe("Chave Pix (CNPJ): 12.345.678/0001-90\nLoja Exemplo");
+    });
+  });
+
   it("resposta a botão nativo vira resposta interativa", () => {
     const content = parseEvolutionContent({
       interactiveResponseMessage: {
