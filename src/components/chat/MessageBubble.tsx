@@ -12,6 +12,7 @@ import {
   ExternalLinkIcon,
   FileTextIcon,
   FilmIcon,
+  MapPin,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import { QuotedMessage } from "./QuotedMessage";
 import { toast } from "react-toastify";
 import { useMediaUrl } from "../../lib/mediaUrls";
 import { MAX_EDIT_TEXT_LENGTH } from "../../lib/messageEdit";
+import { locationMapsLinkFromText, pixFromText } from "../../lib/messageQuickActions";
 import { CloseButton } from "../ui/CloseButton";
 
 interface MessageBubbleProps {
@@ -334,6 +336,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const canRetryFailedMessage =
     localStatus === "failed" && typeof onRetry === "function";
 
+  // Atalhos: copiar o Pix e abrir a localização no Maps
+  const quickText = message.deletedAt || rawMediaUrl ? "" : displayText;
+  const pixAction = useMemo(() => pixFromText(quickText), [quickText]);
+  const locationLink = useMemo(
+    () => locationMapsLinkFromText(quickText),
+    [quickText],
+  );
+
   const maxPreviewLength = 200;
   const shouldTruncate = displayText.length > maxPreviewLength;
   const visibleText =
@@ -567,15 +577,27 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const hasMenu =
     canCopy || canDownload || canReplyHere || canReactHere || canEdit || canDelete;
 
-  const handleCopy = async () => {
+  const handleCopy = () =>
+    copyText(displayText, "Mensagem copiada.", "Não foi possível copiar a mensagem.");
+
+  const handleCopyPix = () => {
+    if (!pixAction) return;
+    void copyText(
+      pixAction.value,
+      pixAction.kind === "code" ? "Código Pix copiado." : "Chave Pix copiada.",
+      "Não foi possível copiar o Pix.",
+    );
+  };
+
+  const copyText = async (value: string, success: string, failure: string) => {
     let copied = false;
     try {
-      await navigator.clipboard.writeText(displayText);
+      await navigator.clipboard.writeText(value);
       copied = true;
     } catch {
       // Sem permissão para a área de transferência: cópia pelo jeito antigo
       const area = document.createElement("textarea");
-      area.value = displayText;
+      area.value = value;
       area.setAttribute("readonly", "");
       area.style.position = "fixed";
       area.style.opacity = "0";
@@ -588,8 +610,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       }
       area.remove();
     }
-    if (copied) toast.success("Mensagem copiada.", { autoClose: 1500 });
-    else toast.error("Não foi possível copiar a mensagem.");
+    if (copied) toast.success(success, { autoClose: 1500 });
+    else toast.error(failure);
   };
 
   // O link assinado é de outro domínio: o atributo download não vale, então
@@ -865,6 +887,41 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   )}
                 </div>
               ) : null}
+
+              {(pixAction || locationLink) && (
+                <div
+                  className={`-mx-4 -mb-3 mt-2 border-t text-sm font-medium ${
+                    isClient
+                      ? "border-gray-300 text-[#0A84FF]"
+                      : "border-white/25 text-white"
+                  }`}
+                >
+                  {pixAction ? (
+                    <button
+                      type="button"
+                      onClick={handleCopyPix}
+                      className={`flex w-full items-center justify-center gap-1.5 rounded-b-lg py-2 transition-colors ${
+                        isClient ? "hover:bg-gray-300/60" : "hover:bg-[#fff]/10"
+                      }`}
+                    >
+                      <Copy className="h-4 w-4" />
+                      {pixAction.kind === "code" ? "Copiar código Pix" : "Copiar chave Pix"}
+                    </button>
+                  ) : (
+                    <a
+                      href={locationLink ?? undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex w-full items-center justify-center gap-1.5 rounded-b-lg py-2 transition-colors ${
+                        isClient ? "hover:bg-gray-300/60" : "hover:bg-[#fff]/10"
+                      }`}
+                    >
+                      <MapPin className="h-4 w-4" />
+                      Abrir no Google Maps
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
 
             {hasReactions && (
