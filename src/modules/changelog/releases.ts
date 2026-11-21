@@ -94,6 +94,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
   },
   {
     kind: "improved",
+    text: "Ao abrir em tela cheia uma conversa que estava na janela flutuante (ou o contrário), as mensagens aparecem na hora, sem esperar carregar de novo.",
+  },
+  {
+    kind: "improved",
     text: "Mensagem que o WhatsApp não conseguiu entregar ao cliente agora aparece com o aviso \"Não entregue\" em vermelho, em vez de ficar com um tique só. Clique em \"Reenviar\" para mandar de novo. Se várias mensagens não forem entregues, confira a conexão do número em Integrações.",
   },
   {

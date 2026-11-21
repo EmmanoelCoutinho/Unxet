@@ -348,11 +348,19 @@ function replaceLocalOptimisticWithPersisted(
 }
 
 export function useMessages(conversationId: string | null) {
-  const [messages, setMessages] = useState<UiMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Conversa já aberta antes (caixa flutuante ↔ tela cheia): começa com as
+  // mensagens guardadas, sem "Carregando", e atualiza em segundo plano
+  const [messages, setMessages] = useState<UiMessage[]>(
+    () => (conversationId ? messagesCache.get(conversationId) : undefined) ?? [],
+  );
+  const [loading, setLoading] = useState(
+    () => !(conversationId && messagesCache.get(conversationId)?.length),
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<any>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [hasMore, setHasMore] = useState(
+    () => (conversationId ? hasMoreCache.get(conversationId) : undefined) ?? false,
+  );
   const [loadingOlder, setLoadingOlder] = useState(false);
 
   const didInitialLoadRef = useRef(false);
