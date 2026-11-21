@@ -13,13 +13,19 @@ const MAX_NAME = 100;
 const MAX_ADDRESS = 200;
 
 const NUMBER = String.raw`-?\d{1,3}(?:\.\d+)?`;
+const COMMA_NUMBER = String.raw`-?\d{1,3},\d+`;
 // "lat,lng" solto ou nos formatos de link do Google Maps:
 // ...@-1.4558,-48.4902,17z | ...?q=-1.4558,-48.4902 | !3d-1.4558!4d-48.4902
 const PATTERNS = [
   new RegExp(String.raw`!3d(${NUMBER})!4d(${NUMBER})`),
   new RegExp(String.raw`@(${NUMBER}),\s*(${NUMBER})`),
   new RegExp(String.raw`[?&](?:q|query|ll|destination)=(${NUMBER}),\s*(${NUMBER})`),
+  // Pino solto aberto pelo link curto: .../maps/search/-1.4558,+-48.4902
+  new RegExp(String.raw`/maps/(?:search|place)/(${NUMBER}),[\s+]*(${NUMBER})`),
   new RegExp(String.raw`^\s*(${NUMBER})\s*[,;\s]\s*(${NUMBER})\s*$`),
+  // Vírgula decimal, como se escreve no Brasil: "-1,4558, -48,4902",
+  // "-1,4558; -48,4902" ou "-1,4558 -48,4902"
+  new RegExp(String.raw`^\s*(${COMMA_NUMBER})\s*(?:[,;]\s*|\s+)(${COMMA_NUMBER})\s*$`),
 ];
 
 const valid = (lat: number, lng: number) =>
@@ -45,8 +51,8 @@ export function parseCoordinates(
   for (const pattern of PATTERNS) {
     const match = value.match(pattern);
     if (!match) continue;
-    const latitude = Number(match[1]);
-    const longitude = Number(match[2]);
+    const latitude = Number(match[1].replace(",", "."));
+    const longitude = Number(match[2].replace(",", "."));
     if (valid(latitude, longitude)) {
       return { latitude: round(latitude), longitude: round(longitude) };
     }
@@ -81,4 +87,33 @@ export function sharedLocationMapsUrl(location: SharedLocation): string {
 export function sharedLocationText(location: SharedLocation): string {
   const place = [location.name, location.address].filter(Boolean).join(" - ");
   return `📍 Localização${place ? `: ${place}` : ""}\n${sharedLocationMapsUrl(location)}`;
+}
+
+/** Link curto do Google Maps (o app pede ao resolve-maps-link para abrir). */
+export function isShortMapsLink(raw: string): boolean {
+  return /^\s*https:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps)\/\S+\s*$/i.test(String(raw ?? ""));
+}
+
+const LOCATION_TEXT =
+  /^📍 Localização(?:: (.+))?\nhttps:\/\/maps\.google\.com\/\?q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/u;
+
+/**
+ * Localização de uma mensagem enviada pelo Unxet (para o "Reenviar"). Ela
+ * fica gravada como texto (sharedLocationText); nome e endereço saem da
+ * resposta da Evolution guardada no payload e, sem ela, do próprio texto.
+ */
+export function sharedLocationFromMessage(
+  text: string | null | undefined,
+  payload?: unknown,
+): SharedLocation | null {
+  const match = String(text ?? "").trim().match(LOCATION_TEXT);
+  if (!match) return null;
+  const sent = (payload as { message?: { locationMessage?: Record<string, unknown> } } | null)
+    ?.message?.locationMessage;
+  return buildSharedLocation({
+    latitude: Number(match[2]),
+    longitude: Number(match[3]),
+    name: typeof sent?.name === "string" ? sent.name : sent ? undefined : match[1],
+    address: typeof sent?.address === "string" ? sent.address : undefined,
+  });
 }

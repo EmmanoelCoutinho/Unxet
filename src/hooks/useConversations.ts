@@ -17,6 +17,7 @@ import {
   isConnectionRemoved,
 } from "../lib/whatsappConnections";
 import { playMessageSound } from "../modules/notifications/notificationSounds";
+import { isVideoFile } from "../lib/videoFile";
 
 // Quanto tempo esperar a conversa nova aparecer na lista para tocar o som
 const NEW_CONVERSATION_SOUND_WINDOW_MS = 10000;
@@ -100,11 +101,24 @@ export function useConversations(options: UseConversationsOptions = {}) {
   };
 
   const detectMediaType = (
-    msg?: { type?: string | null; payload?: any },
+    msg?: {
+      type?: string | null;
+      payload?: any;
+      media_mime_type?: string | null;
+      filename?: string | null;
+    },
     payload?: any,
   ): Conversation["lastMessageType"] => {
     const parsedPayload = payload ?? parsePayload(msg?.payload);
     const directType = msg?.type ?? parsedPayload?.type;
+
+    // Vídeo fica gravado como documento: vale o tipo do arquivo
+    if (
+      (directType === "document" || directType === "video") &&
+      isVideoFile(msg?.media_mime_type, msg?.filename)
+    ) {
+      return "video";
+    }
     const candidate =
       parsedPayload?.message ?? parsedPayload?.messages?.[0] ?? parsedPayload;
 
@@ -129,6 +143,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
     type?: string | null;
     payload?: any;
     deleted_at?: string | null;
+    media_mime_type?: string | null;
+    filename?: string | null;
   }) => {
     if (!msg) {
       return { text: "", type: "text" as Conversation["lastMessageType"] };
@@ -281,6 +297,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
             created_at,
             direction,
             type,
+            media_mime_type,
+            filename,
             payload,
             deleted_at
           ),

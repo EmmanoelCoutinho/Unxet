@@ -43,6 +43,18 @@ describe("buildReplyPreview", () => {
     ).toEqual({ author: "cliente", type: "text", text: "oi", senderName: "Maria" });
   });
 
+  it("vídeo gravado como documento aparece como vídeo", () => {
+    expect(
+      buildReplyPreview({ direction: "inbound", type: "document", text: "", media_mime_type: "video/mp4" }),
+    ).toEqual({ author: "cliente", type: "video", text: "🎥 Vídeo" });
+    expect(
+      buildReplyPreview({ direction: "inbound", type: "document", text: "", filename: "aula.MP4" }),
+    ).toMatchObject({ type: "video", text: "🎥 Vídeo" });
+    expect(
+      buildReplyPreview({ direction: "inbound", type: "document", text: "", media_mime_type: "application/pdf" }),
+    ).toMatchObject({ type: "document", text: "📄 Documento" });
+  });
+
   it("corta textos longos", () => {
     expect(buildReplyPreview({ direction: "inbound", text: "a".repeat(500) }).text).toHaveLength(200);
   });

@@ -9,6 +9,7 @@
 
 import webpush from "npm:web-push@3.6.7";
 import { listConversationParticipantIds } from "./conversationParticipants.ts";
+import { displayMessageType } from "./videoFile.ts";
 
 const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
@@ -74,7 +75,7 @@ async function hasActiveBotSession(supabase, conversationId: string) {
   return (count ?? 0) > 0;
 }
 
-async function sendInboundPush(supabase, { conversationId, messageType }) {
+async function sendInboundPush(supabase, { conversationId, messageType, mediaMimeType = null, filename = null }) {
   if (!PUSH_ENABLED) return;
 
   // Enquanto o bot está atendendo, ninguém precisa ser avisado.
@@ -92,7 +93,8 @@ async function sendInboundPush(supabase, { conversationId, messageType }) {
 
   await sendPushToUsers(supabase, userIds, {
     title: conversation.group ? conversation.group.name || "Grupo do WhatsApp" : conversation.contact?.name || conversation.contact?.phone || "Novo contato",
-    body: buildBody(messageType),
+    // Vídeo fica gravado como documento: avisa "Enviou um vídeo"
+    body: buildBody(displayMessageType(messageType, mediaMimeType, filename)),
     conversationId,
     url: `/inbox/chat/${conversationId}`,
   });
@@ -150,7 +152,13 @@ export async function sendPushToUsers(
  */
 export function queueInboundPush(
   supabase,
-  params: { conversationId: string; messageType?: string | null; after?: Promise<unknown> },
+  params: {
+    conversationId: string;
+    messageType?: string | null;
+    mediaMimeType?: string | null;
+    filename?: string | null;
+    after?: Promise<unknown>;
+  },
 ) {
   const task = Promise.resolve(params.after)
     .catch(() => {})
