@@ -23,10 +23,10 @@ import { VideoPlayer } from "./VideoPlayer";
 import { isVideoFile as looksLikeVideo } from "../../lib/videoFile";
 import { WhatsappText } from "./WhatsappText";
 import { QuotedMessage } from "./QuotedMessage";
+import { addStickerFavorite, stickerPathFromUrl } from "../../lib/stickerFavorites";
 import { toast } from "react-toastify";
 import { useMediaUrl } from "../../lib/mediaUrls";
 import { MAX_EDIT_TEXT_LENGTH } from "../../lib/messageEdit";
-import { addStickerFavorite, stickerPathFromUrl } from "../../lib/stickerFavorites";
 import { CloseButton } from "../ui/CloseButton";
 
 interface MessageBubbleProps {
