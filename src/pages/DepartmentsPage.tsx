@@ -262,6 +262,61 @@ export const DepartmentsPage: React.FC = () => {
 
   const { toasts, pushToast } = useToasts();
 
+  // Quem entra no rodízio do setor em edição: atendentes do setor que não são
+  // administradores (mesma regra de distribute_conversation). null = carregando
+  const [rotationMembers, setRotationMembers] = useState<string[] | null>(null);
+  const editingDepartmentId = editingDepartment?.id ?? null;
+
+  useEffect(() => {
+    if (!isModalOpen || !clinicId || !editingDepartmentId) {
+      setRotationMembers(null);
+      return;
+    }
+    let active = true;
+    setRotationMembers(null);
+    void (async () => {
+      const [usersResult, membersResult] = await Promise.all([
+        supabase
+          .from("clinic_users")
+          .select("user_id, name, email, role, department_id")
+          .eq("clinic_id", clinicId),
+        supabase
+          .from("department_members")
+          .select("clinic_user_id")
+          .eq("department_id", editingDepartmentId),
+      ]);
+      if (!active) return;
+      if (usersResult.error || membersResult.error) {
+        setRotationMembers([]);
+        return;
+      }
+      const memberIds = new Set(
+        (membersResult.data ?? []).map((row) => row.clinic_user_id as string),
+      );
+      const names = (
+        (usersResult.data ?? []) as Array<{
+          user_id: string | null;
+          name: string | null;
+          email: string | null;
+          role: string | null;
+          department_id: string | null;
+        }>
+      )
+        .filter(
+          (row) =>
+            row.user_id &&
+            row.role !== "admin" &&
+            (row.department_id === editingDepartmentId || memberIds.has(row.user_id)),
+        )
+        .map((row) => row.name || row.email || "Atendente")
+        .sort((a, b) => a.localeCompare(b, "pt-BR"));
+      setRotationMembers(names);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [isModalOpen, clinicId, editingDepartmentId]);
+
   const resetForm = useCallback(() => {
     setFormValues({
       name: "",
@@ -1009,6 +1064,33 @@ export const DepartmentsPage: React.FC = () => {
                     );
                   })}
                 </div>
+                {formValues.distribution_mode === "round_robin" &&
+                  (!editingDepartment ? (
+                    <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Depois de criar o setor, adicione atendentes a ele em
+                      Atendentes. Administradores não entram no rodízio.
+                    </p>
+                  ) : rotationMembers === null ? (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Carregando quem participa do rodízio...
+                    </p>
+                  ) : rotationMembers.length === 0 ? (
+                    <p
+                      role="alert"
+                      className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+                    >
+                      Nenhum atendente participa do rodízio: este setor só tem
+                      administradores (ou ninguém). Todas as conversas vão
+                      ficar em Pendentes até alguém aceitar. Adicione
+                      atendentes ao setor em Atendentes.
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-600">
+                      <span className="font-medium">Participam do rodízio:</span>{" "}
+                      {rotationMembers.join(", ")}. Só recebe quem estiver com o
+                      Unxet aberto na hora.
+                    </p>
+                  ))}
                 <p className="mt-2 text-xs text-slate-500">
                   As automações do chat continuam valendo nos dois modos. Se
                   o atendente não responder, “Voltar para fila de espera”
