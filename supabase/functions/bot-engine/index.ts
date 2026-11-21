@@ -6,6 +6,7 @@ import { classifyUnmatchedInput } from "../_shared/botInput.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@1.3.0";
 import { AI_TOOL_END, AI_TOOL_TRANSFER, aiUsageNotification, buildChatTurns, buildSystemPrompt } from "../_shared/aiAssistant.ts";
 import { sendPushToUsers } from "../_shared/push.ts";
+import { distributeConversation } from "../_shared/distribution.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -1896,7 +1897,10 @@ async function handoffConversation(supabase, conversationId, departmentId) {
   const { error } = await supabase.from("conversations").update(payload).eq("id", conversationId);
   if (error) {
     console.error("handoffConversation error:", error);
+    return;
   }
+  // Setor com rodízio: a conversa vai direto para o atendente da vez
+  await distributeConversation(supabase, conversationId);
 }
 async function insertConversationEvent(supabase, conversationId, eventType, metadata) {
   const { error } = await supabase.from("conversation_events").insert({

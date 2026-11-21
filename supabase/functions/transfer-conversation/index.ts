@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hasClinicPermission } from "../_shared/security.ts";
 import { clinicHasFeature, PLAN_LIMIT_MESSAGES } from "../_shared/plan.ts";
 import { sendPushToUsers } from "../_shared/push.ts";
+import { distributeConversation } from "../_shared/distribution.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -11,6 +12,34 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
 };
+/** Aviso para quem passou a ser o responsável (sino + push), sem atrasar a resposta. */ async function notifyNewAssignee(admin, { conv, conversationId, toUserId, body }) {
+  const url = `/inbox/chat/${conversationId}`;
+  const title = "Conversa transferida para você";
+  const notifyTask = (async ()=>{
+    const { error: notifErr } = await admin.from("user_notifications").insert({
+      user_id: toUserId,
+      clinic_id: conv.clinic_id,
+      kind: "conversation_transferred",
+      title,
+      body,
+      url
+    });
+    if (notifErr) console.error("transfer.notification_failed", notifErr);
+    await sendPushToUsers(admin, [
+      toUserId
+    ], {
+      title,
+      body,
+      conversationId,
+      url
+    });
+  })().catch((err)=>console.error("transfer.notify_failed", err?.message ?? String(err)));
+  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+    EdgeRuntime.waitUntil(notifyTask);
+  } else {
+    await notifyTask;
+  }
+}
 /**
  * Transfere para um atendente: ele vira o responsável e a conversa fica em
  * atendimento (pode responder na hora). O setor continua o mesmo; o
@@ -56,33 +85,12 @@ const corsHeaders = {
   // Aviso para quem recebeu (sino + push), sem atrasar a resposta
   if (toUserId !== user.id) {
     const contactLabel = conv.contacts?.name || conv.contacts?.phone || "um cliente";
-    const url = `/inbox/chat/${conversationId}`;
-    const title = "Conversa transferida para você";
-    const body = `${actorName} transferiu para você a conversa com ${contactLabel}.`;
-    const notifyTask = (async ()=>{
-      const { error: notifErr } = await admin.from("user_notifications").insert({
-        user_id: toUserId,
-        clinic_id: conv.clinic_id,
-        kind: "conversation_transferred",
-        title,
-        body,
-        url
-      });
-      if (notifErr) console.error("transfer.notification_failed", notifErr);
-      await sendPushToUsers(admin, [
-        toUserId
-      ], {
-        title,
-        body,
-        conversationId,
-        url
-      });
-    })().catch((err)=>console.error("transfer.notify_failed", err?.message ?? String(err)));
-    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
-      EdgeRuntime.waitUntil(notifyTask);
-    } else {
-      await notifyTask;
-    }
+    await notifyNewAssignee(admin, {
+      conv,
+      conversationId,
+      toUserId,
+      body: `${actorName} transferiu para você a conversa com ${contactLabel}.`
+    });
   }
   return new Response(JSON.stringify({
     ok: true,
@@ -272,9 +280,26 @@ serve(async (req)=>{
         status: nextStatus
       }
     });
+    // Setor de destino com rodízio: a conversa vai direto para o atendente da
+    // vez (depois do evento de transferência, para a ordem no histórico)
+    let result = updated;
+    const assignedUserId = await distributeConversation(admin, conversationId);
+    if (assignedUserId) {
+      const { data: distributed } = await admin.from("conversations").select("id, status, assigned_user_id, department_id, clinic_id").eq("id", conversationId).maybeSingle();
+      if (distributed) result = distributed;
+      if (assignedUserId !== user.id) {
+        const contactLabel = conv.contacts?.name || conv.contacts?.phone || "um cliente";
+        await notifyNewAssignee(admin, {
+          conv,
+          conversationId,
+          toUserId: assignedUserId,
+          body: `${actorName} transferiu para ${destDept.name} a conversa com ${contactLabel}. Pelo rodízio do setor, ela ficou com você.`
+        });
+      }
+    }
     return new Response(JSON.stringify({
       ok: true,
-      conversation: updated
+      conversation: result
     }), {
       status: 200,
       headers: {
