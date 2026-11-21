@@ -12,6 +12,7 @@ import {
   ExternalLinkIcon,
   FileTextIcon,
   FilmIcon,
+  MapPin,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import { QuotedMessage } from "./QuotedMessage";
 import { toast } from "react-toastify";
 import { useMediaUrl } from "../../lib/mediaUrls";
 import { MAX_EDIT_TEXT_LENGTH } from "../../lib/messageEdit";
+import { locationMapsLinkFromText, pixFromText } from "../../lib/messageQuickActions";
 import { CloseButton } from "../ui/CloseButton";
 
 interface MessageBubbleProps {
@@ -225,6 +227,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
+  const editFieldRef = useRef<HTMLTextAreaElement | null>(null);
+  // O item escolhido no menu leva o foco para outro lugar (ver onCloseAutoFocus)
+  const skipMenuFocusReturn = useRef(false);
 
   // UI-only metadata (falha/envio)
   const local = (message as unknown as LocalMeta) ?? {};
@@ -330,6 +335,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const showStatusRow = !isClient && localStatus === "failed";
   const canRetryFailedMessage =
     localStatus === "failed" && typeof onRetry === "function";
+
+  // Atalhos: copiar o Pix e abrir a localização no Maps
+  const quickText = message.deletedAt || rawMediaUrl ? "" : displayText;
+  const pixAction = useMemo(() => pixFromText(quickText), [quickText]);
+  const locationLink = useMemo(
+    () => locationMapsLinkFromText(quickText),
+    [quickText],
+  );
 
   const maxPreviewLength = 200;
   const shouldTruncate = displayText.length > maxPreviewLength;
@@ -486,6 +499,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     deleteMode === "everyone" ? "Apagar para todos" : "Remover do Unxet";
 
   const openEditDialog = () => {
+    skipMenuFocusReturn.current = true;
     setEditDraft(message.text ?? "");
     setIsEditDialogOpen(true);
   };
@@ -563,15 +577,27 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const hasMenu =
     canCopy || canDownload || canReplyHere || canReactHere || canEdit || canDelete;
 
-  const handleCopy = async () => {
+  const handleCopy = () =>
+    copyText(displayText, "Mensagem copiada.", "Não foi possível copiar a mensagem.");
+
+  const handleCopyPix = () => {
+    if (!pixAction) return;
+    void copyText(
+      pixAction.value,
+      pixAction.kind === "code" ? "Código Pix copiado." : "Chave Pix copiada.",
+      "Não foi possível copiar o Pix.",
+    );
+  };
+
+  const copyText = async (value: string, success: string, failure: string) => {
     let copied = false;
     try {
-      await navigator.clipboard.writeText(displayText);
+      await navigator.clipboard.writeText(value);
       copied = true;
     } catch {
       // Sem permissão para a área de transferência: cópia pelo jeito antigo
       const area = document.createElement("textarea");
-      area.value = displayText;
+      area.value = value;
       area.setAttribute("readonly", "");
       area.style.position = "fixed";
       area.style.opacity = "0";
@@ -584,8 +610,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       }
       area.remove();
     }
-    if (copied) toast.success("Mensagem copiada.", { autoClose: 1500 });
-    else toast.error("Não foi possível copiar a mensagem.");
+    if (copied) toast.success(success, { autoClose: 1500 });
+    else toast.error(failure);
   };
 
   // O link assinado é de outro domínio: o atributo download não vale, então
@@ -861,6 +887,41 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   )}
                 </div>
               ) : null}
+
+              {(pixAction || locationLink) && (
+                <div
+                  className={`-mx-4 -mb-3 mt-2 border-t text-sm font-medium ${
+                    isClient
+                      ? "border-gray-300 text-[#0A84FF]"
+                      : "border-white/25 text-white"
+                  }`}
+                >
+                  {pixAction ? (
+                    <button
+                      type="button"
+                      onClick={handleCopyPix}
+                      className={`flex w-full items-center justify-center gap-1.5 rounded-b-lg py-2 transition-colors ${
+                        isClient ? "hover:bg-gray-300/60" : "hover:bg-[#fff]/10"
+                      }`}
+                    >
+                      <Copy className="h-4 w-4" />
+                      {pixAction.kind === "code" ? "Copiar código Pix" : "Copiar chave Pix"}
+                    </button>
+                  ) : (
+                    <a
+                      href={locationLink ?? undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex w-full items-center justify-center gap-1.5 rounded-b-lg py-2 transition-colors ${
+                        isClient ? "hover:bg-gray-300/60" : "hover:bg-[#fff]/10"
+                      }`}
+                    >
+                      <MapPin className="h-4 w-4" />
+                      Abrir no Google Maps
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
 
             {hasReactions && (
@@ -910,6 +971,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     align={isClient ? "start" : "end"}
                     sideOffset={4}
                     collisionPadding={8}
+                    // Responder, Editar e Apagar levam o foco para outro lugar
+                    // (campo de texto ou janela): o menu não devolve o foco à setinha
+                    onCloseAutoFocus={(event) => {
+                      if (skipMenuFocusReturn.current) event.preventDefault();
+                      skipMenuFocusReturn.current = false;
+                    }}
                     className="z-[60] min-w-[200px] rounded-lg border border-gray-200 bg-white py-1.5 shadow-lg"
                   >
                     {canReactHere && (
@@ -942,7 +1009,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     )}
                     {canReplyHere && (
                       <DropdownMenu.Item
-                        onSelect={() => onReply?.(message)}
+                        onSelect={() => {
+                          skipMenuFocusReturn.current = true;
+                          onReply?.(message);
+                        }}
                         className={MENU_ITEM_CLASS}
                       >
                         <Reply className="h-4 w-4 text-gray-500" />
@@ -982,7 +1052,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                           <DropdownMenu.Separator className="my-1 h-px bg-gray-200" />
                         )}
                         <DropdownMenu.Item
-                          onSelect={() => setIsDeleteDialogOpen(true)}
+                          onSelect={() => {
+                            skipMenuFocusReturn.current = true;
+                            setIsDeleteDialogOpen(true);
+                          }}
                           className={MENU_ITEM_CLASS}
                         >
                           <Trash2 className="h-4 w-4 text-gray-500" />
@@ -1022,7 +1095,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         >
           <Dialog.Portal>
             <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/40" />
-            <Dialog.Content className="fixed left-1/2 top-1/2 z-[80] w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-xl sm:p-6">
+            <Dialog.Content
+              // Foco no texto com o cursor no fim, pronto para continuar escrevendo
+              onOpenAutoFocus={(event) => {
+                event.preventDefault();
+                const field = editFieldRef.current;
+                if (!field) return;
+                field.focus();
+                field.setSelectionRange(field.value.length, field.value.length);
+              }}
+              className="fixed left-1/2 top-1/2 z-[80] w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-xl sm:p-6"
+            >
               <div className="flex items-start justify-between gap-3">
                 <Dialog.Title className="text-base font-semibold text-gray-900">
                   Editar mensagem
@@ -1048,7 +1131,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 }}
                 maxLength={MAX_EDIT_TEXT_LENGTH}
                 rows={4}
-                autoFocus
+                ref={editFieldRef}
                 aria-label="Texto da mensagem"
                 className="mt-4 w-full resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
               />

@@ -1648,9 +1648,25 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     () => ({ provider: conversation?.provider ?? null, currentUserId: authUser?.id ?? null }),
     [conversation?.provider, authUser?.id],
   );
+  // Relógio do prazo de edição: enquanto alguma mensagem ainda pode ser
+  // editada, a tela confere de novo a cada 30 s e o "Editar" some do menu
+  // quando os 15 minutos passam (antes ficava até a tela atualizar)
+  const [editClock, setEditClock] = useState(() => Date.now());
+  const hasEditableMessage = useMemo(
+    () =>
+      canReply &&
+      messages.some((message) => canEditMessage(message, { ...editRules, now: editClock })),
+    [canReply, messages, editRules, editClock],
+  );
+  useEffect(() => {
+    if (!hasEditableMessage) return;
+    setEditClock(Date.now());
+    const timer = window.setInterval(() => setEditClock(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [hasEditableMessage]);
   const isMessageEditable = useCallback(
-    (message: Message) => canReply && canEditMessage(message, { ...editRules, now: Date.now() }),
-    [canReply, editRules],
+    (message: Message) => canReply && canEditMessage(message, { ...editRules, now: editClock }),
+    [canReply, editRules, editClock],
   );
 
   const handleEditMessage = useCallback(
