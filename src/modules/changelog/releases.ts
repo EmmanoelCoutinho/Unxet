@@ -153,6 +153,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "new",
     text: "Conversa: Pix recebido pelo WhatsApp ganhou o botão \"Copiar código Pix\" (ou \"Copiar chave Pix\"), que copia o código certinho para colar no banco. Localizações enviadas ou recebidas têm o botão \"Abrir no Google Maps\": no celular abre o app do Maps e no computador abre o mapa numa nova aba.",
   },
+  {
+    kind: "new",
+    text: "Depois de ler o QR Code de novo, uma faixa abaixo da barra superior mostra a sincronização do WhatsApp: primeiro a busca pelas mensagens que chegaram enquanto o número esteve desconectado e depois quantas já entraram nas conversas, até concluir.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
