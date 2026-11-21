@@ -13,6 +13,7 @@ import {
   FileTextIcon,
   FilmIcon,
   Pencil,
+  Star,
   Trash2,
 } from "lucide-react";
 import type { Message as UiMessage } from "../../types";
@@ -25,6 +26,7 @@ import { QuotedMessage } from "./QuotedMessage";
 import { toast } from "react-toastify";
 import { useMediaUrl } from "../../lib/mediaUrls";
 import { MAX_EDIT_TEXT_LENGTH } from "../../lib/messageEdit";
+import { addStickerFavorite, stickerPathFromUrl } from "../../lib/stickerFavorites";
 import { CloseButton } from "../ui/CloseButton";
 
 interface MessageBubbleProps {
@@ -560,8 +562,34 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const canReplyHere = !!onReply && isPersisted;
   const canEdit = !isClient && !!onEditMessage && isPersisted && localStatus !== "sending";
   const canReactHere = !!onReact && isPersisted;
+  // Figurinha guardada na pasta da empresa pode ir para as favoritas
+  const favoriteStickerPath =
+    isSticker && !message.deletedAt ? stickerPathFromUrl(rawMediaUrl) : null;
+  const canFavoriteSticker = !!favoriteStickerPath;
   const hasMenu =
-    canCopy || canDownload || canReplyHere || canReactHere || canEdit || canDelete;
+    canCopy ||
+    canDownload ||
+    canReplyHere ||
+    canReactHere ||
+    canEdit ||
+    canDelete ||
+    canFavoriteSticker;
+
+  const handleFavoriteSticker = async () => {
+    if (!favoriteStickerPath) return;
+    try {
+      const result = await addStickerFavorite(favoriteStickerPath);
+      toast.success(
+        result === "added"
+          ? "Figurinha adicionada às favoritas."
+          : "Essa figurinha já está nas favoritas.",
+        { autoClose: 1500 },
+      );
+    } catch (err) {
+      console.error("Erro ao favoritar figurinha:", err);
+      toast.error("Não foi possível adicionar a figurinha às favoritas.");
+    }
+  };
 
   const handleCopy = async () => {
     let copied = false;
@@ -958,6 +986,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         Copiar
                       </DropdownMenu.Item>
                     )}
+                    {canFavoriteSticker && (
+                      <DropdownMenu.Item
+                        onSelect={() => void handleFavoriteSticker()}
+                        className={MENU_ITEM_CLASS}
+                      >
+                        <Star className="h-4 w-4 text-gray-500" />
+                        Adicionar às favoritas
+                      </DropdownMenu.Item>
+                    )}
                     {canDownload && (
                       <DropdownMenu.Item
                         onSelect={() => void handleDownload()}
@@ -978,7 +1015,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     )}
                     {canDelete && (
                       <>
-                        {(canReplyHere || canCopy || canDownload || canEdit) && (
+                        {(canReplyHere || canCopy || canDownload || canEdit || canFavoriteSticker) && (
                           <DropdownMenu.Separator className="my-1 h-px bg-gray-200" />
                         )}
                         <DropdownMenu.Item
