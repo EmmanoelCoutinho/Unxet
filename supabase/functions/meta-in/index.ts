@@ -4,6 +4,7 @@ import { matchSurveyAnswer } from "../_shared/satisfactionSurvey.ts";
 import { queueInboundPush } from "../_shared/push.ts";
 import { findOutboundByMetaId } from "../_shared/metaMessageId.ts";
 import { blockIdentifiers, registerBlockedInbound } from "../_shared/contactBlock.ts";
+import { distributeConversation } from "../_shared/distribution.ts";
 const VERIFY_TOKEN = Deno.env.get("META_VERIFY_TOKEN") ?? "";
 const META_APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
 const ALLOW_UNSIGNED_TESTS = (Deno.env.get("META_ALLOW_UNSIGNED_TESTS") ?? "false") === "true";
@@ -1337,10 +1338,14 @@ serve(async (req)=>{
               message: err?.message ?? String(err)
             }, null, 2));
           });
+          // Setor com rodízio: depois que o bot decide (e se não for ele a
+          // atender), a conversa vai para o atendente da vez. O push espera
+          // para avisar a pessoa certa.
+          const routed = botCall.then(()=>distributeConversation(supabase, conversation.id));
           queueInboundPush(supabase, {
             conversationId: conversation.id,
             messageType: dbType,
-            after: botCall
+            after: routed
           });
         }
         if (shouldReopen) {

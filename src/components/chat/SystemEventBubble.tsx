@@ -92,6 +92,15 @@ const getEventText = (event: ConversationEvent) => {
     case "returned_to_pending_automatically":
       return "Sistema retornou a conversa automaticamente para pendente";
 
+    // Rodízio do setor (departments.distribution_mode = round_robin)
+    case "auto_assigned": {
+      const toUser = meta.assigned_user_name || "um atendente";
+      return `Sistema distribuiu a conversa para ${toUser} (rodízio do setor)`;
+    }
+
+    case "auto_assign_skipped":
+      return "Ninguém do setor estava online: a conversa ficou em Pendentes";
+
     case "sla_first_response_breached":
       return "Sistema registrou violação do SLA da primeira resposta";
 

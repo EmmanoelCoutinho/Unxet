@@ -3,7 +3,11 @@ import { supabase } from "../../lib/supabaseClient";
 import { Button } from "../ui/Button";
 import { CloseButton } from "../ui/CloseButton";
 
-type DepartmentRow = { id: string; name: string };
+type DepartmentRow = {
+  id: string;
+  name: string;
+  distribution_mode: "queue" | "round_robin" | null;
+};
 type MemberRow = { userId: string; name: string };
 
 export type TransferTarget = { departmentId: string } | { userId: string };
@@ -56,7 +60,7 @@ export const TransferModal: React.FC<{
       setDepartmentsLoading(true);
       const { data, error } = await supabase
         .from("departments")
-        .select("id,name")
+        .select("id,name,distribution_mode")
         .eq("clinic_id", clinicId)
         .eq("is_active", true)
         .order("name");
@@ -116,6 +120,13 @@ export const TransferModal: React.FC<{
   const canConfirm =
     mode === "user" ? !!userId : !!deptId && deptId !== currentDepartmentId;
 
+  // Setor com rodízio: a conversa vai direto para o atendente da vez
+  const selectedDepartment = departments.find((d) => d.id === deptId);
+  const departmentHint =
+    selectedDepartment?.distribution_mode === "round_robin"
+      ? "Esse setor divide as conversas entre os atendentes: ela vai direto para o próximo da vez que estiver online. Se ninguém estiver online, fica pendente até alguém aceitar."
+      : "A conversa vai para a fila do setor escolhido e ficará pendente até alguém aceitar.";
+
   if (!open) return null;
 
   const tabClass = (active: boolean) =>
@@ -136,7 +147,7 @@ export const TransferModal: React.FC<{
             <p className="mt-1 text-sm text-gray-500">
               {mode === "user"
                 ? "A pessoa escolhida vira a responsável e já pode responder o cliente."
-                : "A conversa vai para a fila do setor escolhido e ficará pendente até alguém aceitar."}
+                : departmentHint}
             </p>
           </div>
           <CloseButton onClick={onClose} />

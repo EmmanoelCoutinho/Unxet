@@ -76,6 +76,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
+    text: "Departamentos podem dividir as conversas entre os atendentes: em \"Editar departamento\", escolha \"Dividir entre os atendentes\" e cada conversa nova vai direto para um atendente online do setor, um de cada vez, já aberta. Administradores ficam fora do rodízio, e se ninguém estiver online a conversa fica em Pendentes. As automações do chat continuam valendo. O modo padrão continua sendo a fila de espera.",
+    adminOnly: true,
+  },
+  {
+    kind: "new",
     text: "Quando alguém transfere uma conversa para você, toca um som e aparece um aviso no canto da tela com quem transferiu e o cliente, e o botão \"Abrir conversa\" leva direto até ela. O aviso também continua no sino.",
   },
   {
