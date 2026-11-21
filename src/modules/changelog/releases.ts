@@ -118,7 +118,7 @@ export const NEXT_RELEASE: ReleaseChange[] = [
   },
   {
     kind: "new",
-    text: "WhatsApp por QR Code: agora dá para enviar figurinhas. No clipe, clique em \"Figurinha\" para escolher uma das que a empresa já recebeu ou enviou, ou crie uma a partir de uma imagem. Na conversa, as figurinhas aparecem soltas, sem balão, como no WhatsApp.",
+    text: "WhatsApp por QR Code: agora dá para enviar figurinhas. Como no WhatsApp, cada atendente tem as suas favoritas: na setinha de uma figurinha da conversa, escolha \"Adicionar às favoritas\". No clipe, clique em \"Figurinha\" para enviar uma das favoritas, tirar alguma da lista no X ou criar uma a partir de uma imagem (ela já entra nas favoritas). Na conversa, as figurinhas aparecem soltas, sem balão, como no WhatsApp.",
   },
   {
     kind: "improved",
