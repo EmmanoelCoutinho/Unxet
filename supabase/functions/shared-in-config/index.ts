@@ -358,6 +358,13 @@ serve(async (req)=>{
         status: 500
       });
     }
+    // Progresso da faixa "Sincronizando mensagens" (falhar aqui não atrapalha a mensagem)
+    if (isRecovered) {
+      const { error: bumpErr } = await supabase.rpc("bump_inbound_recovery", {
+        p_connection_id: channelConnectionId
+      });
+      if (bumpErr) console.warn("[INBOUND_RECOVERY_BUMP_ERROR]", bumpErr);
+    }
     // ── 9. Atualização da conversa ────────────────────────────────────────
     // Recuperada ou atrasada só reabre se for a mensagem mais recente do
     // cliente. Se ele já escreveu depois dela, ela chegou "no meio" de uma
