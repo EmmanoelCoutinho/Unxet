@@ -25,6 +25,7 @@ import { loadConnectionDepartment, pickDefaultDepartmentId } from "../_shared/co
 import { groupPicKey, linkContactToGroup } from "../_shared/whatsappGroups.ts";
 import { safeStorageContentType } from "../_shared/storageContentType.ts";
 import { isLateInbound, unansweredSince } from "../_shared/lateInbound.ts";
+import { distributeConversation } from "../_shared/distribution.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -468,6 +469,9 @@ serve(async (req)=>{
         updated_at: new Date().toISOString()
       }).eq("id", conversation.id).eq("in_bot_flow", true);
     }
+    // Setor com rodízio: com o bot fora de cena, a conversa vai para o
+    // atendente da vez (antes do push, para avisar a pessoa certa)
+    await distributeConversation(supabase, conversation.id);
     // Enquanto o bot conduz a conversa ela não está na fila: sem notificação
     const { data: botState } = await supabase.from("conversations").select("in_bot_flow").eq("id", conversation.id).maybeSingle();
     if (botState?.in_bot_flow !== true) {

@@ -6,6 +6,7 @@ import { classifyUnmatchedInput } from "../_shared/botInput.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@1.3.0";
 import { AI_TOOL_END, AI_TOOL_TRANSFER, aiUsageNotification, buildChatTurns, buildSystemPrompt } from "../_shared/aiAssistant.ts";
 import { sendPushToUsers } from "../_shared/push.ts";
+import { distributeConversation } from "../_shared/distribution.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -38,7 +39,7 @@ const UNRECOGNIZED_HANDOFF_TEXT = "Certo! Vou encaminhar sua mensagem para um de
 function logStep(step, meta) {
   console.log(`[bot-engine] ${step}`, meta ? JSON.stringify(meta, null, 2) : "");
 }
-serve(async (req)=>{
+async function handleRequest(req) {
   try {
     if (req.method !== "POST") {
       return json(405, {
@@ -512,6 +513,20 @@ serve(async (req)=>{
       error: "Internal error"
     });
   }
+}
+// Setor com rodízio: depois que o bot termina (passou para uma pessoa,
+// transferiu de setor ou encerrou a sessão), a conversa vai para o atendente
+// da vez. Dentro do fluxo não adianta chamar: a sessão do bot ainda está
+// ativa até o fim do processamento, e distribute_conversation espera ela
+// acabar. Chamada sem efeito quando a conversa não espera o rodízio.
+serve(async (req)=>{
+  const payload = await req.clone().json().catch(()=>null);
+  const response = await handleRequest(req);
+  if (response.status === 200 && payload?.conversationId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    await distributeConversation(supabase, String(payload.conversationId));
+  }
+  return response;
 });
 function json(status, body) {
   return new Response(JSON.stringify(body), {
@@ -1896,6 +1911,7 @@ async function handoffConversation(supabase, conversationId, departmentId) {
   const { error } = await supabase.from("conversations").update(payload).eq("id", conversationId);
   if (error) {
     console.error("handoffConversation error:", error);
+    return;
   }
 }
 async function insertConversationEvent(supabase, conversationId, eventType, metadata) {
