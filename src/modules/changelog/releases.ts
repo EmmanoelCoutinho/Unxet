@@ -122,6 +122,11 @@ export const NEXT_RELEASE: ReleaseChange[] = [
   },
   {
     kind: "improved",
+    text: "Departamentos: ao escolher \"Dividir entre os atendentes\", a tela mostra quem participa do rodízio e avisa quando o setor só tem administradores (nesse caso todas as conversas ficariam em Pendentes).",
+    adminOnly: true,
+  },
+  {
+    kind: "improved",
     text: "Conversa: a tecla Esc cancela a resposta citada, e \"Editar mensagem\" abre com o cursor no fim do texto. A opção \"Editar\" some do menu sozinha quando passam os 15 minutos.",
   },
 ];
