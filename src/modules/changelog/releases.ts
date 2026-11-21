@@ -129,6 +129,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "improved",
     text: "Conversa: a tecla Esc cancela a resposta citada, e \"Editar mensagem\" abre com o cursor no fim do texto. A opção \"Editar\" some do menu sozinha quando passam os 15 minutos.",
   },
+  {
+    kind: "new",
+    text: "Conversa: Pix recebido pelo WhatsApp ganhou o botão \"Copiar código Pix\" (ou \"Copiar chave Pix\"), que copia o código certinho para colar no banco. Localizações enviadas ou recebidas têm o botão \"Abrir no Google Maps\": no celular abre o app do Maps e no computador abre o mapa numa nova aba.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
