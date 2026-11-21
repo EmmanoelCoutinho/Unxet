@@ -36,3 +36,17 @@ export function buildSharedContact(
 export function sharedContactText(contact: SharedContact): string {
   return `👤 Contato: ${contact.name} - +${contact.phone}`;
 }
+
+/**
+ * Contato de uma mensagem enviada pelo Unxet (para o "Reenviar"): ela fica
+ * gravada como texto, no formato de sharedContactText.
+ */
+export function sharedContactFromText(
+  text: string | null | undefined,
+): SharedContact | null {
+  const match = String(text ?? "")
+    .trim()
+    .match(/^👤 Contato: (.+) - \+(\d{10,15})$/u);
+  if (!match) return null;
+  return buildSharedContact(match[1], `+${match[2]}`);
+}

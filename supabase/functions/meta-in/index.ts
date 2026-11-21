@@ -1345,6 +1345,8 @@ serve(async (req)=>{
           queueInboundPush(supabase, {
             conversationId: conversation.id,
             messageType: dbType,
+            mediaMimeType: media.media_mime_type,
+            filename: media.filename,
             after: routed
           });
         }

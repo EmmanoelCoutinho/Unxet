@@ -485,7 +485,9 @@ serve(async (req)=>{
     if (botState?.in_bot_flow !== true) {
       queueInboundPush(supabase, {
         conversationId: conversation.id,
-        messageType
+        messageType,
+        mediaMimeType,
+        filename: documentFilename
       });
     }
     // ── 11. Evento de reabertura ──────────────────────────────────────────

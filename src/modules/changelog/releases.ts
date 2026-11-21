@@ -125,6 +125,22 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     text: "Departamentos: ao escolher \"Dividir entre os atendentes\", a tela mostra quem participa do rodízio e avisa quando o setor só tem administradores (nesse caso todas as conversas ficariam em Pendentes).",
     adminOnly: true,
   },
+  {
+    kind: "improved",
+    text: "Links nas mensagens agora são clicáveis e abrem em outra aba: o mapa de uma localização, convites de grupo e qualquer site que o cliente mandar.",
+  },
+  {
+    kind: "improved",
+    text: "Enviar localização: o link do botão \"Compartilhar\" do Google Maps (maps.app.goo.gl) agora funciona, e as coordenadas podem ser escritas com vírgula, como -1,4558, -48,4902.",
+  },
+  {
+    kind: "fixed",
+    text: "Vídeos apareciam como \"Documento\" na lista de conversas, na mensagem respondida e na notificação do celular. Agora aparecem como \"Vídeo\".",
+  },
+  {
+    kind: "fixed",
+    text: "\"Reenviar\" de uma localização ou de um contato que não foi entregue mandava só o texto. Agora reenvia o mapa ou o cartão de contato.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
