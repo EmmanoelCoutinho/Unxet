@@ -55,6 +55,17 @@ const looksLikeIsoVideo = (header: Uint8Array) =>
   header[6] === 0x79 &&
   header[7] === 0x70;
 
+/**
+ * Tem modal ou menu aberto na tela? (alguns ficam sempre no DOM, escondidos
+ * com aria-hidden ou display: none: esses não contam)
+ */
+const hasOpenOverlay = () =>
+  Array.from(document.querySelectorAll('[role="dialog"], [role="menu"]')).some(
+    (element) =>
+      !element.closest('[aria-hidden="true"]') &&
+      element.getClientRects().length > 0,
+  );
+
 type SendableInput =
   | string
   | {
@@ -165,10 +176,27 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const hasAttachments = pendingAttachments.length > 0;
 
-  // Escolheu "Responder": o cursor vai para o campo
+  // Escolheu "Responder": o cursor vai para o campo. Espera o menu da
+  // mensagem fechar, porque ele devolve o foco para a setinha ao fechar.
   useEffect(() => {
-    if (replyingTo) textareaRef.current?.focus();
+    if (!replyingTo) return;
+    textareaRef.current?.focus();
+    const timer = window.setTimeout(() => textareaRef.current?.focus(), 150);
+    return () => window.clearTimeout(timer);
   }, [replyingTo]);
+
+  // Esc cancela a resposta citada, como no WhatsApp, mesmo com o foco fora
+  // do campo. Esc de modal ou menu aberto continua fechando só ele.
+  useEffect(() => {
+    if (!replyingTo || !onCancelReply) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (hasOpenOverlay()) return;
+      onCancelReply();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [replyingTo, onCancelReply]);
 
   // Libera as prévias das imagens ao sair da conversa
   useEffect(

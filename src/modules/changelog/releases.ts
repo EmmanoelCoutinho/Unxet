@@ -120,6 +120,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "new",
     text: "WhatsApp por QR Code: agora dá para enviar figurinhas. No clipe, clique em \"Figurinha\" para escolher uma das que a empresa já recebeu ou enviou, ou crie uma a partir de uma imagem. Na conversa, as figurinhas aparecem soltas, sem balão, como no WhatsApp.",
   },
+  {
+    kind: "improved",
+    text: "Conversa: a tecla Esc cancela a resposta citada, e \"Editar mensagem\" abre com o cursor no fim do texto. A opção \"Editar\" some do menu sozinha quando passam os 15 minutos.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
