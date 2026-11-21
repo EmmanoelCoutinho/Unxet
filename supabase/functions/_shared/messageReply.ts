@@ -4,6 +4,8 @@
 // WhatsApp oficial). A citação guarda um resumo da original (reply_preview)
 // para aparecer mesmo quando a original não está carregada na tela.
 
+import { displayMessageType } from "./videoFile.ts";
+
 type Client = { from: (table: string) => any };
 
 export type ReplyPreview = {
@@ -22,6 +24,8 @@ export type ReplyTarget = {
   meta_message_id: string | null;
   sender_name: string | null;
   deleted_at: string | null;
+  media_mime_type?: string | null;
+  filename?: string | null;
   payload?: unknown;
 };
 
@@ -51,8 +55,11 @@ export function buildReplyPreview(target: {
   type?: string | null;
   text?: string | null;
   sender_name?: string | null;
+  media_mime_type?: string | null;
+  filename?: string | null;
 }): ReplyPreview {
-  const type = String(target.type ?? "text") || "text";
+  // Vídeo fica gravado como documento: a citação mostra "🎥 Vídeo"
+  const type = displayMessageType(target.type, target.media_mime_type, target.filename);
   const raw = String(target.text ?? "").trim();
   const text = (raw || MEDIA_LABELS[type] || "Mensagem").slice(0, PREVIEW_MAX);
   const author = target.direction === "inbound" ? "cliente" : "atendente";
@@ -64,7 +71,7 @@ export function buildReplyPreview(target: {
 }
 
 const TARGET_COLUMNS =
-  "id, conversation_id, direction, type, text, meta_message_id, sender_name, deleted_at, payload";
+  "id, conversation_id, direction, type, text, meta_message_id, sender_name, deleted_at, media_mime_type, filename, payload";
 
 /**
  * Mensagem que o atendente quer responder: precisa ser da mesma conversa,
