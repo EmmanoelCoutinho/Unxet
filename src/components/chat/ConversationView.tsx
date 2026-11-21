@@ -294,6 +294,15 @@ export type ConversationViewProps = {
   windowControls?: WindowControlsProps;
 };
 
+// Última versão de cada conversa aberta, por empresa: ao trocar entre a caixa
+// flutuante e a tela cheia o cabeçalho aparece na hora (o banco atualiza depois)
+const conversationCache = new Map<
+  string,
+  { conversation: Conversation; tags: UiTag[] }
+>();
+const conversationCacheKey = (clinicId: string | null | undefined, id: string) =>
+  `${clinicId ?? ""}:${id}`;
+
 export const ConversationView: React.FC<ConversationViewProps> = ({
   conversationId: id,
   variant = "page",
@@ -343,8 +352,12 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   );
 
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [loadingConversation, setLoadingConversation] = useState(true);
+  const [conversation, setConversation] = useState<Conversation | null>(
+    () => conversationCache.get(conversationCacheKey(clinicId, id))?.conversation ?? null,
+  );
+  const [loadingConversation, setLoadingConversation] = useState(
+    () => !conversationCache.has(conversationCacheKey(clinicId, id)),
+  );
   // O rascunho fica guardado por conversa: segue entre a caixa e a tela cheia
   const [draftMessage, setDraftMessageState] = useState(() => getDraft(id));
   const setDraftMessage = useCallback(
@@ -362,7 +375,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
   const [isManageTagsOpen, setIsManageTagsOpen] = useState(false);
   const [availableTags, setAvailableTags] = useState<UiTag[]>([]);
-  const [selectedTags, setSelectedTags] = useState<UiTag[]>([]);
+  const [selectedTags, setSelectedTags] = useState<UiTag[]>(
+    () => conversationCache.get(conversationCacheKey(clinicId, id))?.tags ?? [],
+  );
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagsSavingId, setTagsSavingId] = useState<string | null>(null);
   const [acceptingConversation, setAcceptingConversation] = useState(false);
@@ -455,10 +470,11 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     justOpenedRef.current = true;
     stickToBottomRef.current = true;
     didInitialConversationLoadRef.current = false;
-    setConversation(null);
-    setSelectedTags([]);
+    const cached = conversationCache.get(conversationCacheKey(clinicId, id));
+    setConversation(cached?.conversation ?? null);
+    setSelectedTags(cached?.tags ?? []);
     setAvailableTags([]);
-    setLoadingConversation(true);
+    setLoadingConversation(!cached);
     setDraftMessageState(getDraft(id));
     setRecordingUiState({
       isRecording: false,
@@ -719,6 +735,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       }
 
       if (!data) {
+        conversationCache.delete(conversationCacheKey(clinicId, requestedId));
         setConversation(null);
         setLoadingConversation(false);
         didInitialConversationLoadRef.current = true;
@@ -845,6 +862,15 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   useEffect(() => {
     loadConversation();
   }, [loadConversation]);
+
+  // Guarda a versão atual (inclui mudanças feitas aqui, como aceitar ou etiquetar)
+  useEffect(() => {
+    if (!id || !conversation || conversation.id !== id) return;
+    conversationCache.set(conversationCacheKey(clinicId, id), {
+      conversation,
+      tags: selectedTags,
+    });
+  }, [clinicId, id, conversation, selectedTags]);
 
   useEffect(() => {
     const cid = (conversation as any)?.clinicId as string | undefined;
