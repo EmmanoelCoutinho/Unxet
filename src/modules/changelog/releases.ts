@@ -122,6 +122,11 @@ export const NEXT_RELEASE: ReleaseChange[] = [
   },
   {
     kind: "improved",
+    text: "Departamentos: ao escolher \"Dividir entre os atendentes\", a tela mostra quem participa do rodízio e avisa quando o setor só tem administradores (nesse caso todas as conversas ficariam em Pendentes).",
+    adminOnly: true,
+  },
+  {
+    kind: "improved",
     text: "Links nas mensagens agora são clicáveis e abrem em outra aba: o mapa de uma localização, convites de grupo e qualquer site que o cliente mandar.",
   },
   {
