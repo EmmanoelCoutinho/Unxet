@@ -22,9 +22,35 @@ type Department = {
   description: string | null;
   is_default: boolean;
   is_active: boolean;
+  distribution_mode: DistributionMode;
   created_at: string;
   updated_at: string;
 };
+
+// Como as conversas que chegam ao setor são entregues à equipe
+type DistributionMode = "queue" | "round_robin";
+
+const DEPARTMENT_COLUMNS =
+  "id, clinic_id, name, slug, description, is_default, is_active, distribution_mode, created_at, updated_at";
+
+const DISTRIBUTION_OPTIONS: {
+  value: DistributionMode;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "queue",
+    label: "Fila de espera",
+    description:
+      "As conversas chegam em Pendentes e qualquer pessoa do setor aceita.",
+  },
+  {
+    value: "round_robin",
+    label: "Dividir entre os atendentes",
+    description:
+      "Cada conversa nova vai direto para um atendente, um de cada vez, e já chega aberta. Só recebe quem está com o Unxet aberto (administradores ficam fora). Se ninguém estiver online, a conversa fica em Pendentes.",
+  },
+];
 
 // Pesquisa de satisfação respondida pelos clientes do setor. A média fica
 // na escala atual da empresa (avaliações antigas podem ter outra escala).
@@ -92,6 +118,7 @@ type DepartmentFormValues = {
   description: string;
   is_active: boolean;
   is_default: boolean;
+  distribution_mode: DistributionMode;
 };
 
 type Toast = {
@@ -150,6 +177,8 @@ const mapRowToDepartment = (row: Department): Department => ({
   description: row.description,
   is_default: row.is_default,
   is_active: row.is_active,
+  distribution_mode:
+    row.distribution_mode === "round_robin" ? "round_robin" : "queue",
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -163,6 +192,7 @@ const buildDepartmentPayload = (
   slug: normalizeSlug(values.name),
   description: values.description.trim() || null,
   is_active: values.is_active,
+  distribution_mode: values.distribution_mode,
 });
 
 const buildDepartmentUpdatePayload = (values: DepartmentFormValues) => ({
@@ -170,6 +200,7 @@ const buildDepartmentUpdatePayload = (values: DepartmentFormValues) => ({
   slug: normalizeSlug(values.name),
   description: values.description.trim() || null,
   is_active: values.is_active,
+  distribution_mode: values.distribution_mode,
 });
 
 const buildToast = (message: string, type: Toast["type"]): Toast => ({
@@ -226,9 +257,65 @@ export const DepartmentsPage: React.FC = () => {
     description: "",
     is_active: true,
     is_default: false,
+    distribution_mode: "queue",
   });
 
   const { toasts, pushToast } = useToasts();
+
+  // Quem entra no rodízio do setor em edição: atendentes do setor que não são
+  // administradores (mesma regra de distribute_conversation). null = carregando
+  const [rotationMembers, setRotationMembers] = useState<string[] | null>(null);
+  const editingDepartmentId = editingDepartment?.id ?? null;
+
+  useEffect(() => {
+    if (!isModalOpen || !clinicId || !editingDepartmentId) {
+      setRotationMembers(null);
+      return;
+    }
+    let active = true;
+    setRotationMembers(null);
+    void (async () => {
+      const [usersResult, membersResult] = await Promise.all([
+        supabase
+          .from("clinic_users")
+          .select("user_id, name, email, role, department_id")
+          .eq("clinic_id", clinicId),
+        supabase
+          .from("department_members")
+          .select("clinic_user_id")
+          .eq("department_id", editingDepartmentId),
+      ]);
+      if (!active) return;
+      if (usersResult.error || membersResult.error) {
+        setRotationMembers([]);
+        return;
+      }
+      const memberIds = new Set(
+        (membersResult.data ?? []).map((row) => row.clinic_user_id as string),
+      );
+      const names = (
+        (usersResult.data ?? []) as Array<{
+          user_id: string | null;
+          name: string | null;
+          email: string | null;
+          role: string | null;
+          department_id: string | null;
+        }>
+      )
+        .filter(
+          (row) =>
+            row.user_id &&
+            row.role !== "admin" &&
+            (row.department_id === editingDepartmentId || memberIds.has(row.user_id)),
+        )
+        .map((row) => row.name || row.email || "Atendente")
+        .sort((a, b) => a.localeCompare(b, "pt-BR"));
+      setRotationMembers(names);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [isModalOpen, clinicId, editingDepartmentId]);
 
   const resetForm = useCallback(() => {
     setFormValues({
@@ -236,6 +323,7 @@ export const DepartmentsPage: React.FC = () => {
       description: "",
       is_active: true,
       is_default: false,
+      distribution_mode: "queue",
     });
     setEditingDepartment(null);
     setFormErrors({});
@@ -274,7 +362,7 @@ export const DepartmentsPage: React.FC = () => {
     const { data, error } = await supabase
       .from("departments")
       .select(
-        "id, clinic_id, name, slug, description, is_default, is_active, created_at, updated_at",
+        DEPARTMENT_COLUMNS,
       )
       .eq("clinic_id", clinicId)
       .order("is_default", { ascending: false })
@@ -306,7 +394,7 @@ export const DepartmentsPage: React.FC = () => {
         // O padrão é definido depois, por setDefaultDepartment (troca atômica)
         .insert({ ...payload, is_default: false })
         .select(
-          "id, clinic_id, name, slug, description, is_default, is_active, created_at, updated_at",
+          DEPARTMENT_COLUMNS,
         )
         .single();
 
@@ -334,7 +422,7 @@ export const DepartmentsPage: React.FC = () => {
         .eq("id", departmentId)
         .eq("clinic_id", clinicId)
         .select(
-          "id, clinic_id, name, slug, description, is_default, is_active, created_at, updated_at",
+          DEPARTMENT_COLUMNS,
         )
         .single();
 
@@ -402,7 +490,7 @@ export const DepartmentsPage: React.FC = () => {
         .eq("id", departmentId)
         .eq("clinic_id", clinicId)
         .select(
-          "id, clinic_id, name, slug, description, is_default, is_active, created_at, updated_at",
+          DEPARTMENT_COLUMNS,
         )
         .single();
 
@@ -456,6 +544,7 @@ export const DepartmentsPage: React.FC = () => {
       description: department.description ?? "",
       is_active: department.is_active,
       is_default: department.is_default,
+      distribution_mode: department.distribution_mode,
     });
     setFormErrors({});
     setIsModalOpen(true);
@@ -738,6 +827,14 @@ export const DepartmentsPage: React.FC = () => {
                             {department.description}
                           </p>
                         )}
+                        {department.distribution_mode === "round_robin" && (
+                          <span
+                            title="Cada conversa nova vai direto para um atendente online do setor, um de cada vez"
+                            className="mt-1 inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700"
+                          >
+                            Dividido entre os atendentes
+                          </span>
+                        )}
                       </td>
                       <td className="block basis-full md:basis-auto md:table-cell md:px-6 md:py-4">
                         {rating ? (
@@ -924,6 +1021,82 @@ export const DepartmentsPage: React.FC = () => {
                   departamento.
                 </p>
               )}
+              <fieldset>
+                <legend className="mb-1 block text-sm font-medium text-slate-800">
+                  Distribuição das conversas
+                </legend>
+                <div className="space-y-2">
+                  {DISTRIBUTION_OPTIONS.map((option) => {
+                    const selected =
+                      formValues.distribution_mode === option.value;
+                    return (
+                      <label
+                        key={option.value}
+                        className={[
+                          "flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm",
+                          selected
+                            ? "border-[#0A84FF] bg-blue-50"
+                            : "border-slate-200 hover:border-slate-300",
+                        ].join(" ")}
+                      >
+                        <input
+                          type="radio"
+                          name="distribution_mode"
+                          value={option.value}
+                          checked={selected}
+                          onChange={() =>
+                            setFormValues((prev) => ({
+                              ...prev,
+                              distribution_mode: option.value,
+                            }))
+                          }
+                          className="mt-0.5 h-4 w-4 border-slate-300 text-[#0A84FF]"
+                        />
+                        <span>
+                          <span className="block font-medium text-slate-800">
+                            {option.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-slate-500">
+                            {option.description}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {formValues.distribution_mode === "round_robin" &&
+                  (!editingDepartment ? (
+                    <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Depois de criar o setor, adicione atendentes a ele em
+                      Atendentes. Administradores não entram no rodízio.
+                    </p>
+                  ) : rotationMembers === null ? (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Carregando quem participa do rodízio...
+                    </p>
+                  ) : rotationMembers.length === 0 ? (
+                    <p
+                      role="alert"
+                      className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+                    >
+                      Nenhum atendente participa do rodízio: este setor só tem
+                      administradores (ou ninguém). Todas as conversas vão
+                      ficar em Pendentes até alguém aceitar. Adicione
+                      atendentes ao setor em Atendentes.
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-600">
+                      <span className="font-medium">Participam do rodízio:</span>{" "}
+                      {rotationMembers.join(", ")}. Só recebe quem estiver com o
+                      Unxet aberto na hora.
+                    </p>
+                  ))}
+                <p className="mt-2 text-xs text-slate-500">
+                  As automações do chat continuam valendo nos dois modos. Se
+                  o atendente não responder, “Voltar para fila de espera”
+                  devolve a conversa para Pendentes.
+                </p>
+              </fieldset>
             </div>
 
             <div className="mt-6 flex items-center justify-end gap-3">
