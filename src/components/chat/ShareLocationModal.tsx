@@ -3,8 +3,10 @@ import { createPortal } from "react-dom";
 import { ExternalLinkIcon, LocateFixedIcon, MapPinIcon } from "lucide-react";
 import { Button } from "../ui/Button";
 import { CloseButton } from "../ui/CloseButton";
+import { supabase } from "../../lib/supabaseClient";
 import {
   buildSharedLocation,
+  isShortMapsLink,
   parseCoordinates,
   sharedLocationMapsUrl,
   type SharedLocation,
@@ -71,12 +73,53 @@ export const ShareLocationModal: React.FC<{
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Link curto (maps.app.goo.gl): não traz as coordenadas, então o servidor
+  // segue o redirecionamento e o campo recebe as coordenadas do destino
+  const [resolvingLink, setResolvingLink] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLinkError(null);
+    if (!open || !isShortMapsLink(place)) {
+      setResolvingLink(false);
+      return;
+    }
+    let cancelled = false;
+    setResolvingLink(true);
+    void (async () => {
+      const { data, error } = await supabase.functions.invoke("resolve-maps-link", {
+        body: { url: place.trim() },
+      });
+      if (cancelled) return;
+      setResolvingLink(false);
+      if (error) {
+        const response = (error as { context?: Response }).context;
+        const payload = await response?.json?.().catch(() => null);
+        if (cancelled) return;
+        setLinkError(payload?.error ?? "Não foi possível abrir o link agora.");
+        return;
+      }
+      const found = typeof data?.url === "string" ? parseCoordinates(data.url) : null;
+      if (found) {
+        setPlace(formatCoords(found.latitude, found.longitude));
+      } else {
+        setLinkError(
+          "O link não trouxe as coordenadas do local. No Google Maps, toque e segure no ponto do mapa e copie as coordenadas que aparecem na busca.",
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, place]);
+
   const coords = useMemo(() => parseCoordinates(place), [place]);
   const location = useMemo(
     () => (coords ? buildSharedLocation({ ...coords, name, address }) : null),
     [coords, name, address],
   );
-  const placeInvalid = place.trim().length > 0 && !coords;
+  const placeInvalid =
+    place.trim().length > 0 && !coords && !resolvingLink && !isShortMapsLink(place);
 
   const useCurrentPosition = () => {
     if (!("geolocation" in navigator)) {
@@ -150,10 +193,17 @@ export const ShareLocationModal: React.FC<{
               className={inputClass}
               autoFocus
             />
-            <p className={`mt-1 text-xs ${placeInvalid ? "text-red-600" : "text-gray-500"}`}>
-              {placeInvalid
-                ? "Não encontramos as coordenadas. No Google Maps, abra o local, toque em Compartilhar e copie o link completo (o link curto maps.app.goo.gl não traz as coordenadas)."
-                : "No Google Maps, abra o local e copie o link da barra de endereço."}
+            <p
+              className={`mt-1 text-xs ${placeInvalid || linkError ? "text-red-600" : "text-gray-500"}`}
+              aria-live="polite"
+            >
+              {resolvingLink
+                ? "Abrindo o link do Google Maps..."
+                : linkError
+                  ? linkError
+                  : placeInvalid
+                    ? "Não encontramos as coordenadas. Cole o link do Google Maps (o do botão Compartilhar também serve) ou as coordenadas, como -1,4558, -48,4902."
+                    : "No Google Maps, abra o local e copie o link (da barra de endereço ou do botão Compartilhar)."}
             </p>
             <button
               type="button"

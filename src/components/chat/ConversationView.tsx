@@ -49,8 +49,16 @@ import { unblockContact } from "../../modules/contacts/api/blocking";
 import { OtherNumbersBanner } from "./OtherNumbersBanner";
 import { GENERIC_SEND_ERROR, sendErrorMessage } from "../../lib/sendError";
 import { useConversationParticipants } from "../../hooks/useConversationParticipants";
-import { sharedContactText, type SharedContact } from "../../lib/sharedContact";
-import { sharedLocationText, type SharedLocation } from "../../lib/sharedLocation";
+import {
+  sharedContactFromText,
+  sharedContactText,
+  type SharedContact,
+} from "../../lib/sharedContact";
+import {
+  sharedLocationFromMessage,
+  sharedLocationText,
+  type SharedLocation,
+} from "../../lib/sharedLocation";
 import { canEditMessage } from "../../lib/messageEdit";
 import {
   conversationConnectionLabel,
@@ -61,6 +69,7 @@ import { useWhatsappConnections } from "../../hooks/useWhatsappConnections";
 import { useFloatingChats } from "../../modules/floatingChats/FloatingChatsContext";
 import { useConversationList } from "../../contexts/ConversationsContext";
 import { WindowControls, type WindowControlsProps } from "./WindowControls";
+import { isVideoFile } from "../../lib/videoFile";
 import { CONVERSATION_GROUP_SELECT, conversationGroupOf, groupConversationFields } from "../../utils/whatsappGroup";
 
 type UiTag = { id: string; name: string; color: string };
@@ -176,7 +185,12 @@ function replyPreviewOf(message: Message): MessageReplyPreview {
   return {
     id: message.id,
     author: message.author,
-    type: message.type,
+    // Vídeo fica gravado como documento: a citação mostra "🎥 Vídeo"
+    type:
+      (message.type === "document" || message.type === "video") &&
+      isVideoFile(message.mediaMimeType, message.filename)
+        ? "video"
+        : message.type,
     text: (message.text ?? "").trim().slice(0, 200),
     // atendente; ou, no grupo, quem escreveu
     senderName: message.senderName,
@@ -235,15 +249,23 @@ function normalizeInput(input: SendableInput) {
 }
 
 /**
- * O que reenviar de uma mensagem que o WhatsApp não entregou: texto ou a
- * mesma mídia (mesmo arquivo do Storage). Null quando não dá para refazer
- * (ex.: contato compartilhado, modelo da Meta, mensagem do bot).
+ * O que reenviar de uma mensagem que o WhatsApp não entregou: texto, a
+ * mesma mídia (mesmo arquivo do Storage), a mesma localização ou o mesmo
+ * contato. Localização e contato ficam gravados como texto: sem esse
+ * cuidado, o "Reenviar" mandava o texto no lugar do mapa ou do cartão.
  */
 export function resendInputFor(msg: Message): SendableInput | null {
   if (msg.deliveryStatus !== "failed" || msg.deletedAt) return null;
   const text = (msg.text ?? "").trim();
   const type = msg.type ?? "text";
-  if (type === "text") return text ? text : null;
+  if (type === "text") {
+    if (!text) return null;
+    const location = sharedLocationFromMessage(text, msg.payload);
+    if (location) return { type: "location", location };
+    const contact = sharedContactFromText(text);
+    if (contact) return { type: "contact", contact };
+    return text;
+  }
   if (type === "sticker" && msg.mediaUrl) {
     return { type: "sticker", mediaUrl: msg.mediaUrl, mediaMimeType: msg.mediaMimeType };
   }
