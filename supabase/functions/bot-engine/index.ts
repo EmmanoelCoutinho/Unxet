@@ -39,7 +39,7 @@ const UNRECOGNIZED_HANDOFF_TEXT = "Certo! Vou encaminhar sua mensagem para um de
 function logStep(step, meta) {
   console.log(`[bot-engine] ${step}`, meta ? JSON.stringify(meta, null, 2) : "");
 }
-serve(async (req)=>{
+async function handleRequest(req) {
   try {
     if (req.method !== "POST") {
       return json(405, {
@@ -513,6 +513,20 @@ serve(async (req)=>{
       error: "Internal error"
     });
   }
+}
+// Setor com rodízio: depois que o bot termina (passou para uma pessoa,
+// transferiu de setor ou encerrou a sessão), a conversa vai para o atendente
+// da vez. Dentro do fluxo não adianta chamar: a sessão do bot ainda está
+// ativa até o fim do processamento, e distribute_conversation espera ela
+// acabar. Chamada sem efeito quando a conversa não espera o rodízio.
+serve(async (req)=>{
+  const payload = await req.clone().json().catch(()=>null);
+  const response = await handleRequest(req);
+  if (response.status === 200 && payload?.conversationId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    await distributeConversation(supabase, String(payload.conversationId));
+  }
+  return response;
 });
 function json(status, body) {
   return new Response(JSON.stringify(body), {
@@ -1899,8 +1913,6 @@ async function handoffConversation(supabase, conversationId, departmentId) {
     console.error("handoffConversation error:", error);
     return;
   }
-  // Setor com rodízio: a conversa vai direto para o atendente da vez
-  await distributeConversation(supabase, conversationId);
 }
 async function insertConversationEvent(supabase, conversationId, eventType, metadata) {
   const { error } = await supabase.from("conversation_events").insert({
