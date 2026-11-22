@@ -9,6 +9,11 @@ type SettingsTabItem = {
 
 const SETTINGS_TABS: SettingsTabItem[] = [
   {
+    label: "Dados da empresa",
+    path: "/inbox/settings/company",
+    isActive: (pathname) => pathname.startsWith("/inbox/settings/company"),
+  },
+  {
     label: "Automações de conversa",
     path: "/inbox/settings/automations/conversations",
     isActive: (pathname) => pathname.startsWith("/inbox/settings/automations"),

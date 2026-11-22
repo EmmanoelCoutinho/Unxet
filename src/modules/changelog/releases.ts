@@ -75,6 +75,11 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "new",
+    text: "Dados da empresa: em Configurações, o administrador cadastra e edita nome, razão social, CNPJ ou CPF, telefone, e-mail, site e endereço da empresa. O nome da empresa agora aparece no topo do app para toda a equipe.",
+    adminOnly: true,
+  },
+  {
     kind: "improved",
     text: "Conversas do WhatsApp por QR Code: quando o cliente manda várias fotos de uma vez, elas aparecem juntas como álbum, igual no WhatsApp. Clique nas fotos para ver todas, passando com as setas.",
   },

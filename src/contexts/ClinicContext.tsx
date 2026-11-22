@@ -23,7 +23,19 @@ type Clinic = {
   id: string;
   name?: string | null;
   slug?: string | null;
-  // adicione campos que você tiver na tabela clinics
+  // Dados da empresa (Configurações > Dados da empresa)
+  legal_name?: string | null;
+  document?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  postal_code?: string | null;
+  street?: string | null;
+  street_number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
 };
 
 type ClinicMembership = {
