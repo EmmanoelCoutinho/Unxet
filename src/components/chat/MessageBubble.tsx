@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
+  AlertCircle,
   Check,
   CheckCheck,
   ChevronDown,
@@ -10,15 +11,27 @@ import {
   Reply,
   ExternalLinkIcon,
   FileTextIcon,
+  FilmIcon,
+  MapPin,
+  Pencil,
+  Star,
   Trash2,
 } from "lucide-react";
 import type { Message as UiMessage } from "../../types";
 import { AudioTranscriptStatus } from "./AudioTranscriptStatus";
 import { AudioPlayer } from "./AudioPlayer";
+import { VideoPlayer } from "./VideoPlayer";
+import { isVideoFile as looksLikeVideo } from "../../lib/videoFile";
 import { WhatsappText } from "./WhatsappText";
 import { QuotedMessage } from "./QuotedMessage";
+import { addStickerFavorite, stickerPathFromUrl } from "../../lib/stickerFavorites";
 import { toast } from "react-toastify";
 import { useMediaUrl } from "../../lib/mediaUrls";
+import { MAX_EDIT_TEXT_LENGTH } from "../../lib/messageEdit";
+import { locationMapsLinkFromText, pixFromText } from "../../lib/messageQuickActions";
+import { CloseButton } from "../ui/CloseButton";
+import { PollCard } from "./PollCard";
+import { pollFromPayload } from "../../lib/whatsappPoll";
 
 interface MessageBubbleProps {
   message: UiMessage;
@@ -32,6 +45,8 @@ interface MessageBubbleProps {
    * Você deve passar essa função a partir do Chat.tsx.
    */
   onRetry?: (message: UiMessage) => void;
+  /** Reenvia como mensagem nova o que o WhatsApp avisou que não entregou */
+  onResendUndelivered?: (message: UiMessage) => void;
   onRetryTranscript?: (message: UiMessage) => Promise<void> | void;
   onDeleteMessage?: (messageId: string) => Promise<void>;
   /**
@@ -39,6 +54,8 @@ interface MessageBubbleProps {
    * "system": a API não permite (Meta); a mensagem some apenas do Unxet.
    */
   deleteMode?: "everyone" | "system";
+  /** Editar o texto (só quando pode: WhatsApp QR Code, quem enviou, até 15 min). true = editou */
+  onEditMessage?: (messageId: string, text: string) => Promise<boolean>;
   /** Responder citando (só WhatsApp e quem pode responder a conversa) */
   onReply?: (message: UiMessage) => void;
   /** Reagir com emoji; null remove a reação da empresa */
@@ -190,9 +207,11 @@ const parseFilenameFromDocumentText = (text?: string): string | undefined => {
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   onRetry,
+  onResendUndelivered,
   onRetryTranscript,
   onDeleteMessage,
   deleteMode = "system",
+  onEditMessage,
   onReply,
   onReact,
   onQuotedClick,
@@ -206,8 +225,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showOriginalText, setShowOriginalText] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editDraft, setEditDraft] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
+  const editFieldRef = useRef<HTMLTextAreaElement | null>(null);
+  // O item escolhido no menu leva o foco para outro lugar (ver onCloseAutoFocus)
+  const skipMenuFocusReturn = useRef(false);
 
   // UI-only metadata (falha/envio)
   const local = (message as unknown as LocalMeta) ?? {};
@@ -226,8 +252,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const mediaUrl = useMediaUrl(rawMediaUrl);
   const mediaLoading = Boolean(rawMediaUrl) && !mediaUrl;
 
-  const mediaType =
-    message.type ??
+  // Vídeo fica gravado como documento (QR Code e Meta): toca na conversa.
+  // Vale o tipo do arquivo ou, sem ele, a extensão do nome.
+  const isVideoFile =
+    (message.type === "document" || message.type === "video") &&
+    looksLikeVideo(message.mediaMimeType, message.filename);
+  const mediaType = isVideoFile
+    ? "video"
+    : message.type ??
     (payload.image
       ? "image"
       : payload.audio
@@ -244,6 +276,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     payload?.image?.caption ?? payload?.document?.caption ?? null;
 
   const displayText = message.text || captionFromPayload || "";
+  // Enquete do WhatsApp: mostra o cartão no lugar do texto
+  const poll = useMemo(
+    () => (message.deletedAt ? null : pollFromPayload(message.payload)),
+    [message.deletedAt, message.payload],
+  );
   const transcriptStatus = message.transcriptStatus;
   const transcriptText = message.transcriptText;
 
@@ -286,6 +323,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const hasMedia = Boolean(rawMediaUrl);
 
   const onlyAudio = mediaType === "audio";
+  // Figurinha aparece solta, sem balão (como no WhatsApp)
+  const isSticker = mediaType === "sticker";
   const onlyDocument =
     mediaType === "document" && (!displayText || !displayText.trim());
 
@@ -293,7 +332,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const bubblePadding = hasMedia ? "p-2" : "px-4 py-3";
 
   const bubbleClass =
-    onlyAudio || onlyDocument
+    onlyAudio || onlyDocument || isSticker
       ? bubbleBase
       : `${bubbleBase} ${
           isClient
@@ -305,6 +344,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const showStatusRow = !isClient && localStatus === "failed";
   const canRetryFailedMessage =
     localStatus === "failed" && typeof onRetry === "function";
+
+  // Atalhos: copiar o Pix e abrir a localização no Maps
+  const quickText = message.deletedAt || rawMediaUrl || poll ? "" : displayText;
+  const pixAction = useMemo(() => pixFromText(quickText), [quickText]);
+  const locationLink = useMemo(
+    () => locationMapsLinkFromText(quickText),
+    [quickText],
+  );
 
   const maxPreviewLength = 200;
   const shouldTruncate = displayText.length > maxPreviewLength;
@@ -352,8 +399,84 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     );
   }, [showStatusRow, localStatus, localError, canRetryFailedMessage]);
 
+  // O WhatsApp avisou que não entregou (mensagem já gravada, sem erro local)
+  const isUndelivered =
+    !isClient &&
+    !message.deletedAt &&
+    localStatus !== "failed" &&
+    localStatus !== "sending" &&
+    message.deliveryStatus === "failed";
+
+  // Editada no WhatsApp: "Editada" ao lado da hora mostra o texto de antes
+  const isEdited = !!message.editedAt && !message.deletedAt;
+  const canShowOriginal = isEdited && !!message.originalText?.trim();
+  const editedLabel = isEdited ? (
+    canShowOriginal ? (
+      <button
+        type="button"
+        onClick={() => setShowOriginalText((v) => !v)}
+        className="italic hover:underline"
+        title={showOriginalText ? "Esconder o texto de antes" : "Ver o texto de antes da edição"}
+        aria-expanded={showOriginalText}
+      >
+        Editada
+      </button>
+    ) : (
+      <span className="italic" title="Mensagem editada no WhatsApp">
+        Editada
+      </span>
+    )
+  ) : null;
+  const editNoticeNode = isEdited ? (
+    <>
+      {canShowOriginal && showOriginalText && (
+        <div className="mt-1 border-l-2 border-gray-300 pl-2 text-xs text-gray-500">
+          <span className="font-medium">Antes da edição: </span>
+          <span className="whitespace-pre-wrap break-words">{message.originalText}</span>
+        </div>
+      )}
+      {message.editUnreadable && (
+        <div className="mt-1 flex items-start gap-1 text-xs text-amber-600">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>Mensagem editada no WhatsApp. O texto novo não chegou ao Unxet: veja no celular.</span>
+        </div>
+      )}
+    </>
+  ) : null;
+
+  const undeliveredNode = isUndelivered ? (
+    <div className="flex items-center justify-end gap-2 mt-1">
+      <span
+        className="flex items-center gap-1 text-xs text-red-600"
+        title={
+          message.failureReason
+            ? `O WhatsApp não entregou esta mensagem: ${message.failureReason}`
+            : "O WhatsApp não entregou esta mensagem ao cliente. Confira a conexão do número em Integrações e reenvie."
+        }
+      >
+        <AlertCircle className="h-3.5 w-3.5" aria-hidden />
+        Não entregue
+      </span>
+      {onResendUndelivered && (
+        <button
+          type="button"
+          onClick={() => onResendUndelivered(message)}
+          className="text-xs font-medium text-blue-600 hover:text-blue-700"
+        >
+          Reenviar
+        </button>
+      )}
+    </div>
+  ) : null;
+
   // Ticks como no WhatsApp: ✓ enviada, ✓✓ entregue, ✓✓ verde lida pelo cliente.
   const deliveryIcon = (() => {
+    if (isUndelivered) {
+      return (
+        <AlertCircle className="h-4 w-4 text-red-500" aria-label="Não entregue" />
+      );
+    }
+
     if (
       isClient ||
       message.deletedAt ||
@@ -383,6 +506,29 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const deleteLabel =
     deleteMode === "everyone" ? "Apagar para todos" : "Remover do Unxet";
+
+  const openEditDialog = () => {
+    skipMenuFocusReturn.current = true;
+    setEditDraft(message.text ?? "");
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!onEditMessage) return;
+    const text = editDraft.trim();
+    if (!text) return;
+    if (text === (message.text ?? "").trim()) {
+      setIsEditDialogOpen(false);
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      const ok = await onEditMessage(message.id, text);
+      if (ok) setIsEditDialogOpen(false);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const handleConfirmDelete = async () => {
     if (!onDeleteMessage) return;
@@ -435,19 +581,58 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const canCopy = !message.deletedAt && !!displayText.trim();
   const canDownload = !message.deletedAt && !!mediaUrl;
   const canReplyHere = !!onReply && isPersisted;
+  const canEdit = !isClient && !!onEditMessage && isPersisted && localStatus !== "sending";
   const canReactHere = !!onReact && isPersisted;
+  // Figurinha guardada na pasta da empresa pode ir para as favoritas
+  const favoriteStickerPath =
+    isSticker && !message.deletedAt ? stickerPathFromUrl(rawMediaUrl) : null;
+  const canFavoriteSticker = !!favoriteStickerPath;
   const hasMenu =
-    canCopy || canDownload || canReplyHere || canReactHere || canDelete;
+    canCopy ||
+    canDownload ||
+    canReplyHere ||
+    canReactHere ||
+    canEdit ||
+    canDelete ||
+    canFavoriteSticker;
 
-  const handleCopy = async () => {
+  const handleFavoriteSticker = async () => {
+    if (!favoriteStickerPath) return;
+    try {
+      const result = await addStickerFavorite(favoriteStickerPath);
+      toast.success(
+        result === "added"
+          ? "Figurinha adicionada às favoritas."
+          : "Essa figurinha já está nas favoritas.",
+        { autoClose: 1500 },
+      );
+    } catch (err) {
+      console.error("Erro ao favoritar figurinha:", err);
+      toast.error("Não foi possível adicionar a figurinha às favoritas.");
+    }
+  };
+
+  const handleCopy = () =>
+    copyText(displayText, "Mensagem copiada.", "Não foi possível copiar a mensagem.");
+
+  const handleCopyPix = () => {
+    if (!pixAction) return;
+    void copyText(
+      pixAction.value,
+      pixAction.kind === "code" ? "Código Pix copiado." : "Chave Pix copiada.",
+      "Não foi possível copiar o Pix.",
+    );
+  };
+
+  const copyText = async (value: string, success: string, failure: string) => {
     let copied = false;
     try {
-      await navigator.clipboard.writeText(displayText);
+      await navigator.clipboard.writeText(value);
       copied = true;
     } catch {
       // Sem permissão para a área de transferência: cópia pelo jeito antigo
       const area = document.createElement("textarea");
-      area.value = displayText;
+      area.value = value;
       area.setAttribute("readonly", "");
       area.style.position = "fixed";
       area.style.opacity = "0";
@@ -460,8 +645,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       }
       area.remove();
     }
-    if (copied) toast.success("Mensagem copiada.", { autoClose: 1500 });
-    else toast.error("Não foi possível copiar a mensagem.");
+    if (copied) toast.success(success, { autoClose: 1500 });
+    else toast.error(failure);
   };
 
   // O link assinado é de outro domínio: o atributo download não vale, então
@@ -567,12 +752,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   className={onlyAudio || onlyDocument ? "max-w-72" : ""}
                 />
               )}
-              {mediaLoading && (
-                <div
-                  className="h-12 w-48 max-w-full animate-pulse rounded-lg bg-black/10"
-                  aria-label="Carregando mídia"
-                />
-              )}
+              {mediaLoading &&
+                (mediaType === "video" ? (
+                  <div
+                    className={`flex aspect-video w-72 max-w-full animate-pulse flex-col items-center justify-center gap-2 rounded-xl ${
+                      isClient ? "bg-gray-200 text-gray-500" : "bg-[#fff]/15 text-white/90"
+                    }`}
+                    aria-label="Carregando vídeo"
+                  >
+                    <FilmIcon className="h-8 w-8" aria-hidden />
+                    <span className="text-xs font-medium">Carregando vídeo...</span>
+                  </div>
+                ) : isSticker ? (
+                  <div
+                    className="h-32 w-32 animate-pulse rounded-2xl bg-gray-200"
+                    aria-label="Carregando figurinha"
+                  />
+                ) : (
+                  <div
+                    className="h-12 w-48 max-w-full animate-pulse rounded-lg bg-black/10"
+                    aria-label="Carregando mídia"
+                  />
+                ))}
               {mediaUrl && (
                 <>
                   {mediaType === "image" && (
@@ -600,10 +801,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   )}
 
                   {mediaType === "video" && (
-                    <video
-                      controls
-                      className="h-48 w-48 rounded-lg object-cover"
+                    <VideoPlayer
                       src={mediaUrl}
+                      outgoing={!isClient}
+                      filename={message.filename}
                     />
                   )}
 
@@ -693,13 +894,22 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     <img
                       src={mediaUrl}
                       alt="Figurinha"
-                      className="h-24 w-24 rounded-lg object-cover"
+                      className="h-32 w-32 cursor-zoom-in object-contain drop-shadow-sm"
+                      onClick={() => setPreviewSrc(mediaUrl)}
                     />
                   )}
                 </>
               )}
 
-              {displayText && mediaType !== "audio" && !onlyAudio ? (
+              {poll ? (
+                <PollCard
+                  poll={poll}
+                  votes={message.pollVotes}
+                  outgoing={!isClient}
+                  contactName={contactName}
+                  isGroup={isGroup}
+                />
+              ) : displayText && mediaType !== "audio" && !onlyAudio ? (
                 <div className="text-sm whitespace-pre-wrap break-words">
                   <span>
                     <WhatsappText text={visibleText} />
@@ -720,6 +930,41 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   )}
                 </div>
               ) : null}
+
+              {(pixAction || locationLink) && (
+                <div
+                  className={`-mx-4 -mb-3 mt-2 border-t text-sm font-medium ${
+                    isClient
+                      ? "border-gray-300 text-[#0A84FF]"
+                      : "border-white/25 text-white"
+                  }`}
+                >
+                  {pixAction ? (
+                    <button
+                      type="button"
+                      onClick={handleCopyPix}
+                      className={`flex w-full items-center justify-center gap-1.5 rounded-b-lg py-2 transition-colors ${
+                        isClient ? "hover:bg-gray-300/60" : "hover:bg-[#fff]/10"
+                      }`}
+                    >
+                      <Copy className="h-4 w-4" />
+                      {pixAction.kind === "code" ? "Copiar código Pix" : "Copiar chave Pix"}
+                    </button>
+                  ) : (
+                    <a
+                      href={locationLink ?? undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex w-full items-center justify-center gap-1.5 rounded-b-lg py-2 transition-colors ${
+                        isClient ? "hover:bg-gray-300/60" : "hover:bg-[#fff]/10"
+                      }`}
+                    >
+                      <MapPin className="h-4 w-4" />
+                      Abrir no Google Maps
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
 
             {hasReactions && (
@@ -754,7 +999,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     title="Opções da mensagem"
                     aria-label="Opções da mensagem"
                     className={`absolute flex items-center opacity-0 transition-opacity duration-150 focus-visible:opacity-100 [@media(hover:hover)]:group-hover/bubble:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:pointer-events-none ${
-                      onlyAudio || onlyDocument || mediaType === "image"
+                      onlyAudio || onlyDocument || isSticker || mediaType === "image" || mediaType === "video"
                         ? "right-1 top-1 h-6 w-6 justify-center rounded-full bg-white/90 text-gray-600 shadow-sm"
                         : isClient
                           ? "right-0 top-0 h-7 w-10 justify-end rounded-tr-lg bg-gradient-to-l from-gray-200 from-60% to-transparent pr-1.5 text-gray-600"
@@ -769,6 +1014,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     align={isClient ? "start" : "end"}
                     sideOffset={4}
                     collisionPadding={8}
+                    // Responder, Editar e Apagar levam o foco para outro lugar
+                    // (campo de texto ou janela): o menu não devolve o foco à setinha
+                    onCloseAutoFocus={(event) => {
+                      if (skipMenuFocusReturn.current) event.preventDefault();
+                      skipMenuFocusReturn.current = false;
+                    }}
                     className="z-[60] min-w-[200px] rounded-lg border border-gray-200 bg-white py-1.5 shadow-lg"
                   >
                     {canReactHere && (
@@ -801,7 +1052,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     )}
                     {canReplyHere && (
                       <DropdownMenu.Item
-                        onSelect={() => onReply?.(message)}
+                        onSelect={() => {
+                          skipMenuFocusReturn.current = true;
+                          onReply?.(message);
+                        }}
                         className={MENU_ITEM_CLASS}
                       >
                         <Reply className="h-4 w-4 text-gray-500" />
@@ -817,6 +1071,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         Copiar
                       </DropdownMenu.Item>
                     )}
+                    {canFavoriteSticker && (
+                      <DropdownMenu.Item
+                        onSelect={() => void handleFavoriteSticker()}
+                        className={MENU_ITEM_CLASS}
+                      >
+                        <Star className="h-4 w-4 text-gray-500" />
+                        Adicionar às favoritas
+                      </DropdownMenu.Item>
+                    )}
                     {canDownload && (
                       <DropdownMenu.Item
                         onSelect={() => void handleDownload()}
@@ -826,13 +1089,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         Baixar
                       </DropdownMenu.Item>
                     )}
+                    {canEdit && (
+                      <DropdownMenu.Item
+                        onSelect={openEditDialog}
+                        className={MENU_ITEM_CLASS}
+                      >
+                        <Pencil className="h-4 w-4 text-gray-500" />
+                        Editar
+                      </DropdownMenu.Item>
+                    )}
                     {canDelete && (
                       <>
-                        {(canReplyHere || canCopy || canDownload) && (
+                        {(canReplyHere || canCopy || canDownload || canEdit || canFavoriteSticker) && (
                           <DropdownMenu.Separator className="my-1 h-px bg-gray-200" />
                         )}
                         <DropdownMenu.Item
-                          onSelect={() => setIsDeleteDialogOpen(true)}
+                          onSelect={() => {
+                            skipMenuFocusReturn.current = true;
+                            setIsDeleteDialogOpen(true);
+                          }}
                           className={MENU_ITEM_CLASS}
                         >
                           <Trash2 className="h-4 w-4 text-gray-500" />
@@ -846,19 +1121,95 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             )}
           </div>
 
+          {editNoticeNode}
           {statusNode}
           {errorHintNode}
+          {undeliveredNode}
 
           <span
             className={`mt-1 flex items-center gap-1 text-xs text-gray-500 ${
               isClient ? "justify-start" : "justify-end"
             }`}
           >
+            {editedLabel}
             {formatTime(message.createdAt)}
             {deliveryIcon}
           </span>
         </div>
       </div>
+
+      {canEdit && (
+        <Dialog.Root
+          open={isEditDialogOpen}
+          onOpenChange={(open) => {
+            if (!isSavingEdit) setIsEditDialogOpen(open);
+          }}
+        >
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/40" />
+            <Dialog.Content
+              // Foco no texto com o cursor no fim, pronto para continuar escrevendo
+              onOpenAutoFocus={(event) => {
+                event.preventDefault();
+                const field = editFieldRef.current;
+                if (!field) return;
+                field.focus();
+                field.setSelectionRange(field.value.length, field.value.length);
+              }}
+              className="fixed left-1/2 top-1/2 z-[80] w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-xl sm:p-6"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <Dialog.Title className="text-base font-semibold text-gray-900">
+                  Editar mensagem
+                </Dialog.Title>
+                <CloseButton
+                  className="-mr-2 -mt-1"
+                  onClick={() => {
+                    if (!isSavingEdit) setIsEditDialogOpen(false);
+                  }}
+                />
+              </div>
+              <Dialog.Description className="mt-1 text-sm text-gray-600">
+                O cliente vê o texto novo com a marca "Editada". O WhatsApp só permite editar até 15 minutos depois do envio.
+              </Dialog.Description>
+              <textarea
+                value={editDraft}
+                onChange={(event) => setEditDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void handleSaveEdit();
+                  }
+                }}
+                maxLength={MAX_EDIT_TEXT_LENGTH}
+                rows={4}
+                ref={editFieldRef}
+                aria-label="Texto da mensagem"
+                className="mt-4 w-full resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+              />
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    disabled={isSavingEdit}
+                    className="rounded-full border border-gray-300 px-5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </Dialog.Close>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveEdit()}
+                  disabled={isSavingEdit || !editDraft.trim()}
+                  className="rounded-full bg-[#0A84FF] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:opacity-50"
+                >
+                  {isSavingEdit ? "Salvando..." : "Salvar"}
+                </button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
 
       {canDelete && (
         <Dialog.Root

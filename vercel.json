@@ -16,7 +16,7 @@
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         {
           "key": "Permissions-Policy",
-          "value": "camera=(), geolocation=(), microphone=(self)"
+          "value": "camera=(), geolocation=(self), microphone=(self)"
         },
         {
           "key": "Strict-Transport-Security",

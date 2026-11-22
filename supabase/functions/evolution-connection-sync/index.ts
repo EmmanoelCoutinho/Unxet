@@ -256,7 +256,7 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
   // Esbarrou no limite de chamadas entre funções: o resto fica para a próxima rodada
   let rateLimited = false;
   try {
-    const { data: connections, error } = await supabase.from("channel_connections").select("id, session_name, evolution_api_url, evolution_api_key, inbound_recovery_requested_at, inbound_recovery_from").eq("provider", "evolution").eq("status", "connected").is("archived_at", null).not("session_name", "is", null).not("inbound_recovery_requested_at", "is", null);
+    const { data: connections, error } = await supabase.from("channel_connections").select("id, session_name, evolution_api_url, evolution_api_key, inbound_recovery_requested_at, inbound_recovery_from, inbound_recovery_done, inbound_recovery_total").eq("provider", "evolution").eq("status", "connected").is("archived_at", null).not("session_name", "is", null).not("inbound_recovery_requested_at", "is", null);
     if (error) {
       console.error("[INBOUND_RECOVERY_QUERY_ERROR]", error);
       return results;
@@ -325,6 +325,18 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
             if (withNumber) ready.push(withNumber);
             else result.unresolved += 1;
           }
+          // Total da faixa "Sincronizando mensagens": as já trazidas + as que
+          // faltam. O "done" é o lido antes da busca: o que entrou nesse
+          // meio-tempo sai das duas contas, e a faixa nunca espera além do total.
+          // O "último avanço" só começa a contar na primeira rodada: renovado a
+          // cada rodada, a faixa parada nunca sumia.
+          const { error: totalError } = await supabase.from("channel_connections").update({
+            inbound_recovery_total: (connection.inbound_recovery_done ?? 0) + ready.length,
+            ...connection.inbound_recovery_total == null ? {
+              inbound_recovery_progress_at: new Date().toISOString()
+            } : {}
+          }).eq("id", connection.id).eq("inbound_recovery_requested_at", connection.inbound_recovery_requested_at);
+          if (totalError) console.error("[INBOUND_RECOVERY_TOTAL_ERROR]", connection.id, totalError);
           // Caminho principal: tudo para a fila de entrada, em lotes. O que a
           // fila não aceitou segue pelo caminho direto, mais lento.
           const leftover = INBOUND_GATEWAY_URL ? await enqueueRecovered(connection.session_name, ready, result) : ready;
@@ -359,7 +371,9 @@ const INTEGRATIONS_URL = "/settings/integrations/meta";
       if (phase === "last" && (complete || expired)) {
         const { error: clearError } = await supabase.from("channel_connections").update({
           inbound_recovery_requested_at: null,
-          inbound_recovery_from: null
+          inbound_recovery_from: null,
+          inbound_recovery_total: null,
+          inbound_recovery_done: 0
         }).eq("id", connection.id).eq("inbound_recovery_requested_at", connection.inbound_recovery_requested_at);
         if (clearError) console.error("[INBOUND_RECOVERY_CLEAR_ERROR]", connection.id, clearError);
       }

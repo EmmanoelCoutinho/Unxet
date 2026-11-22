@@ -16,6 +16,11 @@ import {
   conversationConnectionLabel,
   isConnectionRemoved,
 } from "../lib/whatsappConnections";
+import { playMessageSound } from "../modules/notifications/notificationSounds";
+import { isVideoFile } from "../lib/videoFile";
+
+// Quanto tempo esperar a conversa nova aparecer na lista para tocar o som
+const NEW_CONVERSATION_SOUND_WINDOW_MS = 10000;
 
 type UseConversationsOptions = {
   status?: string;
@@ -55,6 +60,11 @@ export function useConversations(options: UseConversationsOptions = {}) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<any>(null);
 
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+  // Primeira mensagem de conversas que ainda não estão na lista
+  const newConversationSoundsRef = useRef(new Map<string, number>());
+
   const lastRefetchAtRef = useRef(0);
   const refetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didInitialLoadRef = useRef(false);
@@ -91,11 +101,24 @@ export function useConversations(options: UseConversationsOptions = {}) {
   };
 
   const detectMediaType = (
-    msg?: { type?: string | null; payload?: any },
+    msg?: {
+      type?: string | null;
+      payload?: any;
+      media_mime_type?: string | null;
+      filename?: string | null;
+    },
     payload?: any,
   ): Conversation["lastMessageType"] => {
     const parsedPayload = payload ?? parsePayload(msg?.payload);
     const directType = msg?.type ?? parsedPayload?.type;
+
+    // Vídeo fica gravado como documento: vale o tipo do arquivo
+    if (
+      (directType === "document" || directType === "video") &&
+      isVideoFile(msg?.media_mime_type, msg?.filename)
+    ) {
+      return "video";
+    }
     const candidate =
       parsedPayload?.message ?? parsedPayload?.messages?.[0] ?? parsedPayload;
 
@@ -120,6 +143,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
     type?: string | null;
     payload?: any;
     deleted_at?: string | null;
+    media_mime_type?: string | null;
+    filename?: string | null;
   }) => {
     if (!msg) {
       return { text: "", type: "text" as Conversation["lastMessageType"] };
@@ -272,6 +297,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
             created_at,
             direction,
             type,
+            media_mime_type,
+            filename,
             payload,
             deleted_at
           ),
@@ -461,6 +488,15 @@ export function useConversations(options: UseConversationsOptions = {}) {
 
         // Uma busca mais nova já foi disparada: este resultado está defasado
         if (fetchSeq !== fetchSeqRef.current) return;
+
+        newConversationSoundsRef.current.forEach((arrivedAt, conversationId) => {
+          if (mapped.some((c) => c.id === conversationId && c.unreadCount > 0)) {
+            playMessageSound();
+            newConversationSoundsRef.current.delete(conversationId);
+          } else if (Date.now() - arrivedAt > NEW_CONVERSATION_SOUND_WINDOW_MS) {
+            newConversationSoundsRef.current.delete(conversationId);
+          }
+        });
 
         setConversations((prev) => {
           const prevById = new Map(prev.map((c) => [c.id, c]));
@@ -746,6 +782,16 @@ export function useConversations(options: UseConversationsOptions = {}) {
           // Mensagem chegando na conversa que está aberta na tela já nasce lida
           const viewing = isInbound && isViewing(msg.conversation_id);
 
+          // Toca nas mesmas mensagens que contam como não lidas
+          if (isInbound && !viewing) {
+            const known = conversationsRef.current.find((c) => c.id === msg.conversation_id);
+            if (!known) {
+              newConversationSoundsRef.current.set(msg.conversation_id, Date.now());
+            } else if (!known.inBotFlow && !isAssignedToOther(known, authUser.id)) {
+              playMessageSound();
+            }
+          }
+
           setConversations((current) => {
             const idx = current.findIndex((c) => c.id === msg.conversation_id);
             if (idx === -1) {
@@ -792,7 +838,7 @@ export function useConversations(options: UseConversationsOptions = {}) {
           }
         },
       )
-      // Mensagem apagada: se era a última da conversa, a prévia deixa de mostrar o texto
+      // Mensagem apagada ou editada: se era a última da conversa, a prévia acompanha
       .on(
         "postgres_changes",
         {
@@ -801,8 +847,8 @@ export function useConversations(options: UseConversationsOptions = {}) {
           table: "messages",
         },
         (payload) => {
-          const msg = payload.new as DbMessage;
-          if (!msg?.deleted_at) return;
+          const msg = payload.new as DbMessage & { edited_at?: string | null };
+          if (!msg?.deleted_at && !msg?.edited_at) return;
 
           setConversations((current) => {
             const idx = current.findIndex(

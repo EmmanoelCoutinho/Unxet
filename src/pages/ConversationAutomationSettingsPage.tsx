@@ -87,6 +87,42 @@ const DEFAULT_SETTINGS: AutomationFormValues = {
   signAgentMessages: true,
 };
 
+type MinutesOption = { value: number; label: string };
+
+const SLA_FIRST_RESPONSE_OPTIONS: MinutesOption[] = [
+  { value: 5, label: "5 minutos" },
+  { value: 10, label: "10 minutos" },
+  { value: 15, label: "15 minutos" },
+  { value: 30, label: "30 minutos" },
+  { value: 60, label: "1 hora" },
+  { value: 120, label: "2 horas" },
+  { value: 240, label: "4 horas" },
+];
+
+// Mínimo de 5 minutos (validado ao salvar)
+const RETURN_TO_PENDING_OPTIONS: MinutesOption[] = [
+  { value: 5, label: "5 minutos" },
+  { value: 10, label: "10 minutos" },
+  { value: 15, label: "15 minutos" },
+  { value: 30, label: "30 minutos" },
+  { value: 60, label: "1 hora" },
+  { value: 120, label: "2 horas" },
+  { value: 240, label: "4 horas" },
+  { value: 480, label: "8 horas" },
+];
+
+const AUTO_CLOSE_OPTIONS: MinutesOption[] = [
+  { value: 60, label: "1 hora" },
+  { value: 120, label: "2 horas" },
+  { value: 240, label: "4 horas" },
+  { value: 480, label: "8 horas" },
+  { value: 720, label: "12 horas" },
+  { value: 1440, label: "24 horas" },
+  { value: 2880, label: "2 dias" },
+  { value: 4320, label: "3 dias" },
+  { value: 10080, label: "7 dias" },
+];
+
 const parsePositiveInteger = (value: string) => {
   if (!value.trim()) return null;
   if (!/^\d+$/.test(value.trim())) return null;
@@ -170,6 +206,8 @@ const AutomationCard = ({
   onMinutesChange,
   minutesError,
   showMinutesInput = true,
+  minutesOptions = [],
+  minutesLabel = "Tempo",
   minMinutes = 1,
   locked = false,
 }: {
@@ -181,10 +219,30 @@ const AutomationCard = ({
   onMinutesChange?: (value: string) => void;
   minutesError?: string;
   showMinutesInput?: boolean;
+  /** Opções de tempo, mostradas como botões */
+  minutesOptions?: MinutesOption[];
+  minutesLabel?: string;
+  /** Menor tempo aceito no campo "Customizado" */
   minMinutes?: number;
   /** Mostra o estado, mas não deixa mudar */
   locked?: boolean;
 }) => {
+  // Tempo salvo que não está nos botões abre direto no campo "Customizado"
+  const [customMinutes, setCustomMinutes] = useState(
+    () =>
+      minutesValue !== undefined &&
+      !minutesOptions.some((option) => String(option.value) === minutesValue),
+  );
+
+  const optionButtonClass = (selected: boolean) =>
+    [
+      "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+      selected
+        ? "border-blue-600 bg-blue-600 text-white"
+        : "border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600",
+      enabled ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+    ].join(" ");
+
   return (
     <Card className="p-4 sm:p-6">
       <div className="flex flex-col gap-5">
@@ -202,19 +260,62 @@ const AutomationCard = ({
         </div>
 
         {showMinutesInput && onMinutesChange && minutesValue !== undefined ? (
-          <div className="max-w-xs">
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={minMinutes}
-              step={1}
-              label="Tempo em minutos"
-              value={minutesValue}
-              onChange={(event) => onMinutesChange(event.target.value)}
-              disabled={!enabled}
-              error={minutesError}
-              placeholder="Ex: 60"
-            />
+          <div className="w-full">
+            <p className="mb-2 block text-sm font-medium text-gray-900">
+              {minutesLabel}
+            </p>
+            <div
+              role="radiogroup"
+              aria-label={`${title}: ${minutesLabel}`}
+              className="flex flex-wrap gap-2"
+            >
+              {minutesOptions.map((option) => {
+                const selected =
+                  !customMinutes && String(option.value) === minutesValue;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={!enabled}
+                    onClick={() => {
+                      setCustomMinutes(false);
+                      onMinutesChange(String(option.value));
+                    }}
+                    className={optionButtonClass(selected)}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={customMinutes}
+                disabled={!enabled}
+                onClick={() => setCustomMinutes(true)}
+                className={optionButtonClass(customMinutes)}
+              >
+                Customizado
+              </button>
+            </div>
+            {customMinutes ? (
+              <div className="mt-3 max-w-xs">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={minMinutes}
+                  step={1}
+                  label="Tempo em minutos"
+                  value={minutesValue}
+                  onChange={(event) => onMinutesChange(event.target.value)}
+                  disabled={!enabled}
+                  error={minutesError}
+                  placeholder="Ex: 90"
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -478,6 +579,8 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
                 slaFirstResponseEnabled: value,
               })
             }
+            minutesOptions={SLA_FIRST_RESPONSE_OPTIONS}
+            minutesLabel="Alertar depois de"
             minutesValue={formValues.slaFirstResponseAfterMinutes}
             onMinutesChange={(value) =>
               setFormValues((prev) => ({
@@ -497,6 +600,8 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
                 returnToPendingEnabled: value,
               })
             }
+            minutesOptions={RETURN_TO_PENDING_OPTIONS}
+            minutesLabel="Voltar para a fila depois de"
             minMinutes={5}
             minutesValue={formValues.returnToPendingAfterMinutes}
             onMinutesChange={(value) =>
@@ -517,6 +622,8 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
                 autoCloseEnabled: value,
               })
             }
+            minutesOptions={AUTO_CLOSE_OPTIONS}
+            minutesLabel="Fechar depois de"
             minutesValue={formValues.autoCloseAfterMinutes}
             onMinutesChange={(value) =>
               setFormValues((prev) => ({
@@ -529,7 +636,9 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
 
           <AutomationCard
             title="Nome do atendente nas mensagens"
-            description={'Ligado: o cliente recebe o nome de quem respondeu na primeira linha da mensagem (ex.: "Maria:" e, embaixo, o texto). Útil quando mais de um atendente responde a mesma conversa. No WhatsApp o nome vai em negrito.'}
+            description={
+              'Ligado: o cliente recebe o nome de quem respondeu na primeira linha da mensagem (ex.: "Maria:" e, embaixo, o texto). Útil quando mais de um atendente responde a mesma conversa. No WhatsApp o nome vai em negrito.'
+            }
             enabled={formValues.signAgentMessages}
             onEnabledChange={(value) =>
               handleToggleChange({
@@ -617,12 +726,11 @@ export const ConversationAutomationSettingsPage: React.FC = () => {
 
               <p className="text-xs text-slate-500">
                 A pesquisa é enviada quando um atendente finaliza a conversa
-                (não no fechamento automático). Não há prazo: a nota vale
-                mesmo dias depois, e notas fracionadas (como 9,5) são
-                arredondadas. Se o cliente mandar outra mensagem que não seja
-                nota, a conversa reabre normalmente. No WhatsApp oficial, o
-                envio depende da janela de 24 horas desde a última mensagem
-                do cliente.
+                (não no fechamento automático). Não há prazo: a nota vale mesmo
+                dias depois, e notas fracionadas (como 9,5) são arredondadas. Se
+                o cliente mandar outra mensagem que não seja nota, a conversa
+                reabre normalmente. No WhatsApp oficial, o envio depende da
+                janela de 24 horas desde a última mensagem do cliente.
               </p>
             </div>
           </Card>

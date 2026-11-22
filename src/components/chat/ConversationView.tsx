@@ -36,6 +36,8 @@ import { ChatHeader } from "./ChatHeader";
 import { ConversationCampaignBanner } from "../../modules/scheduledMessages/components/ConversationCampaignBanner";
 import { ConversationDealBar } from "../../modules/leads/components/ConversationDealBar";
 import { MessageBubble } from "./MessageBubble";
+import { MessageAlbum } from "./MessageAlbum";
+import { groupAlbums } from "../../lib/messageAlbums";
 import { SystemEventBubble } from "./SystemEventBubble";
 import { MessageInput } from "./MessageInput";
 import { ArrowDownIcon, ArrowLeftIcon } from "lucide-react";
@@ -49,7 +51,17 @@ import { unblockContact } from "../../modules/contacts/api/blocking";
 import { OtherNumbersBanner } from "./OtherNumbersBanner";
 import { GENERIC_SEND_ERROR, sendErrorMessage } from "../../lib/sendError";
 import { useConversationParticipants } from "../../hooks/useConversationParticipants";
-import { sharedContactText, type SharedContact } from "../../lib/sharedContact";
+import {
+  sharedContactFromText,
+  sharedContactText,
+  type SharedContact,
+} from "../../lib/sharedContact";
+import {
+  sharedLocationFromMessage,
+  sharedLocationText,
+  type SharedLocation,
+} from "../../lib/sharedLocation";
+import { canEditMessage } from "../../lib/messageEdit";
 import {
   conversationConnectionLabel,
   isConnectionRemoved,
@@ -59,6 +71,7 @@ import { useWhatsappConnections } from "../../hooks/useWhatsappConnections";
 import { useFloatingChats } from "../../modules/floatingChats/FloatingChatsContext";
 import { useConversationList } from "../../contexts/ConversationsContext";
 import { WindowControls, type WindowControlsProps } from "./WindowControls";
+import { isVideoFile } from "../../lib/videoFile";
 import { CONVERSATION_GROUP_SELECT, conversationGroupOf, groupConversationFields } from "../../utils/whatsappGroup";
 
 type UiTag = { id: string; name: string; color: string };
@@ -66,25 +79,27 @@ type UiTag = { id: string; name: string; color: string };
 type SendableInput =
   | string
   | {
-      type: "text" | "image" | "audio" | "document" | "contact";
+      type: "text" | "image" | "audio" | "document" | "contact" | "location" | "sticker";
       text?: string;
       mediaUrl?: string;
       mediaMimeType?: string;
       filename?: string;
       fileSize?: number;
       contact?: SharedContact;
+      location?: SharedLocation;
     };
 
 type LocalSendStatus = "sending" | "failed" | "sent";
 
 type LocalPayload = {
-  type: "text" | "image" | "audio" | "document" | "contact";
+  type: "text" | "image" | "audio" | "document" | "contact" | "location" | "sticker";
   text?: string;
   mediaUrl?: string;
   mediaMimeType?: string;
   filename?: string;
   fileSize?: number;
   contact?: SharedContact;
+  location?: SharedLocation;
   replyToMessageId?: string;
 };
 
@@ -172,7 +187,12 @@ function replyPreviewOf(message: Message): MessageReplyPreview {
   return {
     id: message.id,
     author: message.author,
-    type: message.type,
+    // Vídeo fica gravado como documento: a citação mostra "🎥 Vídeo"
+    type:
+      (message.type === "document" || message.type === "video") &&
+      isVideoFile(message.mediaMimeType, message.filename)
+        ? "video"
+        : message.type,
     text: (message.text ?? "").trim().slice(0, 200),
     // atendente; ou, no grupo, quem escreveu
     senderName: message.senderName,
@@ -181,13 +201,14 @@ function replyPreviewOf(message: Message): MessageReplyPreview {
 
 function normalizeInput(input: SendableInput) {
   let bodyText = "";
-  let outboundType: "text" | "image" | "audio" | "document" | "contact" =
+  let outboundType: "text" | "image" | "audio" | "document" | "contact" | "location" | "sticker" =
     "text";
   let mediaUrl: string | undefined;
   let mediaMimeType: string | undefined;
   let filename: string | undefined;
   let fileSize: number | undefined;
   let contact: SharedContact | undefined;
+  let location: SharedLocation | undefined;
 
   if (typeof input === "string") {
     bodyText = input.trim();
@@ -200,27 +221,67 @@ function normalizeInput(input: SendableInput) {
     filename = input.filename;
     fileSize = input.fileSize;
     contact = input.contact;
-    // contato vira texto no histórico (a edge function grava no mesmo formato)
+    location = input.location;
+    // contato e localização viram texto no histórico (a edge function grava no mesmo formato)
     if (outboundType === "contact" && contact) {
       bodyText = sharedContactText(contact);
+    }
+    if (outboundType === "location" && location) {
+      bodyText = sharedLocationText(location);
     }
   }
 
   return {
     bodyText,
     outboundType,
-    // tipo exibido na bolha: não existe bolha própria de contato
-    displayType: (outboundType === "contact" ? "text" : outboundType) as
+    // tipo exibido na bolha: não existe bolha própria de contato nem de localização
+    displayType: (outboundType === "contact" || outboundType === "location" ? "text" : outboundType) as
       | "text"
       | "image"
       | "audio"
-      | "document",
+      | "document"
+      | "sticker",
     mediaUrl,
     mediaMimeType,
     filename,
     fileSize,
     contact,
+    location,
   };
+}
+
+/**
+ * O que reenviar de uma mensagem que o WhatsApp não entregou: texto, a
+ * mesma mídia (mesmo arquivo do Storage), a mesma localização ou o mesmo
+ * contato. Localização e contato ficam gravados como texto: sem esse
+ * cuidado, o "Reenviar" mandava o texto no lugar do mapa ou do cartão.
+ */
+export function resendInputFor(msg: Message): SendableInput | null {
+  if (msg.deliveryStatus !== "failed" || msg.deletedAt) return null;
+  const text = (msg.text ?? "").trim();
+  const type = msg.type ?? "text";
+  if (type === "text") {
+    if (!text) return null;
+    const location = sharedLocationFromMessage(text, msg.payload);
+    if (location) return { type: "location", location };
+    const contact = sharedContactFromText(text);
+    if (contact) return { type: "contact", contact };
+    return text;
+  }
+  if (type === "sticker" && msg.mediaUrl) {
+    return { type: "sticker", mediaUrl: msg.mediaUrl, mediaMimeType: msg.mediaMimeType };
+  }
+  if ((type === "image" || type === "audio" || type === "document") && msg.mediaUrl) {
+    return {
+      type,
+      text: text || undefined,
+      mediaUrl: msg.mediaUrl,
+      mediaMimeType: msg.mediaMimeType,
+      filename: msg.filename,
+      fileSize: msg.fileSize,
+    };
+  }
+  return null;
 }
 
 export type ConversationViewProps = {
@@ -234,6 +295,15 @@ export type ConversationViewProps = {
   /** Caixa flutuante: minimizar, maximizar e fechar. */
   windowControls?: WindowControlsProps;
 };
+
+// Última versão de cada conversa aberta, por empresa: ao trocar entre a caixa
+// flutuante e a tela cheia o cabeçalho aparece na hora (o banco atualiza depois)
+const conversationCache = new Map<
+  string,
+  { conversation: Conversation; tags: UiTag[] }
+>();
+const conversationCacheKey = (clinicId: string | null | undefined, id: string) =>
+  `${clinicId ?? ""}:${id}`;
 
 export const ConversationView: React.FC<ConversationViewProps> = ({
   conversationId: id,
@@ -284,8 +354,12 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   );
 
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [loadingConversation, setLoadingConversation] = useState(true);
+  const [conversation, setConversation] = useState<Conversation | null>(
+    () => conversationCache.get(conversationCacheKey(clinicId, id))?.conversation ?? null,
+  );
+  const [loadingConversation, setLoadingConversation] = useState(
+    () => !conversationCache.has(conversationCacheKey(clinicId, id)),
+  );
   // O rascunho fica guardado por conversa: segue entre a caixa e a tela cheia
   const [draftMessage, setDraftMessageState] = useState(() => getDraft(id));
   const setDraftMessage = useCallback(
@@ -303,7 +377,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
   const [isManageTagsOpen, setIsManageTagsOpen] = useState(false);
   const [availableTags, setAvailableTags] = useState<UiTag[]>([]);
-  const [selectedTags, setSelectedTags] = useState<UiTag[]>([]);
+  const [selectedTags, setSelectedTags] = useState<UiTag[]>(
+    () => conversationCache.get(conversationCacheKey(clinicId, id))?.tags ?? [],
+  );
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagsSavingId, setTagsSavingId] = useState<string | null>(null);
   const [acceptingConversation, setAcceptingConversation] = useState(false);
@@ -380,6 +456,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     return [...messageItems, ...eventItems].sort((a, b) => a.sortAt - b.sortAt);
   }, [messages, events, hasOlderMessages]);
 
+  // Fotos seguidas da mesma pessoa aparecem como álbum (como no WhatsApp)
+  const displayItems = useMemo(() => groupAlbums(timelineItems), [timelineItems]);
+
   // Chave do último item: muda quando chega mensagem nova no fim, mas não
   // quando mensagens antigas entram no topo
   const lastTimelineKey = useMemo(() => {
@@ -396,10 +475,11 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     justOpenedRef.current = true;
     stickToBottomRef.current = true;
     didInitialConversationLoadRef.current = false;
-    setConversation(null);
-    setSelectedTags([]);
+    const cached = conversationCache.get(conversationCacheKey(clinicId, id));
+    setConversation(cached?.conversation ?? null);
+    setSelectedTags(cached?.tags ?? []);
     setAvailableTags([]);
-    setLoadingConversation(true);
+    setLoadingConversation(!cached);
     setDraftMessageState(getDraft(id));
     setRecordingUiState({
       isRecording: false,
@@ -660,6 +740,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       }
 
       if (!data) {
+        conversationCache.delete(conversationCacheKey(clinicId, requestedId));
         setConversation(null);
         setLoadingConversation(false);
         didInitialConversationLoadRef.current = true;
@@ -786,6 +867,15 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   useEffect(() => {
     loadConversation();
   }, [loadConversation]);
+
+  // Guarda a versão atual (inclui mudanças feitas aqui, como aceitar ou etiquetar)
+  useEffect(() => {
+    if (!id || !conversation || conversation.id !== id) return;
+    conversationCache.set(conversationCacheKey(clinicId, id), {
+      conversation,
+      tags: selectedTags,
+    });
+  }, [clinicId, id, conversation, selectedTags]);
 
   useEffect(() => {
     const cid = (conversation as any)?.clinicId as string | undefined;
@@ -1283,6 +1373,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         filename,
         fileSize,
         contact,
+        location,
       } = normalizeInput(input);
 
       if (!bodyText && !mediaUrl) {
@@ -1333,6 +1424,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           contact: contact
             ? { name: contact.name, phone: `+${contact.phone}` }
             : undefined,
+          location,
           replyToMessageId,
         },
       });
@@ -1465,6 +1557,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       filename,
       fileSize,
       contact,
+      location,
     } = normalizeInput(input);
 
     if (!bodyText && !mediaUrl) return;
@@ -1504,6 +1597,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         filename,
         fileSize,
         contact,
+        location,
         replyToMessageId,
       },
     };
@@ -1532,6 +1626,14 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     },
     [id, enqueueSend, sendNow],
   );
+
+  // O WhatsApp avisou que não entregou: manda de novo como mensagem nova
+  // (a original fica marcada "Não entregue" no histórico)
+  const handleResendUndelivered = (msg: Message) => {
+    const input = resendInputFor(msg);
+    if (!input) return;
+    void handleSendMessage(input);
+  };
 
   const handleRetryAudioTranscript = useCallback(
     async (message: Message) => {
@@ -1570,6 +1672,66 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
       toast.info("Transcrição solicitada novamente.");
     },
     [id, setMessages],
+  );
+
+  // Editar mensagem de texto enviada (só WhatsApp via QR Code, até 15 min)
+  const editRules = useMemo(
+    () => ({ provider: conversation?.provider ?? null, currentUserId: authUser?.id ?? null }),
+    [conversation?.provider, authUser?.id],
+  );
+  // Relógio do prazo de edição: enquanto alguma mensagem ainda pode ser
+  // editada, a tela confere de novo a cada 30 s e o "Editar" some do menu
+  // quando os 15 minutos passam (antes ficava até a tela atualizar)
+  const [editClock, setEditClock] = useState(() => Date.now());
+  const hasEditableMessage = useMemo(
+    () =>
+      canReply &&
+      messages.some((message) => canEditMessage(message, { ...editRules, now: editClock })),
+    [canReply, messages, editRules, editClock],
+  );
+  useEffect(() => {
+    if (!hasEditableMessage) return;
+    setEditClock(Date.now());
+    const timer = window.setInterval(() => setEditClock(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [hasEditableMessage]);
+  const isMessageEditable = useCallback(
+    (message: Message) => canReply && canEditMessage(message, { ...editRules, now: editClock }),
+    [canReply, editRules, editClock],
+  );
+
+  const handleEditMessage = useCallback(
+    async (messageId: string, text: string) => {
+      const { data, error } = await supabase.functions.invoke("edit-message", {
+        body: { messageId, text },
+      });
+
+      if (error) {
+        const response = (error as { context?: Response }).context;
+        const payload = await response?.json?.().catch(() => null);
+        console.error("Erro ao editar mensagem:", error);
+        toast.error(payload?.error ?? "Não foi possível editar a mensagem.");
+        return false;
+      }
+      if (data?.unchanged) return true;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                text: data?.text ?? text,
+                editedAt: data?.edited_at ?? new Date().toISOString(),
+                originalText: data?.original_text ?? m.originalText ?? m.text,
+                editUnreadable: false,
+              }
+            : m,
+        ),
+      );
+      toast.success("Mensagem editada.");
+      return true;
+    },
+    [setMessages],
   );
 
   // 🔥 ADICIONADO: Função para deletar a mensagem física no Supabase e atualizar a interface localmente
@@ -1816,8 +1978,19 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
                 </button>
               </div>
             ) : null}
-            {timelineItems.map((item) =>
-              item.kind === "message" ? (
+            {displayItems.map((item) =>
+              item.kind === "album" ? (
+                <div
+                  key={`album-${item.messages[0].id}`}
+                  className="rounded-lg transition-colors duration-700"
+                >
+                  <MessageAlbum
+                    messages={item.messages}
+                    isGroup={conversation?.isGroup === true}
+                    onReply={canReplyAndReact ? handleStartReply : undefined}
+                  />
+                </div>
+              ) : item.kind === "message" ? (
                 <div
                   key={`message-${item.message.id}`}
                   data-message-id={item.message.id}
@@ -1828,11 +2001,19 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
                     contactName={conversation?.contactName ?? ""}
                     isGroup={conversation?.isGroup === true}
                     onRetry={handleRetryLocalMessage}
+                    onResendUndelivered={
+                      canReply && conversation?.status === "open" && resendInputFor(item.message)
+                        ? handleResendUndelivered
+                        : undefined
+                    }
                     onRetryTranscript={handleRetryAudioTranscript}
                     onDeleteMessage={
                       canDeleteMessages ? handleDeleteMessage : undefined
                     }
                     deleteMode={deleteMode}
+                    onEditMessage={
+                      isMessageEditable(item.message) ? handleEditMessage : undefined
+                    }
                     onReply={canReplyAndReact ? handleStartReply : undefined}
                     onReact={canReplyAndReact ? handleReact : undefined}
                     onQuotedClick={scrollToQuotedMessage}
@@ -2065,6 +2246,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           captionsSupported={conversation.channel === "whatsapp"}
           onSend={handleSendMessage}
           allowContacts={conversation.channel === "whatsapp"}
+          allowVideos={conversation.channel === "whatsapp" && conversation.provider === "evolution"}
+          allowLocation={conversation.channel === "whatsapp" && conversation.provider === "evolution"}
+          allowStickers={conversation.channel === "whatsapp" && conversation.provider === "evolution"}
           disabled={!canReply}
           draft={draftMessage}
           onDraftChange={setDraftMessage}

@@ -25,12 +25,18 @@ type DbMessage = {
   deleted_for_everyone?: boolean | null;
   delivered_at?: string | null;
   read_at?: string | null;
+  failed_at?: string | null;
+  failure_reason?: string | null;
   sender_user_id?: string | null;
   sender_name?: string | null;
   reply_to_message_id?: string | null;
   reply_preview?: any;
   client_reaction?: string | null;
   agent_reaction?: string | null;
+  edited_at?: string | null;
+  original_text?: string | null;
+  edit_unreadable?: boolean | null;
+  poll_votes?: UiMessage["pollVotes"] | null;
 };
 
 // Citação gravada na resposta (reply_preview) + id da original
@@ -192,7 +198,13 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
           ? "read"
           : row.delivered_at
             ? "delivered"
-            : "sent"
+            : row.failed_at
+              ? "failed"
+              : "sent"
+        : undefined,
+    failureReason:
+      row.direction === "outbound" && row.failed_at && !row.delivered_at
+        ? (row.failure_reason ?? undefined)
         : undefined,
     createdAt: row.sent_at ?? row.created_at ?? new Date().toISOString(),
     senderUserId: row.sender_user_id ?? undefined,
@@ -200,6 +212,10 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
     replyTo: isDeleted ? undefined : mapReplyPreview(row),
     clientReaction: row.client_reaction ?? undefined,
     agentReaction: row.agent_reaction ?? undefined,
+    editedAt: isDeleted ? undefined : (row.edited_at ?? undefined),
+    originalText: isDeleted ? undefined : (row.original_text ?? undefined),
+    editUnreadable: isDeleted ? undefined : (row.edit_unreadable ?? undefined),
+    pollVotes: isDeleted ? undefined : (row.poll_votes ?? undefined),
   };
 };
 
@@ -230,12 +246,18 @@ const MESSAGE_COLUMNS = `
   deleted_for_everyone,
   delivered_at,
   read_at,
+  failed_at,
+  failure_reason,
   sender_user_id,
   sender_name,
   reply_to_message_id,
   reply_preview,
   client_reaction,
-  agent_reaction
+  agent_reaction,
+  edited_at,
+  original_text,
+  edit_unreadable,
+  poll_votes
 `;
 
 const oldestPersistedTime = (list: UiMessage[]) => {
@@ -329,11 +351,19 @@ function replaceLocalOptimisticWithPersisted(
 }
 
 export function useMessages(conversationId: string | null) {
-  const [messages, setMessages] = useState<UiMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Conversa já aberta antes (caixa flutuante ↔ tela cheia): começa com as
+  // mensagens guardadas, sem "Carregando", e atualiza em segundo plano
+  const [messages, setMessages] = useState<UiMessage[]>(
+    () => (conversationId ? messagesCache.get(conversationId) : undefined) ?? [],
+  );
+  const [loading, setLoading] = useState(
+    () => !(conversationId && messagesCache.get(conversationId)?.length),
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<any>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [hasMore, setHasMore] = useState(
+    () => (conversationId ? hasMoreCache.get(conversationId) : undefined) ?? false,
+  );
   const [loadingOlder, setLoadingOlder] = useState(false);
 
   const didInitialLoadRef = useRef(false);

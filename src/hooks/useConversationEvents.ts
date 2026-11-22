@@ -35,19 +35,49 @@ const mapDbEvent = (row: DbEvent): ConversationEvent => {
   };
 };
 
+// Eventos já buscados por conversa: reabrir a conversa (caixa flutuante ↔
+// tela cheia) mostra na hora e atualiza em segundo plano
+const eventsCache = new Map<string, ConversationEvent[]>();
+
 export function useConversationEvents(conversationId: string | null) {
-  const [events, setEvents] = useState<ConversationEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [events, setEventsState] = useState<ConversationEvent[]>(
+    () => (conversationId ? eventsCache.get(conversationId) : undefined) ?? [],
+  );
+  const [loading, setLoading] = useState(
+    () => !(conversationId && eventsCache.has(conversationId)),
+  );
   const [error, setError] = useState<any>(null);
+
+  const setEvents = useCallback(
+    (
+      updater:
+        | ConversationEvent[]
+        | ((prev: ConversationEvent[]) => ConversationEvent[]),
+    ) => {
+      setEventsState((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        if (conversationId) eventsCache.set(conversationId, next);
+        return next;
+      });
+    },
+    [conversationId],
+  );
 
   const fetchEvents = useCallback(async () => {
     if (!conversationId) {
-      setEvents([]);
+      setEventsState([]);
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    const cached = eventsCache.get(conversationId);
+    if (cached) {
+      setEventsState(cached);
+      setLoading(false);
+    } else {
+      setEventsState([]);
+      setLoading(true);
+    }
     setError(null);
 
     const { data, error } = await supabase

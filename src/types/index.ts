@@ -21,7 +21,8 @@ export type MessageDirection = "inbound" | "outbound";
 export type MessageSendStatus = "sending" | "failed" | "sent";
 export type TranscriptStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED";
 // Ticks do WhatsApp para mensagens enviadas: ✓ enviada, ✓✓ entregue, ✓✓ verde lida
-export type MessageDeliveryStatus = "sent" | "delivered" | "read";
+// e "failed" quando o WhatsApp avisou que não entregou
+export type MessageDeliveryStatus = "sent" | "delivered" | "read" | "failed";
 
 export type Conversation = {
   id: string;
@@ -119,7 +120,17 @@ export type Message = {
   transcriptText?: string;
   deletedAt?: string;
   deletedForEveryone?: boolean;
+  /** Editada no WhatsApp (última edição) */
+  editedAt?: string;
+  /** Texto antes da primeira edição */
+  originalText?: string;
+  /** A edição chegou, mas o texto novo não pôde ser lido */
+  editUnreadable?: boolean;
+  /** Votos da enquete do WhatsApp, por JID de quem votou (ver lib/whatsappPoll.ts) */
+  pollVotes?: Record<string, { options: string[]; at?: string; name?: string | null; fromMe?: boolean }>;
   deliveryStatus?: MessageDeliveryStatus;
+  /** Motivo que o provedor deu para não entregar (deliveryStatus "failed") */
+  failureReason?: string;
   createdAt: string;
   // Atendente que enviou pelo app (o cliente recebe o nome na 1ª linha)
   senderUserId?: string;
@@ -133,13 +144,14 @@ export type Message = {
   localStatus?: MessageSendStatus;
   localError?: string | null;
   localPayload?: {
-    type: "text" | "image" | "audio" | "document" | "contact";
+    type: "text" | "image" | "audio" | "document" | "contact" | "location" | "sticker";
     text?: string;
     mediaUrl?: string;
     mediaMimeType?: string;
     filename?: string;
     fileSize?: number;
     contact?: { name: string; phone: string };
+    location?: { latitude: number; longitude: number; name?: string; address?: string };
     replyToMessageId?: string;
   };
 };

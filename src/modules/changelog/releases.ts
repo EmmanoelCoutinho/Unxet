@@ -78,6 +78,106 @@ export const NEXT_RELEASE: ReleaseChange[] = [
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    date: "2026-11-22",
+    changes: [
+      {
+        kind: "improved",
+        text: "Conversas do WhatsApp por QR Code: quando o cliente manda várias fotos de uma vez, elas aparecem juntas como álbum, igual no WhatsApp. Clique nas fotos para ver todas, passando com as setas.",
+      },
+      {
+        kind: "improved",
+        text: "Enquetes do WhatsApp por QR Code agora aparecem como no celular, com as opções e quantos votaram em cada uma. Em \"Ver votos\" você vê quem escolheu cada opção. Para votar, use o WhatsApp no celular da empresa.",
+      },
+      {
+        kind: "improved",
+        text: "Fotos, vídeos e áudios de visualização única não entram mais na conversa: o WhatsApp só deixa abrir no celular (o WhatsApp Web também não mostra).",
+      },
+      {
+        kind: "new",
+        text: "Departamentos podem dividir as conversas entre os atendentes: em \"Editar departamento\", escolha \"Dividir entre os atendentes\" e cada conversa nova vai direto para um atendente online do setor, um de cada vez, já aberta. Administradores ficam fora do rodízio, e se ninguém estiver online a conversa fica em Pendentes. As automações do chat continuam valendo. O modo padrão continua sendo a fila de espera.",
+        adminOnly: true,
+      },
+      {
+        kind: "new",
+        text: "Quando alguém transfere uma conversa para você, toca um som e aparece um aviso no canto da tela com quem transferiu e o cliente, e o botão \"Abrir conversa\" leva direto até ela. O aviso também continua no sino.",
+      },
+      {
+        kind: "new",
+        text: "Agora toca um som quando um cliente manda mensagem. Ele não toca na conversa que você está vendo, nas conversas de outros atendentes nem enquanto o bot está atendendo. Para desligar os sons, abra \"Meu perfil\".",
+      },
+      {
+        kind: "improved",
+        text: "Automações do chat: os tempos do SLA da primeira resposta, da volta para a fila de espera e do fechamento automático agora são escolhidos em botões (como \"30 minutos\" ou \"24 horas\"). Para outro tempo, use a opção \"Customizado\" e informe os minutos.",
+        adminOnly: true,
+      },
+      {
+        kind: "improved",
+        text: "Ao abrir em tela cheia uma conversa que estava na janela flutuante (ou o contrário), as mensagens aparecem na hora, sem esperar carregar de novo.",
+      },
+      {
+        kind: "improved",
+        text: "Mensagem que o WhatsApp não conseguiu entregar ao cliente agora aparece com o aviso \"Não entregue\" em vermelho, em vez de ficar com um tique só. Clique em \"Reenviar\" para mandar de novo. Se várias mensagens não forem entregues, confira a conexão do número em Integrações.",
+      },
+      {
+        kind: "improved",
+        text: "Conversas do WhatsApp por QR Code: fotos enviadas em álbum, figurinhas, vídeos redondos, mensagens temporárias e de visualização única agora aparecem na conversa. Listas de opções, botões e modelos que chegam de outras empresas mostram o texto e as opções, e enquetes mostram as alternativas. Antes, vários desses formatos apareciam como \"Mensagem em um formato que o Unxet ainda não exibe\".",
+      },
+      {
+        kind: "improved",
+        text: "Mensagem que o cliente editou no WhatsApp agora aparece com \"Editada\" ao lado da hora. Clique em \"Editada\" para ver o texto de antes. Edição de legenda de foto, vídeo e documento também passa a aparecer.",
+      },
+      {
+        kind: "new",
+        text: "WhatsApp por QR Code: agora dá para editar uma mensagem de texto enviada por engano. Na setinha da mensagem, clique em \"Editar\" (vale por até 15 minutos depois do envio, como no WhatsApp). O cliente vê o texto novo com a marca \"Editada\".",
+      },
+      {
+        kind: "new",
+        text: "WhatsApp por QR Code: o clipe ganhou \"Localização\". Cole o link do Google Maps (ou use a localização do aparelho) e o cliente recebe o mapa, que abre no aplicativo de mapas dele.",
+      },
+      {
+        kind: "improved",
+        text: "WhatsApp por QR Code: vídeos MP4 (até 64 MB) podem ser enviados em \"Fotos e vídeos\" e chegam ao cliente como vídeo, não como arquivo. Na conversa, os vídeos enviados e recebidos tocam direto na mensagem.",
+      },
+      {
+        kind: "new",
+        text: "WhatsApp por QR Code: agora dá para enviar figurinhas. Como no WhatsApp, cada atendente tem as suas favoritas: na setinha de uma figurinha da conversa, escolha \"Adicionar às favoritas\". No clipe, clique em \"Figurinha\" para enviar uma das favoritas, tirar alguma da lista no X ou criar uma a partir de uma imagem (ela já entra nas favoritas). Na conversa, as figurinhas aparecem soltas, sem balão, como no WhatsApp.",
+      },
+      {
+        kind: "improved",
+        text: "Departamentos: ao escolher \"Dividir entre os atendentes\", a tela mostra quem participa do rodízio e avisa quando o setor só tem administradores (nesse caso todas as conversas ficariam em Pendentes).",
+        adminOnly: true,
+      },
+      {
+        kind: "improved",
+        text: "Links nas mensagens agora são clicáveis e abrem em outra aba: o mapa de uma localização, convites de grupo e qualquer site que o cliente mandar.",
+      },
+      {
+        kind: "improved",
+        text: "Enviar localização: o link do botão \"Compartilhar\" do Google Maps (maps.app.goo.gl) agora funciona, e as coordenadas podem ser escritas com vírgula, como -1,4558, -48,4902.",
+      },
+      {
+        kind: "fixed",
+        text: "Vídeos apareciam como \"Documento\" na lista de conversas, na mensagem respondida e na notificação do celular. Agora aparecem como \"Vídeo\".",
+      },
+      {
+        kind: "fixed",
+        text: "\"Reenviar\" de uma localização ou de um contato que não foi entregue mandava só o texto. Agora reenvia o mapa ou o cartão de contato.",
+      },
+      {
+        kind: "improved",
+        text: "Conversa: a tecla Esc cancela a resposta citada, e \"Editar mensagem\" abre com o cursor no fim do texto. A opção \"Editar\" some do menu sozinha quando passam os 15 minutos.",
+      },
+      {
+        kind: "new",
+        text: "Conversa: Pix recebido pelo WhatsApp ganhou o botão \"Copiar código Pix\" (ou \"Copiar chave Pix\"), que copia o código certinho para colar no banco. Localizações enviadas ou recebidas têm o botão \"Abrir no Google Maps\": no celular abre o app do Maps e no computador abre o mapa numa nova aba.",
+      },
+      {
+        kind: "new",
+        text: "Depois de ler o QR Code de novo, uma faixa abaixo da barra superior mostra a sincronização do WhatsApp: primeiro a busca pelas mensagens que chegaram enquanto o número esteve desconectado e depois quantas já entraram nas conversas, até concluir.",
+      },
+    ],
+  },
+  {
     date: "2026-11-17",
     changes: [
       {

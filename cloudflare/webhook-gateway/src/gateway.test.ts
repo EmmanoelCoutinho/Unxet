@@ -230,7 +230,12 @@ describe("gateway: filtro da Evolution", () => {
     );
   });
 
-  it("descarta status que o app não grava (enviada ao servidor, pendente, erro)", () => {
+  it("deixa passar o ERROR das mensagens enviadas (vira \"não entregue\")", () => {
+    expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: true, status: "ERROR" } })).toBeNull();
+    expect(skip({ event: "messages.update", data: [{ key: { id: "A", fromMe: true }, update: { status: 0 } }] })).toBeNull();
+  });
+
+  it("descarta status que o app não grava (enviada ao servidor, pendente)", () => {
     expect(skip({ event: "messages.update", data: { keyId: "A", fromMe: true, status: "SERVER_ACK" } })).toBe(
       "update_status",
     );
