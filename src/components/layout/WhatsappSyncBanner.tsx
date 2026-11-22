@@ -18,7 +18,7 @@ type SyncConnection = WhatsappSyncRow & {
 };
 
 const COLUMNS =
-  "id, display_name, connected_phone, connected_name, inbound_recovery_requested_at, inbound_recovery_total, inbound_recovery_done, inbound_recovery_progress_at";
+  "id, status, display_name, connected_phone, connected_name, inbound_recovery_requested_at, inbound_recovery_total, inbound_recovery_done, inbound_recovery_progress_at";
 
 // Os prazos da faixa (procurando, parada, concluída) dependem do relógio
 const TICK_MS = 15_000;
