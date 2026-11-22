@@ -75,6 +75,18 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
+    kind: "improved",
+    text: "Conversas do WhatsApp por QR Code: quando o cliente manda várias fotos de uma vez, elas aparecem juntas como álbum, igual no WhatsApp. Clique nas fotos para ver todas, passando com as setas.",
+  },
+  {
+    kind: "improved",
+    text: "Enquetes do WhatsApp por QR Code agora aparecem como no celular, com as opções e quantos votaram em cada uma. Em \"Ver votos\" você vê quem escolheu cada opção. Para votar, use o WhatsApp no celular da empresa.",
+  },
+  {
+    kind: "improved",
+    text: "Fotos, vídeos e áudios de visualização única não entram mais na conversa: o WhatsApp só deixa abrir no celular (o WhatsApp Web também não mostra).",
+  },
+  {
     kind: "new",
     text: "Departamentos podem dividir as conversas entre os atendentes: em \"Editar departamento\", escolha \"Dividir entre os atendentes\" e cada conversa nova vai direto para um atendente online do setor, um de cada vez, já aberta. Administradores ficam fora do rodízio, e se ninguém estiver online a conversa fica em Pendentes. As automações do chat continuam valendo. O modo padrão continua sendo a fila de espera.",
     adminOnly: true,

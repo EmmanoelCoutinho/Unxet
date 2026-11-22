@@ -36,6 +36,8 @@ import { ChatHeader } from "./ChatHeader";
 import { ConversationCampaignBanner } from "../../modules/scheduledMessages/components/ConversationCampaignBanner";
 import { ConversationDealBar } from "../../modules/leads/components/ConversationDealBar";
 import { MessageBubble } from "./MessageBubble";
+import { MessageAlbum } from "./MessageAlbum";
+import { groupAlbums } from "../../lib/messageAlbums";
 import { SystemEventBubble } from "./SystemEventBubble";
 import { MessageInput } from "./MessageInput";
 import { ArrowDownIcon, ArrowLeftIcon } from "lucide-react";
@@ -453,6 +455,9 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
     return [...messageItems, ...eventItems].sort((a, b) => a.sortAt - b.sortAt);
   }, [messages, events, hasOlderMessages]);
+
+  // Fotos seguidas da mesma pessoa aparecem como álbum (como no WhatsApp)
+  const displayItems = useMemo(() => groupAlbums(timelineItems), [timelineItems]);
 
   // Chave do último item: muda quando chega mensagem nova no fim, mas não
   // quando mensagens antigas entram no topo
@@ -1973,8 +1978,19 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
                 </button>
               </div>
             ) : null}
-            {timelineItems.map((item) =>
-              item.kind === "message" ? (
+            {displayItems.map((item) =>
+              item.kind === "album" ? (
+                <div
+                  key={`album-${item.messages[0].id}`}
+                  className="rounded-lg transition-colors duration-700"
+                >
+                  <MessageAlbum
+                    messages={item.messages}
+                    isGroup={conversation?.isGroup === true}
+                    onReply={canReplyAndReact ? handleStartReply : undefined}
+                  />
+                </div>
+              ) : item.kind === "message" ? (
                 <div
                   key={`message-${item.message.id}`}
                   data-message-id={item.message.id}

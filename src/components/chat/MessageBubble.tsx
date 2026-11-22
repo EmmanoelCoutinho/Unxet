@@ -30,6 +30,8 @@ import { useMediaUrl } from "../../lib/mediaUrls";
 import { MAX_EDIT_TEXT_LENGTH } from "../../lib/messageEdit";
 import { locationMapsLinkFromText, pixFromText } from "../../lib/messageQuickActions";
 import { CloseButton } from "../ui/CloseButton";
+import { PollCard } from "./PollCard";
+import { pollFromPayload } from "../../lib/whatsappPoll";
 
 interface MessageBubbleProps {
   message: UiMessage;
@@ -274,6 +276,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     payload?.image?.caption ?? payload?.document?.caption ?? null;
 
   const displayText = message.text || captionFromPayload || "";
+  // Enquete do WhatsApp: mostra o cartão no lugar do texto
+  const poll = useMemo(
+    () => (message.deletedAt ? null : pollFromPayload(message.payload)),
+    [message.deletedAt, message.payload],
+  );
   const transcriptStatus = message.transcriptStatus;
   const transcriptText = message.transcriptText;
 
@@ -339,7 +346,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     localStatus === "failed" && typeof onRetry === "function";
 
   // Atalhos: copiar o Pix e abrir a localização no Maps
-  const quickText = message.deletedAt || rawMediaUrl ? "" : displayText;
+  const quickText = message.deletedAt || rawMediaUrl || poll ? "" : displayText;
   const pixAction = useMemo(() => pixFromText(quickText), [quickText]);
   const locationLink = useMemo(
     () => locationMapsLinkFromText(quickText),
@@ -894,7 +901,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </>
               )}
 
-              {displayText && mediaType !== "audio" && !onlyAudio ? (
+              {poll ? (
+                <PollCard
+                  poll={poll}
+                  votes={message.pollVotes}
+                  outgoing={!isClient}
+                  contactName={contactName}
+                  isGroup={isGroup}
+                />
+              ) : displayText && mediaType !== "audio" && !onlyAudio ? (
                 <div className="text-sm whitespace-pre-wrap break-words">
                   <span>
                     <WhatsappText text={visibleText} />

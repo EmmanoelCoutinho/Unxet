@@ -36,6 +36,7 @@ type DbMessage = {
   edited_at?: string | null;
   original_text?: string | null;
   edit_unreadable?: boolean | null;
+  poll_votes?: UiMessage["pollVotes"] | null;
 };
 
 // Citação gravada na resposta (reply_preview) + id da original
@@ -214,6 +215,7 @@ export const mapDbMessage = (row: DbMessage): UiMessage => {
     editedAt: isDeleted ? undefined : (row.edited_at ?? undefined),
     originalText: isDeleted ? undefined : (row.original_text ?? undefined),
     editUnreadable: isDeleted ? undefined : (row.edit_unreadable ?? undefined),
+    pollVotes: isDeleted ? undefined : (row.poll_votes ?? undefined),
   };
 };
 
@@ -254,7 +256,8 @@ const MESSAGE_COLUMNS = `
   agent_reaction,
   edited_at,
   original_text,
-  edit_unreadable
+  edit_unreadable,
+  poll_votes
 `;
 
 const oldestPersistedTime = (list: UiMessage[]) => {
