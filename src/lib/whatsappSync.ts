@@ -7,6 +7,8 @@
 // mensagem que entra na conversa (migration 20261203000000).
 
 export type WhatsappSyncRow = {
+  /** Status da conexão: a faixa só aparece com o número conectado. */
+  status?: string | null;
   inbound_recovery_requested_at: string | null;
   inbound_recovery_total: number | null;
   inbound_recovery_done: number | null;
@@ -39,6 +41,8 @@ export const whatsappSyncState = (
   now = new Date(),
 ): WhatsappSyncState | null => {
   if (!row?.inbound_recovery_requested_at) return null;
+  // Número caiu de novo: a recuperação para e volta na próxima conexão
+  if (row.status && row.status !== "connected") return null;
   const total = row.inbound_recovery_total;
 
   if (total === null || total === undefined) {

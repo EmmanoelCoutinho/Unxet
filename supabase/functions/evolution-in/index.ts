@@ -329,9 +329,40 @@ async function handleMessagesUpdate(body) {
   return null;
 }
 // ---------------------------------------------------------------------------
+// Progresso da faixa "Sincronizando o WhatsApp"
+// ---------------------------------------------------------------------------
+/**
+ * Mensagem recuperada (evolution-connection-sync) que terminou de ser tratada:
+ * soma no progresso da conexão, tenha ela entrado na conversa ou sido
+ * descartada (reação, edição, contato bloqueado...). Contando só as gravadas,
+ * a faixa ficava presa em "37 de 38". Nunca lança erro.
+ */ async function bumpRecoveryProgress(instanceName) {
+  try {
+    if (!instanceName) return;
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: connection } = await supabase.from("channel_connections").select("id").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
+    if (!connection) return;
+    const { error } = await supabase.rpc("bump_inbound_recovery", {
+      p_connection_id: connection.id
+    });
+    if (error) console.warn("[INBOUND_RECOVERY_BUMP_ERROR]", error);
+  } catch (err) {
+    console.warn("[INBOUND_RECOVERY_BUMP_ERROR]", err instanceof Error ? err.message : String(err));
+  }
+}
+// ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 serve(async (req)=>{
+  const recovered = req.headers.get("x-unxet-recovered") === "1" && !!INTERNAL_BOT_SECRET && timingSafeEqual(req.headers.get("x-internal-secret") ?? "", INTERNAL_BOT_SECRET);
+  if (!recovered) return await handleWebhook(req);
+  const instanceName = await req.clone().json().then((body)=>String(body?.instance ?? "").trim()).catch(()=>"");
+  const response = await handleWebhook(req);
+  // 200 = tratada (gravada ou descartada); erro volta pela fila e conta depois
+  if (response.status === 200) await bumpRecoveryProgress(instanceName);
+  return response;
+});
+async function handleWebhook(req) {
   try {
     if (req.method !== "POST") {
       return new Response("Method not allowed", {
@@ -856,7 +887,7 @@ serve(async (req)=>{
       status: 500
     });
   }
-});
+}
 // ---------------------------------------------------------------------------
 // Mensagem enviada pelo próprio número (celular ou WhatsApp Web da empresa)
 // ---------------------------------------------------------------------------

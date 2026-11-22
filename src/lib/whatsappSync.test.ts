@@ -18,6 +18,13 @@ describe("whatsappSyncState", () => {
     expect(whatsappSyncState(row({ inbound_recovery_requested_at: null }), now)).toBeNull();
   });
 
+  it("número que caiu de novo não mostra nada", () => {
+    expect(
+      whatsappSyncState(row({ status: "disconnected", inbound_recovery_total: 38, inbound_recovery_done: 37, inbound_recovery_progress_at: minutesAgo(1) }), now),
+    ).toBeNull();
+    expect(whatsappSyncState(row({ status: "connected" }), now)).toEqual({ kind: "searching" });
+  });
+
   it("antes da primeira busca mostra que está procurando", () => {
     expect(whatsappSyncState(row(), now)).toEqual({ kind: "searching" });
   });
