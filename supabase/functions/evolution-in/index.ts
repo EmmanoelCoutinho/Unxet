@@ -33,7 +33,8 @@ import { savePhoneSentMessage, waitForKnownMessage } from "../_shared/phoneSentM
 import { queueTranscription } from "../_shared/transcription.ts";
 import { decryptSecretEdit, extractMessageEdit, extractSecretEdit, originalMessageSecret, senderJidCandidates } from "../_shared/messageEdit.ts";
 import { stickerExists, stickerStoragePath } from "../_shared/stickerStore.ts";
-import { isProtocolOnlyMessage, mediaFilename, mediaMimeType, parseEvolutionContent, unwrapEvolutionMessage } from "../_shared/evolutionContent.ts";
+import { decryptPollVote, extractPollUpdate, normalizeJids, pollDefinition } from "../_shared/pollVote.ts";
+import { isProtocolOnlyMessage, isViewOnceMedia, mediaFilename, mediaMimeType, parseEvolutionContent, unwrapEvolutionMessage } from "../_shared/evolutionContent.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -329,6 +330,108 @@ async function handleMessagesUpdate(body) {
   return null;
 }
 // ---------------------------------------------------------------------------
+// Voto em enquete
+// ---------------------------------------------------------------------------
+/**
+ * Grava o voto na enquete (messages.poll_votes, por JID de quem votou). O voto
+ * vem criptografado com o messageSecret da enquete (ver _shared/pollVote.ts);
+ * a chave usa os JIDs de quem criou e de quem votou, que podem ser o telefone
+ * ou o LID do cliente e da empresa: tentamos as combinações.
+ */ async function applyPollVote(supabase, { body, data, isFromMe, update }) {
+  const { data: poll, error } = await supabase.from("messages").select("id, conversation_id, direction, payload, poll_votes").eq("meta_message_id", update.pollId).order("created_at", {
+    ascending: false
+  }).limit(1).maybeSingle();
+  if (error) throw error;
+  if (!poll) {
+    console.log("[POLL_VOTE_POLL_NOT_FOUND]", update.pollId);
+    return;
+  }
+  const definition = pollDefinition(poll.payload?.data?.message ?? poll.payload?.message);
+  if (!definition) {
+    console.log("[POLL_VOTE_NOT_A_POLL]", update.pollId);
+    return;
+  }
+  let options = update.plainOptions;
+  let voterJid = normalizeJids([
+    data?.key?.participant,
+    data?.key?.remoteJid
+  ])[0] ?? (isFromMe ? "me" : "cliente");
+  if (!options) {
+    const messageSecret = originalMessageSecret(poll.payload);
+    if (!messageSecret) {
+      console.log("[POLL_VOTE_NO_SECRET]", update.pollId);
+      return;
+    }
+    const instanceName = String(body?.instance ?? "").trim();
+    const key = data?.key ?? {};
+    const pollKey = poll.payload?.data?.key ?? {};
+    const clientValues = [
+      key.senderLid,
+      key.participantLid,
+      key.participant,
+      key.remoteJid,
+      key.remoteJidAlt,
+      key.participantAlt,
+      key.participantPn,
+      key.senderPn,
+      pollKey.senderLid,
+      pollKey.participant,
+      pollKey.remoteJid,
+      pollKey.remoteJidAlt
+    ];
+    if (!normalizeJids(clientValues).some((jid)=>jid.endsWith("@lid"))) {
+      const { data: rows } = await supabase.from("messages").select("payload->data->key->>remoteJid").eq("conversation_id", poll.conversation_id).eq("direction", "inbound").like("payload->data->key->>remoteJid", "%@lid").limit(1);
+      const lid = rows?.[0]?.remoteJid ?? await lookupLid(instanceName, key.remoteJidAlt ?? key.remoteJid);
+      if (lid) clientValues.unshift(lid);
+    }
+    const { data: connection } = await supabase.from("channel_connections").select("connected_phone").eq("provider", "evolution").eq("session_name", instanceName).is("archived_at", null).maybeSingle();
+    const ownValues = [
+      body?.sender,
+      connection?.connected_phone
+    ];
+    const ownPhone = normalizeJids(ownValues).find((jid)=>!jid.endsWith("@lid"));
+    const ownLid = ownPhone ? await lookupLid(instanceName, ownPhone) : null;
+    if (ownLid) ownValues.unshift(ownLid);
+    const jids = normalizeJids([
+      ...clientValues,
+      ...ownValues
+    ]);
+    const result = await decryptPollVote({
+      update,
+      messageSecret,
+      options: definition.options,
+      creatorJids: jids,
+      voterJids: jids
+    });
+    console.log("[POLL_VOTE_DECRYPT]", JSON.stringify({
+      pollId: update.pollId,
+      decrypted: !!result,
+      tried: jids.length,
+      voterJid: result?.voterJid ?? null,
+      creatorJid: result?.creatorJid ?? null
+    }));
+    if (!result) return;
+    options = result.options;
+    voterJid = result.voterJid;
+  }
+  const at = new Date(update.timestampMs ?? (Number(body?.data?.messageTimestamp) * 1000 || Date.now())).toISOString();
+  const votes = poll.poll_votes && typeof poll.poll_votes === "object" ? {
+    ...poll.poll_votes
+  } : {};
+  // Voto atrasado (chegou depois de um mais novo da mesma pessoa) não vale
+  if (votes[voterJid]?.at && votes[voterJid].at > at) return;
+  votes[voterJid] = {
+    options,
+    at,
+    name: isFromMe ? null : body?.data?.pushName ?? null,
+    fromMe: isFromMe
+  };
+  const { error: updateError } = await supabase.from("messages").update({
+    poll_votes: votes
+  }).eq("id", poll.id);
+  if (updateError) throw updateError;
+}
+// ---------------------------------------------------------------------------
 // Progresso da faixa "Sincronizando o WhatsApp"
 // ---------------------------------------------------------------------------
 /**
@@ -507,7 +610,38 @@ async function handleWebhook(req) {
         status: 200
       });
     }
-    // ── Eventos de protocolo (mensagem apagada, voto em enquete, fixar etc.) ─
+    // ── Voto em enquete: atualiza os votos da enquete ──────────────────────
+    const pollUpdate = isMessageEvent ? extractPollUpdate(body?.data?.message) : null;
+    if (pollUpdate) {
+      try {
+        await applyPollVote(supabase, {
+          body,
+          data,
+          isFromMe,
+          update: pollUpdate
+        });
+      } catch (err) {
+        console.error("[POLL_VOTE_ERROR]", err);
+      }
+      return new Response(JSON.stringify({
+        ignored: true,
+        reason: "poll_vote"
+      }), {
+        status: 200
+      });
+    }
+    // ── Visualização única: o WhatsApp não entrega o arquivo aos aparelhos
+    // conectados (o WhatsApp Web também não mostra), então não é gravada ──
+    if (isMessageEvent && isViewOnceMedia(body?.data?.message)) {
+      console.log("[VIEW_ONCE_IGNORED]", body?.data?.key?.id ?? null);
+      return new Response(JSON.stringify({
+        ignored: true,
+        reason: "view_once"
+      }), {
+        status: 200
+      });
+    }
+    // ── Eventos de protocolo (mensagem apagada, fixar etc.) ────────────────
     if (isMessageEvent && isProtocolOnlyMessage(data?.message)) {
       return new Response(JSON.stringify({
         ignored: true,

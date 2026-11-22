@@ -3,6 +3,7 @@ import {
   UNSUPPORTED_TEXT,
   UNSUPPORTED_TEXT_FROM_ME,
   isProtocolOnlyMessage,
+  isViewOnceMedia,
   mediaFilename,
   mediaMimeType,
   parseEvolutionContent,
@@ -246,5 +247,21 @@ describe("tipo e nome do arquivo", () => {
       .toBe("application/pdf");
     expect(mediaFilename({ documentMessage: { fileName: "nota.pdf" } })).toBe("nota.pdf");
     expect(mediaFilename({ imageMessage: image })).toBeUndefined();
+  });
+});
+
+describe("isViewOnceMedia", () => {
+  it("foto, vídeo e áudio de visualização única não são gravados", () => {
+    expect(isViewOnceMedia({ viewOnceMessageV2: { message: { imageMessage: image } }, ...ctx })).toBe(true);
+    expect(isViewOnceMedia({ ephemeralMessage: { message: { viewOnceMessage: { message: { videoMessage: {} } } } } })).toBe(true);
+    expect(isViewOnceMedia({ viewOnceMessageV2Extension: { message: { audioMessage: { ptt: true } } } })).toBe(true);
+    expect(isViewOnceMedia({ imageMessage: { ...image, viewOnce: true } })).toBe(true);
+  });
+
+  it("botões dentro de viewOnceMessage e foto comum continuam", () => {
+    expect(isViewOnceMedia({ viewOnceMessage: { message: { interactiveMessage: { body: { text: "oi" } } } } })).toBe(false);
+    expect(isViewOnceMedia({ imageMessage: image })).toBe(false);
+    expect(isViewOnceMedia({ associatedChildMessage: { message: { imageMessage: image } } })).toBe(false);
+    expect(isViewOnceMedia({ conversation: "oi" })).toBe(false);
   });
 });

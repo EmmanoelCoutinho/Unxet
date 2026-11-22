@@ -61,6 +61,28 @@ export function unwrapEvolutionMessage(message: any): any {
   return current ?? {};
 }
 
+const VIEW_ONCE_KEYS = ["viewOnceMessage", "viewOnceMessageV2", "viewOnceMessageV2Extension"];
+const VIEW_ONCE_MEDIA_KEYS = ["imageMessage", "videoMessage", "audioMessage", "ptvMessage"];
+
+/**
+ * Foto, vídeo ou áudio de visualização única. O WhatsApp não entrega o
+ * arquivo aos aparelhos conectados (nem o WhatsApp Web mostra): não é gravada.
+ * O embrulho viewOnceMessage também carrega botões e listas, que continuam.
+ */
+export function isViewOnceMedia(message: any): boolean {
+  let current = message ?? {};
+  let insideViewOnce = false;
+  for (let depth = 0; depth < 6; depth++) {
+    const media = VIEW_ONCE_MEDIA_KEYS.find((key) => current?.[key]);
+    if (media) return insideViewOnce || current[media]?.viewOnce === true;
+    const wrapper = WRAPPER_KEYS.find((key) => current?.[key]?.message);
+    if (!wrapper) return false;
+    if (VIEW_ONCE_KEYS.includes(wrapper)) insideViewOnce = true;
+    current = current[wrapper].message;
+  }
+  return false;
+}
+
 /** Evento sem conteúdo para o atendente (apagar mensagem, voto em enquete, álbum...). */
 export function isProtocolOnlyMessage(message: any): boolean {
   const keys = contentKeys(unwrapEvolutionMessage(message));

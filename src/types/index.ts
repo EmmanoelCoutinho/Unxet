@@ -126,6 +126,8 @@ export type Message = {
   originalText?: string;
   /** A edição chegou, mas o texto novo não pôde ser lido */
   editUnreadable?: boolean;
+  /** Votos da enquete do WhatsApp, por JID de quem votou (ver lib/whatsappPoll.ts) */
+  pollVotes?: Record<string, { options: string[]; at?: string; name?: string | null; fromMe?: boolean }>;
   deliveryStatus?: MessageDeliveryStatus;
   /** Motivo que o provedor deu para não entregar (deliveryStatus "failed") */
   failureReason?: string;
