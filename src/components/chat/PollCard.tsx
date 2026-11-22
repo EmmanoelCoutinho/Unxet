@@ -56,7 +56,8 @@ export const PollCard: React.FC<PollCardProps> = ({
         <p className="break-words text-sm font-semibold">{poll.name || "Enquete"}</p>
       </div>
       <p className={`mt-1 text-xs ${muted}`}>
-        {poll.multiple ? "Selecione uma ou mais opções" : "Selecione uma opção"}
+        Para votar, use o WhatsApp no celular da empresa
+        {poll.multiple ? " (aceita mais de uma opção)" : ""}
       </p>
 
       <ul className="mt-3 space-y-3">
