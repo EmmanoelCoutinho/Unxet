@@ -6,6 +6,7 @@ const SUPABASE_URL = "https://abc.supabase.co";
 
 let parseSurveyScore: (raw: unknown, scaleMin?: number, scaleMax?: number) => number | null;
 let isCourtesyReply: (raw: unknown) => boolean;
+let isGreetingOnly: (raw: unknown) => boolean;
 let isScoreAttempt: (raw: unknown) => boolean;
 let scaleFromMessage: (message: unknown) => { min: number; max: number } | null;
 let matchSurveyAnswer: (admin: unknown, params: Record<string, unknown>) => Promise<any>;
@@ -16,7 +17,7 @@ beforeAll(async () => {
   vi.stubGlobal("Deno", {
     env: { get: (name: string) => (name === "SUPABASE_URL" ? SUPABASE_URL : "") },
   });
-  ({ parseSurveyScore, isCourtesyReply, isScoreAttempt, scaleFromMessage, matchSurveyAnswer } = await import("./satisfactionSurvey"));
+  ({ parseSurveyScore, isCourtesyReply, isGreetingOnly, isScoreAttempt, scaleFromMessage, matchSurveyAnswer } = await import("./satisfactionSurvey"));
   ({ mediaPathFromUrl, isClinicMediaUrl } = await import("./media"));
 });
 
@@ -229,11 +230,19 @@ describe("matchSurveyAnswer (mesma nota entregue duas vezes)", () => {
 
   // Caso da Ideal (23 e 24/11): "Boa tarde!" dias depois ficava na conversa
   // encerrada e a equipe não via
-  it("cumprimento ou agradecimento depois de 2 horas reabre a conversa", async () => {
-    for (const text of ["Boa tarde!", "Bom dia", "Obrigada"]) {
+  it("cumprimento sozinho depois de 2 horas reabre a conversa", async () => {
+    for (const text of ["Boa tarde!", "Bom dia", "Boa noite, tudo bem"]) {
       const admin = makeAdmin();
       expect(await matchSurveyAnswer(admin, { ...params, text })).toBeNull();
       expect(admin.tables.satisfaction_surveys[0].status).toBe("skipped");
+    }
+  });
+
+  it("agradecimento dias depois continua sem reabrir", async () => {
+    for (const text of ["Obrigada", "Obrigada, boa tarde!", "ok 👍", "🙏", "Muito bom"]) {
+      const admin = makeAdmin();
+      expect(await matchSurveyAnswer(admin, { ...params, text })).toMatchObject({ conversationId: "conv1", score: null });
+      expect(admin.tables.satisfaction_surveys[0].status).toBe("sent");
     }
   });
 
@@ -261,6 +270,22 @@ describe("isCourtesyReply (agradecimento depois do encerramento)", () => {
   it.each(["Quero remarcar", "obrigado, pode me ajudar?", "5", "", null])("trata %j como mensagem normal", (input) => {
     expect(isCourtesyReply(input)).toBe(false);
   });
+});
+
+describe("isGreetingOnly (cumprimento só vale por 2 horas)", () => {
+  it.each(["Bom dia", "Boa tarde!", "Boa noite.", "Bom dia, tudo bem", "Boa tarde 😊", "Bom"])(
+    "%j é só cumprimento",
+    (input) => {
+      expect(isGreetingOnly(input)).toBe(true);
+    },
+  );
+
+  it.each(["Obrigada, boa tarde!", "Ok, bom dia", "Muito bom", "Obrigado", "🙏", "Bom dia, preciso de ajuda", "", null])(
+    "%j não é só cumprimento",
+    (input) => {
+      expect(isGreetingOnly(input)).toBe(false);
+    },
+  );
 });
 
 describe("mediaPathFromUrl (bucket privado)", () => {
