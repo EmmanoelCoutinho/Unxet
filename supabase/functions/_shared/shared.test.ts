@@ -218,6 +218,30 @@ describe("matchSurveyAnswer (mesma nota entregue duas vezes)", () => {
     expect(admin.tables.satisfaction_surveys[0].status).toBe("skipped");
   });
 
+  it("agradecimento logo depois do envio mantém a pesquisa e não reabre", async () => {
+    const admin = makeAdmin();
+    admin.tables.satisfaction_surveys[0].sent_at = new Date(Date.now() - 30 * 60_000).toISOString();
+    for (const text of ["Obrigado!", "Bom dia", "Boa tarde!"]) {
+      expect(await matchSurveyAnswer(admin, { ...params, text })).toMatchObject({ conversationId: "conv1", score: null });
+    }
+    expect(admin.tables.satisfaction_surveys[0].status).toBe("sent");
+  });
+
+  // Caso da Ideal (23 e 24/11): "Boa tarde!" dias depois ficava na conversa
+  // encerrada e a equipe não via
+  it("cumprimento ou agradecimento depois de 2 horas reabre a conversa", async () => {
+    for (const text of ["Boa tarde!", "Bom dia", "Obrigada"]) {
+      const admin = makeAdmin();
+      expect(await matchSurveyAnswer(admin, { ...params, text })).toBeNull();
+      expect(admin.tables.satisfaction_surveys[0].status).toBe("skipped");
+    }
+  });
+
+  it("nota dias depois continua valendo, mesmo fora das 2 horas", async () => {
+    const admin = makeAdmin();
+    expect(await matchSurveyAnswer(admin, { ...params, text: "10, obrigado" })).toMatchObject({ score: 10 });
+  });
+
   it("sem pesquisa pendente, outra mensagem segue como mensagem normal", async () => {
     const admin = makeAdmin();
     await matchSurveyAnswer(admin, params);
