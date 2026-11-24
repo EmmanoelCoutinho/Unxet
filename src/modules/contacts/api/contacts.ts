@@ -7,6 +7,7 @@ import type {
   ContactNote,
   CreateContactNoteInput,
 } from "../types/contacts";
+import { ACTIVE_WINDOW_DAYS, daysSince, isActiveContact } from "../utils/activity";
 
 type ContactNoteRow = Omit<ContactNote, "user_name">;
 
@@ -76,13 +77,6 @@ const mapConversationChannel = (
   return "whatsapp";
 };
 
-const mapConversationStatus = (
-  status: ConversationContactSummaryRow["status"] | null | undefined,
-): Contact["status"] => {
-  if (status === "closed") return "inactive";
-  return "active";
-};
-
 const loadConversationSummaries = async (
   clinicId: string,
   contactIds: string[],
@@ -123,12 +117,20 @@ const loadConversationSummaries = async (
   return summaries;
 };
 
+/** A mais recente de duas datas ISO (qualquer uma pode faltar). */
+const latestDate = (a: string | null | undefined, b: string | null | undefined) => {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return new Date(a) >= new Date(b) ? a : b;
+};
+
 const mapDbContact = (
   row: DbContactRow,
   conversation: ConversationContactSummaryRow | undefined,
   userNames = new Map<string, string>(),
 ): Contact => {
   const assignedUserId = conversation?.assigned_user_id ?? null;
+  const lastContactAt = latestDate(row.last_seen_at, conversation?.last_message_at);
 
   return {
     id: row.id,
@@ -138,14 +140,19 @@ const mapDbContact = (
     email: row.email ?? null,
     avatar_url: row.image_url,
     channel: mapConversationChannel(conversation?.channel),
-    status: mapConversationStatus(conversation?.status),
+    status: isActiveContact({
+      lastContactAt,
+      conversationStatus: conversation?.status ?? null,
+    })
+      ? "active"
+      : "inactive",
     commercial_status: "lead",
     assigned_user_id: assignedUserId,
     assigned_user_name: assignedUserId
       ? userNames.get(assignedUserId) ?? null
       : null,
     tags: [],
-    last_contact_at: row.last_seen_at ?? conversation?.last_message_at ?? null,
+    last_contact_at: lastContactAt,
     created_at: row.first_seen_at ?? row.created_at,
   };
 };
@@ -262,18 +269,17 @@ export const getContactMetrics = async (
   const contacts = (data ?? []) as Array<{ last_seen_at: string | null }>;
 
   const now = Date.now();
-  const daysSince = (date: string | null) =>
-    date ? (now - new Date(date).getTime()) / 86400000 : Number.POSITIVE_INFINITY;
 
   return {
     total: contacts.length,
-    active: contacts.filter((contact) => daysSince(contact.last_seen_at) < 30)
-      .length,
+    active: contacts.filter((contact) =>
+      isActiveContact({ lastContactAt: contact.last_seen_at, now }),
+    ).length,
     inactive7Days: contacts.filter(
-      (contact) => daysSince(contact.last_seen_at) >= 7,
+      (contact) => daysSince(contact.last_seen_at, now) >= 7,
     ).length,
     inactive30Days: contacts.filter(
-      (contact) => daysSince(contact.last_seen_at) >= 30,
+      (contact) => daysSince(contact.last_seen_at, now) >= ACTIVE_WINDOW_DAYS,
     ).length,
   };
 };
