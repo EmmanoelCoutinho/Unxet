@@ -2,7 +2,9 @@
 // @ts-nocheck
 // Pesquisa de satisfação: envio ao encerrar e captura da resposta.
 // A nota é sempre de 0 a 10 e a pesquisa não tem prazo: espera até o cliente
-// mandar outra mensagem que não seja nota ou até a próxima pesquisa.
+// mandar outra mensagem que não seja nota, até a próxima pesquisa, até a
+// conversa reabrir ou até a empresa desligar a pesquisa (os dois últimos por
+// gatilho no banco, migration 20261205000000).
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -308,6 +310,11 @@ export const sendSatisfactionSurvey = async (admin, conversationId: string) => {
 // Reentregas do webhook chegam em segundos ou minutos (a fila tenta de novo)
 const DUPLICATE_ANSWER_WINDOW_MS = 30 * 60_000;
 
+// Agradecimento ou cumprimento ("Obrigado!", "Bom dia") só fica na conversa
+// encerrada enquanto o atendimento é recente. A pesquisa não tem prazo, mas o
+// cliente que volta depois disso com um "Bom dia" quer ser atendido.
+export const COURTESY_WINDOW_MS = 2 * 60 * 60_000;
+
 /**
  * A mesma resposta entregue duas vezes (webhook duplicado ou reenviado pela
  * fila): a primeira entrega já registrou a nota, então a segunda não encontra
@@ -351,9 +358,10 @@ const findDuplicateAnswer = async (admin, params: {
  *   (o chamador grava a mensagem na conversa encerrada e NÃO a reabre).
  * - Nota dentro da escala que a mensagem da pesquisa pede, mesmo que a
  *   escala gravada seja outra: registra e corrige a escala da pesquisa.
- * - Só agradecimento/emoji ("Obrigado!", "👍") ou nota fora da escala ("8" em
- *   1 a 5): mantém a pesquisa pendente e retorna a pesquisa com score null (o
- *   chamador grava na conversa encerrada sem reabrir).
+ * - Só agradecimento/emoji ("Obrigado!", "👍") até 2 horas depois do envio,
+ *   ou nota fora da escala ("8" em 1 a 5): mantém a pesquisa pendente e
+ *   retorna a pesquisa com score null (o chamador grava na conversa encerrada
+ *   sem reabrir). Depois das 2 horas, agradecimento é mensagem comum.
  * - Mesma nota entregue de novo (webhook duplicado): retorna a pesquisa já
  *   respondida com duplicate: true, sem registrar nem agradecer outra vez.
  * - Outro texto: marca a pesquisa como "skipped" e retorna null.
@@ -366,7 +374,7 @@ export const matchSurveyAnswer = async (admin, params: {
 }) => {
   const { data: survey, error } = await admin
     .from("satisfaction_surveys")
-    .select("id, conversation_id, channel, channel_connection_id, scale_min, scale_max")
+    .select("id, conversation_id, channel, channel_connection_id, scale_min, scale_max, sent_at")
     .eq("clinic_id", params.clinicId)
     .eq("contact_id", params.contactId)
     .eq("channel_connection_id", params.channelConnectionId)
@@ -399,9 +407,11 @@ export const matchSurveyAnswer = async (admin, params: {
   }
 
   if (score === null) {
-    // "Obrigado!", "ok 👍" ou nota fora da escala: a pesquisa continua valendo
-    // e a conversa não reabre
-    if (isCourtesyReply(params.text) || isScoreAttempt(params.text)) {
+    // "Obrigado!", "ok 👍" logo depois do encerramento ou nota fora da escala:
+    // a pesquisa continua valendo e a conversa não reabre
+    const sentAt = Date.parse(survey.sent_at ?? "");
+    const courtesyStillCounts = Number.isFinite(sentAt) && Date.now() - sentAt <= COURTESY_WINDOW_MS;
+    if ((courtesyStillCounts && isCourtesyReply(params.text)) || isScoreAttempt(params.text)) {
       return { surveyId: survey.id, conversationId: survey.conversation_id, score: null };
     }
     await admin.from("satisfaction_surveys").update({ status: "skipped" }).eq("id", survey.id);
