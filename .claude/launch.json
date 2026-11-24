@@ -1,0 +1,124 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5173",
+        "--strictPort"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "campaigns-web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d C:\\develop\\MedFlow\\.claude\\worktrees\\campaigns-unified && C:\\develop\\MedFlow\\node_modules\\.bin\\vite.cmd --port 5174 --strictPort"
+      ],
+      "port": 5174
+    },
+    {
+      "name": "web-local-db",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--mode",
+        "localtest",
+        "--port",
+        "5175",
+        "--strictPort"
+      ],
+      "port": 5175
+    },
+    {
+      "name": "web-local-db-5176",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--mode",
+        "localtest",
+        "--port",
+        "5176",
+        "--strictPort"
+      ],
+      "port": 5176
+    },
+    {
+      "name": "company-profile-web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d C:\\develop\\MedFlow\\.claude\\worktrees\\dados-da-empresa && C:\\develop\\MedFlow\\node_modules\\.bin\\vite.cmd --mode localtest --port 5184 --strictPort"
+      ],
+      "port": 5184
+    },
+    {
+      "name": "landing-preview",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d C:\\develop\\unxet-landing && node_modules\\.bin\\vite.cmd preview --port 5181 --strictPort"
+      ],
+      "port": 5181
+    },
+    {
+      "name": "tutorials-web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d C:\\develop\\MedFlow\\.claude\\worktrees\\tutorials && C:\\develop\\MedFlow\\node_modules\\.bin\\vite.cmd --port 5182 --strictPort"
+      ],
+      "port": 5182
+    },
+    {
+      "name": "tutorials-storage-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5185",
+        "--strictPort"
+      ],
+      "port": 5185
+    },
+    {
+      "name": "status-link-web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d C:\\develop\\MedFlow\\.claude\\worktrees\\system-health && C:\\develop\\MedFlow\\node_modules\\.bin\\vite.cmd --port 5183 --strictPort"
+      ],
+      "port": 5183
+    },
+    {
+      "name": "chat-ajustes-web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d C:\\develop\\mf-212 && C:\\develop\\MedFlow\\node_modules\\.bin\\vite.cmd --mode localtest --port 5186 --strictPort"
+      ],
+      "port": 5186
+    },
+    {
+      "name": "figurinhas-web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d C:\\develop\\mf-fig && C:\\develop\\MedFlow\\node_modules\\.bin\\vite.cmd --mode localtest --port 5188 --strictPort"
+      ],
+      "port": 5188
+    }
+  ]
+}
