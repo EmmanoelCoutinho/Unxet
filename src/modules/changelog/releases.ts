@@ -76,7 +76,7 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "fixed",
-    text: "Pesquisa de satisfação: o cliente que volta a escrever depois de 2 horas com um \"Bom dia\" ou \"Obrigado\" reabre a conversa, em vez de a mensagem ficar escondida no atendimento finalizado. Ao desligar a pesquisa, quem ainda não tinha respondido deixa de ser esperado, e a resposta ao menu do bot não é mais confundida com nota.",
+    text: "Pesquisa de satisfação: o cliente que volta a escrever depois de 2 horas com um \"Bom dia\" ou \"Boa tarde\" reabre a conversa, em vez de a mensagem ficar escondida no atendimento finalizado. Ao desligar a pesquisa, quem ainda não tinha respondido deixa de ser esperado, e a resposta ao menu do bot não é mais confundida com nota.",
   },
 ];
 
