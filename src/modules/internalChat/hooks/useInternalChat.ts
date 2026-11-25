@@ -12,8 +12,15 @@ import {
   listTeamMembers,
   markInternalThreadRead,
   sendInternalMessage,
+  uploadInternalAttachment,
 } from "../api/internalChat";
+import {
+  classifyInternalFile,
+  messagePreview,
+  type ClassifiedFile,
+} from "../utils/attachments";
 import type {
+  InternalAttachment,
   InternalMessage,
   InternalMessagesPage,
   InternalThread,
@@ -62,7 +69,7 @@ export function applyMessageToThreads(
         ? {
             ...thread,
             lastMessageAt: message.createdAt,
-            lastMessageBody: message.body.slice(0, 140),
+            lastMessageBody: messagePreview(message).slice(0, 140),
             lastMessageSenderId: message.senderId,
             unreadCount: thread.unreadCount + (options.countAsUnread ? 1 : 0),
           }
@@ -190,16 +197,47 @@ export function useInternalMessages(threadId: string | null) {
   };
 }
 
+export type InternalSendInput = {
+  text?: string;
+  /** Arquivo do computador, colado ou áudio gravado. */
+  file?: File;
+  /** Figurinha já salva na empresa (<empresa>/stickers/...). */
+  stickerPath?: string;
+  /** Reenvio de uma mensagem que falhou (mesmo id). */
+  retryId?: string;
+};
+
+// Arquivo de um envio que falhou: guardado para o "Tentar novamente"
+const failedUploads = new Map<
+  string,
+  { file: File; classified: Extract<ClassifiedFile, { ok: true }> }
+>();
+
 export function useSendInternalMessage(threadId: string | null) {
   const { authUser } = useAuth();
+  const { clinicId } = useClinic();
   const userId = authUser?.id ?? null;
   const queryClient = useQueryClient();
 
-  /** Envia um texto novo ou reenvia uma mensagem que falhou (mesmo id). */
+  /**
+   * Envia texto, arquivo ou figurinha. Retorna o motivo quando o arquivo é
+   * recusado antes de subir (formato ou tamanho).
+   */
   return useCallback(
-    async (body: string, retryId?: string) => {
-      const text = body.trim();
-      if (!userId || !threadId || !text) return;
+    async (input: InternalSendInput): Promise<string | null> => {
+      if (!userId || !threadId || !clinicId) return null;
+
+      const retry = input.retryId ? failedUploads.get(input.retryId) : undefined;
+      const file = input.file ?? retry?.file;
+      let classified = retry?.classified;
+      if (file && !classified) {
+        const result = classifyInternalFile(file);
+        if (!result.ok) return result.reason;
+        classified = result;
+      }
+
+      const text = (input.text ?? "").trim();
+      if (!text && !file && !input.stickerPath) return null;
 
       const key = internalChatKeys.messages(userId, threadId);
       const put = (message: InternalMessage) =>
@@ -208,38 +246,85 @@ export function useSendInternalMessage(threadId: string | null) {
           messages: upsertInternalMessage(current?.messages ?? [], message),
         }));
 
+      const id = input.retryId ?? crypto.randomUUID();
+      const localUrl =
+        file && classified && classified.kind !== "file"
+          ? URL.createObjectURL(file)
+          : undefined;
+
+      const draftAttachment: InternalAttachment | null =
+        file && classified
+          ? {
+              kind: classified.kind,
+              path: "",
+              name: file.name || null,
+              mime: classified.contentType,
+              size: file.size,
+              localUrl,
+            }
+          : input.stickerPath
+            ? {
+                kind: "sticker",
+                path: input.stickerPath,
+                name: null,
+                mime: null,
+                size: null,
+              }
+            : null;
+
       const optimistic: InternalMessage = {
-        id: retryId ?? crypto.randomUUID(),
+        id,
         threadId,
         senderId: userId,
         body: text,
+        attachment: draftAttachment,
         createdAt: new Date().toISOString(),
         pending: true,
       };
       put(optimistic);
 
       try {
+        const attachment =
+          file && classified
+            ? await uploadInternalAttachment({
+                clinicId,
+                threadId,
+                file,
+                classified,
+              })
+            : draftAttachment;
+
         const saved = await sendInternalMessage({
-          id: optimistic.id,
+          id,
           threadId,
           senderId: userId,
           body: text,
+          attachment,
         });
-        put(saved);
+        failedUploads.delete(id);
+        // Mantém o arquivo local na tela até o link assinado carregar
+        put(
+          saved.attachment && localUrl
+            ? { ...saved, attachment: { ...saved.attachment, localUrl } }
+            : saved,
+        );
         applyMessageToThreads(queryClient, userId, saved, {
           countAsUnread: false,
         });
       } catch (error: any) {
         // Id repetido: a tentativa anterior chegou ao banco e só a resposta se perdeu
         if (error?.code === "23505") {
+          failedUploads.delete(id);
           await queryClient.invalidateQueries({ queryKey: key });
-          return;
+          return null;
         }
         console.error("Erro ao enviar mensagem interna:", error);
+        if (file && classified) failedUploads.set(id, { file, classified });
         put({ ...optimistic, pending: false, failed: true });
       }
+      return null;
     },
-    [userId, threadId, queryClient],
+    [userId, threadId, clinicId, queryClient],
   );
 }
 

@@ -29,6 +29,14 @@ let flushTimer: ReturnType<typeof setTimeout> | null = null;
 export const isPrivateMediaUrl = (url: unknown): url is string =>
   typeof url === "string" && !!SUPABASE_URL && url.startsWith(PRIVATE_MEDIA_PREFIX);
 
+/** Caminho no bucket a partir da URL no formato público (ou null se não for do bucket). */
+export const mediaPathFromPublicUrl = (url: unknown): string | null => {
+  if (!isPrivateMediaUrl(url)) return null;
+  const path = decodeURIComponent(url.slice(PRIVATE_MEDIA_PREFIX.length).split(/[?#]/)[0]);
+  if (!path || path.split("/").some((part) => part === ".." || part === "")) return null;
+  return path;
+};
+
 const getFreshCache = (url: string) => {
   const entry = cache.get(url);
   if (entry && entry.expiresAt - REFRESH_MARGIN_MS > Date.now()) return entry;

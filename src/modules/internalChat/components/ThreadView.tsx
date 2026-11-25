@@ -1,8 +1,23 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeftIcon, SendIcon, SmileIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  MicIcon,
+  PaperclipIcon,
+  SendIcon,
+  SmileIcon,
+  StickerIcon,
+  Trash2Icon,
+  UploadIcon,
+} from "lucide-react";
 import { toast } from "react-toastify";
 import { EmojiPicker } from "../../../components/chat/EmojiPicker";
+import { StickerPicker } from "../../../components/chat/StickerPicker";
+import { useClinic } from "../../../contexts/ClinicContext";
+import { mediaPathFromPublicUrl } from "../../../lib/mediaUrls";
 import { INTERNAL_MESSAGE_MAX_LENGTH } from "../api/internalChat";
+import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
+import { formatDuration } from "../utils/attachments";
+import { MessageAttachment } from "./MessageAttachment";
 import {
   setActiveInternalThread,
   useInternalMessages,
@@ -42,6 +57,7 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
     useInternalMessages(thread.id);
   const send = useSendInternalMessage(thread.id);
   const markRead = useMarkInternalThreadRead();
+  const { clinicId } = useClinic();
   const dock = variant === "dock";
 
   const [text, setTextState] = useState(() => drafts.get(thread.id) ?? "");
@@ -53,6 +69,11 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
       return next;
     });
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [stickersOpen, setStickersOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Conta entradas e saídas do arraste (os filhos disparam dragleave)
+  const dragDepthRef = useRef(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -131,6 +152,11 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, [emojiOpen]);
 
+  const keepAtBottom = () => {
+    const el = scrollRef.current;
+    if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight;
+  };
+
   const handleScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -155,9 +181,77 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
     setText("");
     setEmojiOpen(false);
     stickToBottomRef.current = true;
-    void send(body);
+    void send({ text: body });
     textareaRef.current?.focus();
   };
+
+  // Cada arquivo vai numa mensagem; os recusados avisam o motivo
+  const sendFiles = (files: File[]) => {
+    if (!files.length) return;
+    stickToBottomRef.current = true;
+    files.forEach((file) => {
+      void send({ file }).then((reason) => {
+        if (reason) toast.info(`${file.name}: ${reason}`);
+      });
+    });
+  };
+
+  const recorder = useVoiceRecorder((file) => sendFiles([file]));
+
+  const handlePaste = (event: React.ClipboardEvent) => {
+    const files = Array.from(event.clipboardData.files);
+    if (!files.length) return;
+    event.preventDefault();
+    sendFiles(files);
+  };
+
+  const hasFiles = (event: React.DragEvent) =>
+    Array.from(event.dataTransfer.types).includes("Files");
+
+  const dropHandlers = {
+    onDragEnter: (event: React.DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepthRef.current += 1;
+      setDragging(true);
+    },
+    onDragOver: (event: React.DragEvent) => {
+      if (hasFiles(event)) event.preventDefault();
+    },
+    onDragLeave: (event: React.DragEvent) => {
+      if (!hasFiles(event)) return;
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current === 0) setDragging(false);
+    },
+    onDrop: (event: React.DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepthRef.current = 0;
+      setDragging(false);
+      sendFiles(Array.from(event.dataTransfer.files));
+    },
+  };
+
+  const handleSticker = (url: string) => {
+    setStickersOpen(false);
+    const stickerPath = mediaPathFromPublicUrl(url);
+    if (!stickerPath) {
+      toast.error("Não foi possível enviar a figurinha.");
+      return;
+    }
+    stickToBottomRef.current = true;
+    void send({ stickerPath });
+  };
+
+  const retry = (message: InternalMessage) =>
+    void send({
+      text: message.body,
+      retryId: message.id,
+      stickerPath:
+        message.attachment?.kind === "sticker"
+          ? message.attachment.path
+          : undefined,
+    });
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -175,6 +269,8 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
     // No canal geral, identifica quem escreveu no início de cada sequência
     const showSender =
       isGeneral && !mine && (newDay || previous?.senderId !== message.senderId);
+    const { attachment } = message;
+    const isSticker = attachment?.kind === "sticker";
 
     return (
       <React.Fragment key={message.id}>
@@ -198,26 +294,65 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
                   "Usuário removido"}
               </span>
             )}
-            <div
-              className={[
-                "rounded-lg text-sm whitespace-pre-wrap break-words",
-                dock ? "px-3 py-2" : "px-4 py-3",
-                mine
-                  ? "bg-[#0A84FF] text-white"
-                  : dock
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "bg-gray-200 text-gray-900",
-                message.pending ? "opacity-70" : "",
-              ].join(" ")}
-            >
-              {message.body}
-            </div>
+            {isSticker ? (
+              <div
+                className={`${mine ? "self-end" : ""} ${message.pending ? "opacity-70" : ""}`}
+              >
+                <MessageAttachment
+                  attachment={attachment}
+                  mine={mine}
+                  compact={dock}
+                  onMediaLoad={keepAtBottom}
+                />
+              </div>
+            ) : (
+              <div
+                className={[
+                  "rounded-lg text-sm whitespace-pre-wrap break-words",
+                  attachment?.kind === "image"
+                    ? "p-1"
+                    : dock
+                      ? "px-3 py-2"
+                      : "px-4 py-3",
+                  mine
+                    ? "bg-[#0A84FF] text-white"
+                    : dock
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "bg-gray-200 text-gray-900",
+                  message.pending ? "opacity-70" : "",
+                ].join(" ")}
+              >
+                {attachment && (
+                  <MessageAttachment
+                    attachment={attachment}
+                    mine={mine}
+                    compact={dock}
+                    onMediaLoad={keepAtBottom}
+                  />
+                )}
+                {message.body && (
+                  <p
+                    className={
+                      attachment?.kind === "image"
+                        ? dock
+                          ? "px-2 pb-1 pt-1.5"
+                          : "px-3 pb-2 pt-2"
+                        : attachment
+                          ? "mt-2"
+                          : ""
+                    }
+                  >
+                    {message.body}
+                  </p>
+                )}
+              </div>
+            )}
             {message.failed ? (
               <div className="mt-1 flex items-center justify-end gap-2">
                 <span className="text-xs text-red-600">Não enviada</span>
                 <button
                   type="button"
-                  onClick={() => void send(message.body, message.id)}
+                  onClick={() => retry(message)}
                   className="text-xs font-medium text-blue-600 hover:text-blue-700"
                 >
                   Tentar novamente
@@ -236,8 +371,24 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
     );
   };
 
+  const iconButton = [
+    "flex shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-200 disabled:opacity-50",
+    dock ? "h-10 w-9" : "h-11 w-10 sm:h-12 sm:w-12",
+  ].join(" ");
+  const primaryButton = [
+    "flex shrink-0 items-center justify-center rounded-lg bg-[#0A84FF] text-white transition-colors hover:bg-[#0066d6] disabled:opacity-50",
+    dock ? "h-10 w-10" : "h-11 w-11 sm:h-12 sm:w-12",
+  ].join(" ");
+
   return (
-    <>
+    <div className="relative flex min-h-0 flex-1 flex-col" {...dropHandlers}>
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[#0A84FF] bg-blue-50/90 text-sm font-medium text-[#0A84FF]">
+          <UploadIcon className="h-6 w-6" aria-hidden />
+          Solte para enviar na conversa
+        </div>
+      )}
+
       <div
         className={[
           "flex shrink-0 items-center border-b bg-white",
@@ -307,54 +458,137 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
             : "p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-4",
         ].join(" ")}
       >
-        <div className="relative flex items-end gap-1 sm:gap-2">
-          <EmojiPicker
-            open={emojiOpen}
-            pickerRef={emojiPickerRef}
-            onPick={(emoji) => setText((current) => `${current}${emoji}`)}
-          />
-          <button
-            ref={emojiButtonRef}
-            type="button"
-            onClick={() => setEmojiOpen((value) => !value)}
-            className={[
-              "flex shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-gray-200",
-              dock ? "h-10 w-9" : "h-11 w-10 sm:h-12 sm:w-12",
-            ].join(" ")}
-            aria-label="Emojis"
-            aria-expanded={emojiOpen}
-          >
-            <SmileIcon className="h-5 w-5 text-gray-500" />
-          </button>
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            maxLength={INTERNAL_MESSAGE_MAX_LENGTH}
-            placeholder="Mensagem para a equipe..."
-            className={[
-              "min-w-0 flex-1 resize-none rounded-lg border border-gray-200 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]",
-              dock
-                ? "max-h-24 min-h-10 px-3 py-2 text-sm"
-                : "max-h-32 min-h-11 px-3 py-2.5 sm:min-h-12 sm:px-4 sm:py-3",
-            ].join(" ")}
-          />
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!text.trim()}
-            className={[
-              "flex shrink-0 items-center justify-center rounded-lg bg-[#0A84FF] text-white transition-colors hover:bg-[#0066d6] disabled:opacity-50",
-              dock ? "h-10 w-10" : "h-11 w-11 sm:h-12 sm:w-12",
-            ].join(" ")}
-            aria-label="Enviar"
-          >
-            <SendIcon className="h-4 w-4" />
-          </button>
-        </div>
+        {recorder.recording ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={recorder.cancel}
+              className={iconButton}
+              aria-label="Descartar áudio"
+              title="Descartar áudio"
+            >
+              <Trash2Icon className="h-5 w-5" />
+            </button>
+            <div
+              className={[
+                "flex flex-1 items-center gap-2 rounded-lg bg-red-50 px-3 text-sm font-medium text-red-600",
+                dock ? "h-10" : "h-11 sm:h-12",
+              ].join(" ")}
+              role="status"
+            >
+              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+              Gravando {formatDuration(recorder.seconds)}
+            </div>
+            <button
+              type="button"
+              onClick={recorder.stop}
+              className={primaryButton}
+              aria-label="Enviar áudio"
+              title="Enviar áudio"
+            >
+              <SendIcon className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="relative flex items-end gap-1 sm:gap-2">
+            <EmojiPicker
+              open={emojiOpen}
+              pickerRef={emojiPickerRef}
+              onPick={(emoji) => setText((current) => `${current}${emoji}`)}
+            />
+            <button
+              ref={emojiButtonRef}
+              type="button"
+              onClick={() => setEmojiOpen((value) => !value)}
+              className={iconButton}
+              aria-label="Emojis"
+              title="Emojis"
+              aria-expanded={emojiOpen}
+            >
+              <SmileIcon className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className={iconButton}
+              aria-label="Enviar arquivo ou imagem"
+              title="Enviar arquivo ou imagem"
+            >
+              <PaperclipIcon className="h-5 w-5" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                sendFiles(files);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setEmojiOpen(false);
+                setStickersOpen(true);
+              }}
+              className={iconButton}
+              aria-label="Figurinhas"
+              title="Figurinhas"
+            >
+              <StickerIcon className="h-5 w-5" />
+            </button>
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              rows={1}
+              maxLength={INTERNAL_MESSAGE_MAX_LENGTH}
+              placeholder="Mensagem para a equipe..."
+              className={[
+                "min-w-0 flex-1 resize-none rounded-lg border border-gray-200 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0A84FF]",
+                dock
+                  ? "max-h-24 min-h-10 px-3 py-2 text-sm"
+                  : "max-h-32 min-h-11 px-3 py-2.5 sm:min-h-12 sm:px-4 sm:py-3",
+              ].join(" ")}
+            />
+            {text.trim() ? (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                className={primaryButton}
+                aria-label="Enviar"
+                title="Enviar"
+              >
+                <SendIcon className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setEmojiOpen(false);
+                  void recorder.start();
+                }}
+                className={primaryButton}
+                aria-label="Gravar áudio"
+                title="Gravar áudio"
+              >
+                <MicIcon className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
-    </>
+
+      <StickerPicker
+        open={stickersOpen}
+        onClose={() => setStickersOpen(false)}
+        onSelect={handleSticker}
+        clinicId={clinicId}
+      />
+    </div>
   );
 };

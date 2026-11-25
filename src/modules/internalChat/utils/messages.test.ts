@@ -15,6 +15,7 @@ const msg = (
   threadId: "t1",
   senderId: "u1",
   body: id,
+  attachment: null,
   createdAt: new Date(Date.UTC(2026, 9, 12, 10, minute)).toISOString(),
   ...extra,
 });

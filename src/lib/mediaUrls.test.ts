@@ -28,6 +28,15 @@ describe("mediaUrls", () => {
     expect(isPrivateMediaUrl(undefined)).toBe(false);
   });
 
+  it("extrai o caminho do arquivo da URL do bucket", async () => {
+    const { mediaPathFromPublicUrl } = await loadModule();
+    expect(mediaPathFromPublicUrl(`${BASE}/c1/stickers/ab%20c.webp`)).toBe(
+      "c1/stickers/ab c.webp",
+    );
+    expect(mediaPathFromPublicUrl(`${BASE}/c1/../c2/a.jpg`)).toBeNull();
+    expect(mediaPathFromPublicUrl("https://exemplo.com/a.jpg")).toBeNull();
+  });
+
   it("devolve URLs externas sem chamar a função", async () => {
     const { resolveMediaUrl } = await loadModule();
     const url = "https://scontent.cdninstagram.com/a.jpg";

@@ -1,5 +1,12 @@
 import { supabase } from "../../../lib/supabaseClient";
+import { storageFile } from "../../../services/fileLibrary";
+import {
+  INTERNAL_MEDIA_BUCKET,
+  internalAttachmentPath,
+  type ClassifiedFile,
+} from "../utils/attachments";
 import type {
+  InternalAttachment,
   InternalMessage,
   InternalThread,
   TeamMember,
@@ -9,7 +16,8 @@ import type {
 export const INTERNAL_MESSAGES_PAGE_SIZE = 50;
 export const INTERNAL_MESSAGE_MAX_LENGTH = 4000;
 
-const MESSAGE_COLUMNS = "id, thread_id, sender_id, body, created_at";
+const MESSAGE_COLUMNS =
+  "id, thread_id, sender_id, body, created_at, attachment_path, attachment_kind, attachment_name, attachment_mime, attachment_size";
 
 export type DbInternalMessage = {
   id: string;
@@ -17,15 +25,63 @@ export type DbInternalMessage = {
   sender_id: string | null;
   body: string;
   created_at: string;
+  // Ausentes antes da migration 20261205000000
+  attachment_path?: string | null;
+  attachment_kind?: string | null;
+  attachment_name?: string | null;
+  attachment_mime?: string | null;
+  attachment_size?: number | null;
 };
+
+const ATTACHMENT_KINDS = new Set(["image", "audio", "file", "sticker"]);
 
 export const mapInternalMessage = (row: DbInternalMessage): InternalMessage => ({
   id: row.id,
   threadId: row.thread_id,
   senderId: row.sender_id ?? null,
   body: row.body ?? "",
+  attachment:
+    row.attachment_path && ATTACHMENT_KINDS.has(row.attachment_kind ?? "")
+      ? {
+          kind: row.attachment_kind as InternalAttachment["kind"],
+          path: row.attachment_path,
+          name: row.attachment_name ?? null,
+          mime: row.attachment_mime ?? null,
+          size: row.attachment_size ?? null,
+        }
+      : null,
   createdAt: row.created_at,
 });
+
+/** URL de referência do arquivo (formato público), trocada por link assinado ao exibir. */
+export const internalAttachmentUrl = (path: string) =>
+  supabase.storage.from(INTERNAL_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+
+/** Sobe o arquivo para a pasta da conversa e devolve o anexo para a mensagem. */
+export async function uploadInternalAttachment(params: {
+  clinicId: string;
+  threadId: string;
+  file: File;
+  classified: Extract<ClassifiedFile, { ok: true }>;
+}): Promise<InternalAttachment> {
+  const { clinicId, threadId, file, classified } = params;
+  const path = internalAttachmentPath(clinicId, threadId, classified.extension);
+  const { error } = await supabase.storage
+    .from(INTERNAL_MEDIA_BUCKET)
+    .upload(path, storageFile(file, classified.contentType), {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: classified.contentType,
+    });
+  if (error) throw error;
+  return {
+    kind: classified.kind,
+    path,
+    name: file.name || null,
+    mime: classified.contentType,
+    size: file.size,
+  };
+}
 
 export async function listInternalThreads(): Promise<InternalThread[]> {
   const { data, error } = await supabase.rpc("internal_chat_list_threads");
@@ -98,7 +154,9 @@ export async function sendInternalMessage(params: {
   threadId: string;
   senderId: string;
   body: string;
+  attachment?: InternalAttachment | null;
 }): Promise<InternalMessage> {
+  const { attachment } = params;
   const { data, error } = await supabase
     .from("internal_chat_messages")
     .insert({
@@ -106,6 +164,15 @@ export async function sendInternalMessage(params: {
       thread_id: params.threadId,
       sender_id: params.senderId,
       body: params.body,
+      ...(attachment
+        ? {
+            attachment_path: attachment.path,
+            attachment_kind: attachment.kind,
+            attachment_name: attachment.name,
+            attachment_mime: attachment.mime,
+            attachment_size: attachment.size,
+          }
+        : {}),
     })
     .select(MESSAGE_COLUMNS)
     .single();

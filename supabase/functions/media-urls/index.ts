@@ -6,7 +6,8 @@
  * Recebe as URLs que o front quer exibir e só assina as que pertencem a uma
  * mensagem ou contato visível para o usuário. A checagem é feita com o JWT do
  * próprio usuário, então vale o RLS (clínica + isolamento por departamento).
- * Arquivos do Banco de arquivos valem para todos da empresa.
+ * Arquivos do Banco de arquivos valem para todos da empresa. Anexos do chat
+ * interno valem para quem participa da conversa (RLS de internal_chat_messages).
  */
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -57,14 +58,21 @@ serve(async (req) => {
 
   // Quais dessas URLs o usuário pode ver (RLS de messages, contacts e do
   // Banco de arquivos da empresa)
-  const [byMedia, byImage, byAvatar, byLibrary] = await Promise.all([
+  const paths = Array.from(new Set(pathByUrl.values()));
+  const [byMedia, byImage, byAvatar, byLibrary, byInternal] = await Promise.all([
     userClient.from("messages").select("media_url").in("media_url", urls),
     userClient.from("messages").select("image_url").in("image_url", urls),
     userClient.from("contacts").select("image_url").in("image_url", urls),
-    userClient.from("file_library").select("url").in("url", urls)
+    userClient.from("file_library").select("url").in("url", urls),
+    // O chat interno guarda o caminho do arquivo, não a URL
+    userClient
+      .from("internal_chat_messages")
+      .select("attachment_path")
+      .in("attachment_path", paths)
   ]);
 
-  const queryError = byMedia.error ?? byImage.error ?? byAvatar.error ?? byLibrary.error;
+  const queryError =
+    byMedia.error ?? byImage.error ?? byAvatar.error ?? byLibrary.error ?? byInternal.error;
   if (queryError) {
     console.error("[MEDIA_URLS] erro ao verificar acesso:", queryError);
     return json(500, { error: "Failed to check access" });
@@ -76,8 +84,13 @@ serve(async (req) => {
     ...(byAvatar.data ?? []).map((row) => row.image_url),
     ...(byLibrary.data ?? []).map((row) => row.url)
   ]);
+  const allowedPaths = new Set<string>(
+    (byInternal.data ?? []).map((row) => row.attachment_path)
+  );
 
-  const allowedUrls = urls.filter((url) => allowed.has(url));
+  const allowedUrls = urls.filter(
+    (url) => allowed.has(url) || allowedPaths.has(pathByUrl.get(url))
+  );
   if (!allowedUrls.length) return json(200, { urls: {} });
 
   const admin = createClient(

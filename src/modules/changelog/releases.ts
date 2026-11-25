@@ -78,6 +78,10 @@ export const NEXT_RELEASE: ReleaseChange[] = [
     kind: "new",
     text: "Chat da equipe sempre à mão: no computador, ele fica numa aba no canto de baixo da tela, com o número de mensagens não lidas. Clique para abrir a conversa sem sair da tela em que você está, com o canal Geral e as pessoas da equipe na lateral. Mensagem nova da equipe toca um som próprio, que dá para silenciar no botão de som da janela.",
   },
+  {
+    kind: "new",
+    text: "Chat da equipe com arquivos, fotos, áudios e figurinhas: envie pelo clipe, arraste o arquivo para a conversa ou cole uma imagem copiada. Para mandar áudio, clique no microfone com o campo de mensagem vazio. As figurinhas são as mesmas favoritas que você usa com os clientes.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
