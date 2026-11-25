@@ -78,6 +78,15 @@ export const NEXT_RELEASE: ReleaseChange[] = [
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    date: "2026-11-24",
+    changes: [
+      {
+        kind: "fixed",
+        text: "Pesquisa de satisfação: o cliente que volta a escrever depois de 2 horas com um \"Bom dia\" ou \"Boa tarde\" reabre a conversa, em vez de a mensagem ficar escondida no atendimento finalizado. Ao desligar a pesquisa, quem ainda não tinha respondido deixa de ser esperado, e a resposta ao menu do bot não é mais confundida com nota.",
+      },
+    ],
+  },
+  {
     date: "2026-11-22",
     changes: [
       {
