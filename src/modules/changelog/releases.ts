@@ -74,6 +74,10 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
+  {
+    kind: "new",
+    text: "Chat da equipe sempre à mão: no computador, ele fica numa aba no canto de baixo da tela, com o número de mensagens não lidas. Clique para abrir a conversa sem sair da tela em que você está, com o canal Geral e as pessoas da equipe na lateral. Mensagem nova da equipe toca um som próprio, que dá para silenciar no botão de som da janela.",
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [

@@ -17,6 +17,10 @@ import {
   parseStoredBoxes,
   type FloatingBox,
 } from "./layout";
+import {
+  internalDockWidth,
+  useInternalDock,
+} from "../internalChat/dock/dockStore";
 
 // Espaço à esquerda (menu lateral) e à direita que as caixas não ocupam
 const SIDE_MARGIN = 96 + 16;
@@ -73,6 +77,8 @@ export function FloatingChatsProvider({
   const { clinicId } = useClinic();
   const isBelowLg = useIsBelowLg();
   const windowWidth = useWindowWidth();
+  // O chat da equipe ocupa o canto: as caixas de clientes usam o resto
+  const dockWidth = internalDockWidth(useInternalDock());
   // Conversa aberta em tela cheia não aparece também como caixa
   const maximizedId = useMatch("/inbox/chat/:id")?.params.id ?? null;
 
@@ -109,8 +115,8 @@ export function FloatingChatsProvider({
   const { visible, overflow } = useMemo(() => {
     if (!enabled) return { visible: [], overflow: [] };
     const shown = boxes.filter((box) => box.id !== maximizedId);
-    return layoutBoxes(shown, windowWidth - SIDE_MARGIN);
-  }, [enabled, boxes, maximizedId, windowWidth]);
+    return layoutBoxes(shown, windowWidth - SIDE_MARGIN - dockWidth);
+  }, [enabled, boxes, maximizedId, windowWidth, dockWidth]);
 
   const viewingKey = visible
     .filter((box) => !box.minimized)

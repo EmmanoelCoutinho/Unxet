@@ -7,6 +7,7 @@ import { useConversationList } from "../../contexts/ConversationsContext";
 import type { Conversation } from "../../types";
 import { useFloatingChats } from "./FloatingChatsContext";
 import type { FloatingBox } from "./layout";
+import { InternalChatDock } from "../internalChat/dock/InternalChatDock";
 
 // Erro dentro de uma caixa derruba só a caixa, não o app inteiro
 class BoxErrorBoundary extends React.Component<
@@ -196,7 +197,8 @@ const OverflowMenu: React.FC<{
 
 /**
  * Caixas flutuantes de conversa, no canto inferior direito de qualquer tela
- * do app (computador e tablet). A primeira caixa fica no canto.
+ * do app (computador e tablet). O chat da equipe fica no canto e a primeira
+ * caixa de cliente logo à esquerda dele.
  */
 export function FloatingChatsLayer() {
   const navigate = useNavigate();
@@ -209,7 +211,8 @@ export function FloatingChatsLayer() {
     [conversations],
   );
 
-  if (!enabled || visible.length === 0) return null;
+  // Sempre montada: o InternalChatDock decide sozinho se aparece
+  const boxes = enabled ? visible : [];
 
   const conversationOf = (box: FloatingBox) => byId.get(box.id);
   const nameOf = (box: FloatingBox) =>
@@ -217,7 +220,9 @@ export function FloatingChatsLayer() {
 
   return (
     <div className="pointer-events-none fixed bottom-0 right-4 z-[35] flex flex-row-reverse items-end gap-3">
-      {visible.map((box) =>
+      {/* Chat da equipe no canto; as conversas de clientes ficam à esquerda dele */}
+      <InternalChatDock />
+      {boxes.map((box) =>
         box.minimized ? (
           <MinimizedBar
             key={box.id}
@@ -251,7 +256,7 @@ export function FloatingChatsLayer() {
         ),
       )}
 
-      {overflow.length > 0 && (
+      {enabled && overflow.length > 0 && (
         <OverflowMenu
           boxes={overflow}
           nameOf={nameOf}

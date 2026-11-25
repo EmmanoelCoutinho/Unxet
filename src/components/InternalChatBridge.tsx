@@ -16,11 +16,16 @@ import {
   isInternalThreadOnScreen,
   useTeamMembers,
 } from "../modules/internalChat/hooks/useInternalChat";
+import {
+  getInternalDockState,
+  internalDock,
+} from "../modules/internalChat/dock/dockStore";
+import { playInternalChatSound } from "../modules/notifications/notificationSounds";
 
 /**
  * Recebe em tempo real as mensagens do chat interno, em qualquer tela do app:
- * atualiza a conversa aberta, o contador de não lidas do menu e avisa quem
- * está em outra tela. O RLS limita os eventos às conversas do usuário.
+ * atualiza a conversa aberta, o contador de não lidas do menu e da janela
+ * flutuante, toca o som e avisa quem está em outra tela ou conversa. O RLS limita os eventos às conversas do usuário.
  */
 export function InternalChatBridge() {
   const { authUser } = useAuth();
@@ -75,6 +80,8 @@ export function InternalChatBridge() {
 
           if (fromMe || onScreen) return;
 
+          playInternalChatSound();
+
           const senderName =
             membersRef.current.find((m) => m.userId === message.senderId)
               ?.name ?? "Equipe";
@@ -82,8 +89,14 @@ export function InternalChatBridge() {
           // Só o nome: a tela pode estar à vista de um cliente
           toast.info(`${senderName}: nova mensagem no chat interno`, {
             toastId: `internal-chat-${message.threadId}`,
-            onClick: () =>
-              navigateRef.current(`/inbox/team/${message.threadId}`),
+            // Com a janela flutuante na tela, abre a conversa nela sem trocar de tela
+            onClick: () => {
+              if (getInternalDockState().available) {
+                internalDock.open(message.threadId);
+              } else {
+                navigateRef.current(`/inbox/team/${message.threadId}`);
+              }
+            },
           });
         },
       )

@@ -23,6 +23,7 @@ import { PresenceHeartbeat } from "./components/PresenceHeartbeat";
 import { InternalChatBridge } from "./components/InternalChatBridge";
 import { FloatingChatsProvider } from "./modules/floatingChats/FloatingChatsContext";
 import { FloatingChatsLayer } from "./modules/floatingChats/FloatingChatsLayer";
+import { useInternalDock } from "./modules/internalChat/dock/dockStore";
 import { ConversationsProvider } from "./contexts/ConversationsContext";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { ConfirmDialogProvider } from "./components/ui/ConfirmDialog";
@@ -230,6 +231,9 @@ function RoutedApp() {
   const showHeader = !authRoutes.includes(location.pathname);
   const { loading } = useAuth();
   const { subscription, loading: clinicLoading } = useClinic();
+  // Chat da equipe no rodapé: a faixa de baixo fica livre para a aba não
+  // cobrir o campo de mensagem e os botões das telas
+  const { available: internalDockOnScreen } = useInternalDock();
 
   // Garante que o loading não trave a tela se o usuário estiver nas telas públicas de auth.
   // Espera também a empresa: sem isso o app de uma empresa suspensa aparece
@@ -253,7 +257,7 @@ function RoutedApp() {
       <main
         className={
           showHeader
-            ? "pt-16 h-dvh box-border overflow-hidden flex flex-col"
+            ? `pt-16 h-dvh box-border overflow-hidden flex flex-col${internalDockOnScreen ? " pb-12" : ""}`
             : "min-h-screen"
         }
       >
