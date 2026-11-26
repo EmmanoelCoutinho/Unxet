@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  AlertTriangleIcon,
   BanIcon,
   CalendarClockIcon,
   CheckCircle2Icon,
@@ -15,6 +14,7 @@ import {
   PlusIcon,
   SearchIcon,
   SendIcon,
+  ShieldAlertIcon,
   TargetIcon,
   Trash2Icon,
   UsersIcon,
@@ -28,7 +28,6 @@ import { useConfirm } from "../components/ui/ConfirmDialog";
 import { MessageStatusBadge } from "../modules/scheduledMessages/components/StatusBadge";
 import {
   useOfficialWhatsapp,
-  useQrWhatsappConnected,
   useScheduledMessageActions,
   useScheduledMessages,
 } from "../modules/scheduledMessages/hooks/useScheduledMessages";
@@ -99,8 +98,9 @@ export const ScheduledMessagesPage: React.FC = () => {
 
   const { scheduledMessages, loading, error, refetch } = useScheduledMessages(clinicId);
   const { cancel, remove } = useScheduledMessageActions();
-  const qrConnected = useQrWhatsappConnected(clinicId);
-  const { official } = useOfficialWhatsapp(clinicId);
+  // Campanha só sai pelo WhatsApp oficial (pelo QR Code o número corre risco
+  // de bloqueio): sem ele, a tela fica só com o histórico
+  const { official, loading: loadingOfficial } = useOfficialWhatsapp(clinicId);
   // Só o admin vê campanhas de outras pessoas
   const userNames = useClinicUserNames(clinicId, seesAllCampaigns);
 
@@ -209,7 +209,9 @@ export const ScheduledMessagesPage: React.FC = () => {
               <button
                 type="button"
                 onClick={goToNew}
-                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                disabled={!official}
+                title={official ? undefined : "Campanhas só saem pelo WhatsApp oficial"}
+                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <PlusIcon className="h-4 w-4" />
                 Nova campanha
@@ -217,25 +219,29 @@ export const ScheduledMessagesPage: React.FC = () => {
             </div>
           </div>
 
-          {!qrConnected && !official && (
+          {!loadingOfficial && !official && (
             <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              <AlertTriangleIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              <p>
-                O WhatsApp por QR Code da empresa está desconectado. As campanhas só saem se ele estiver
-                conectado no horário do envio.
-                {isAdmin && (
-                  <>
-                    {" "}
-                    <button
-                      type="button"
-                      onClick={() => navigate("/inbox/settings/integrations/meta")}
-                      className="font-semibold underline"
-                    >
-                      Conectar agora
-                    </button>
-                  </>
-                )}
-              </p>
+              <ShieldAlertIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <div className="space-y-1">
+                <p className="font-semibold">Campanhas só pelo WhatsApp oficial</p>
+                <p>
+                  Disparar para muitos clientes pelo WhatsApp conectado por QR Code é o que mais leva o número a
+                  ser bloqueado. Para proteger o seu número, as campanhas saem só pelo WhatsApp oficial (API da
+                  Meta), com um modelo aprovado. As conversas pelo QR Code continuam normalmente.
+                  {isAdmin && (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        onClick={() => navigate("/inbox/settings/integrations/meta")}
+                        className="font-semibold underline"
+                      >
+                        Conectar o WhatsApp oficial
+                      </button>
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
           )}
 
@@ -322,7 +328,7 @@ export const ScheduledMessagesPage: React.FC = () => {
                 ))}
               </div>
             ) : scheduledMessages.length === 0 ? (
-              <EmptyState onCreate={goToNew} />
+              <EmptyState onCreate={goToNew} disabled={!official} />
             ) : visible.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-slate-200 bg-white py-12 text-center text-sm text-slate-500">
                 Nenhuma campanha {search.trim() ? "encontrada" : "neste filtro"}.
@@ -593,7 +599,7 @@ const RowMenu: React.FC<{
   );
 };
 
-const EmptyState: React.FC<{ onCreate: () => void }> = ({ onCreate }) => (
+const EmptyState: React.FC<{ onCreate: () => void; disabled?: boolean }> = ({ onCreate, disabled }) => (
   <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-10">
     <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
       <MegaphoneIcon className="h-7 w-7" />
@@ -621,7 +627,8 @@ const EmptyState: React.FC<{ onCreate: () => void }> = ({ onCreate }) => (
     <button
       type="button"
       onClick={onCreate}
-      className="mt-6 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+      disabled={disabled}
+      className="mt-6 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <PlusIcon className="h-4 w-4" />
       Criar campanha

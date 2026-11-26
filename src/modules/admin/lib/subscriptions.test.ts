@@ -122,6 +122,14 @@ describe("getPlanAlerts", () => {
     ]);
   });
 
+  it("aponta departamentos ativos acima do limite, contando o padrão", () => {
+    const limited: SubscriptionPlan = { ...essencial, max_departments: 3, features: ["departments"] };
+    expect(getPlanAlerts(row({ extra_departments: 2 }), limited)).toEqual([]);
+    expect(getPlanAlerts(row({ extra_departments: 4 }), limited)).toEqual([
+      "5 departamentos ativos (limite 3)",
+    ]);
+  });
+
   it("Empresarial é ilimitado", () => {
     expect(
       getPlanAlerts(row({ attendants: 80, whatsapp: 2, active_bots: 3 }), empresarial),

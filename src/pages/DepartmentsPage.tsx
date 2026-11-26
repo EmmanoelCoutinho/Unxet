@@ -229,7 +229,7 @@ const useToasts = () => {
 };
 
 export const DepartmentsPage: React.FC = () => {
-  const { clinicId, membership } = useClinic();
+  const { clinicId, membership, subscription } = useClinic();
   const isAdmin = membership?.role === "admin";
 
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -722,6 +722,11 @@ export const DepartmentsPage: React.FC = () => {
 
   const canDelete = (department: Department) => !department.is_default;
 
+  // Limite do plano (ativos, o padrão incluído); o banco também barra
+  const departmentLimit = subscription?.plan.max_departments ?? null;
+  const activeDepartments = departments.filter((d) => d.is_active).length;
+  const atDepartmentLimit = departmentLimit !== null && activeDepartments >= departmentLimit;
+
   return (
     <div className="flex h-full flex-col bg-slate-50">
       <div className="px-4 pt-6 pb-4 border-b bg-white sm:px-10 sm:pt-8">
@@ -735,6 +740,13 @@ export const DepartmentsPage: React.FC = () => {
               <p className="text-sm text-gray-500">
                 Apenas administradores podem alterar departamentos.
               </p>
+              {departmentLimit !== null && (
+                <p className={`text-xs ${atDepartmentLimit ? "text-amber-700" : "text-gray-500"}`}>
+                  {activeDepartments} de {departmentLimit} departamentos ativos no plano{" "}
+                  {subscription?.plan.name}
+                  {atDepartmentLimit && ". Desative um para criar outro."}
+                </p>
+              )}
               <TutorialButton tutorialId="criar-departamentos" className="mt-1" />
             </div>
           </div>
@@ -742,7 +754,12 @@ export const DepartmentsPage: React.FC = () => {
             <button
               type="button"
               onClick={openCreateModal}
-              disabled={!isAdmin}
+              disabled={!isAdmin || atDepartmentLimit}
+              title={
+                atDepartmentLimit
+                  ? `O plano ${subscription?.plan.name ?? ""} permite até ${departmentLimit} departamentos ativos`
+                  : undefined
+              }
               className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <PlusIcon className="h-4 w-4" />
