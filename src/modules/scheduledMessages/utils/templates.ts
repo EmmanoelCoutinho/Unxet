@@ -14,8 +14,27 @@ export const TEMPLATE_BUTTONS_MAX = 3;
 export const TEMPLATE_NAME_MAX = 80;
 export const TEMPLATE_NAME_FALLBACK = "cliente";
 
-const NAME_TAG = /\{nome\}/gi;
-const OTHER_VARIABLE = /\{\{[^}]*\}\}|\{(?!nome\})[^{}\s]*\}/i;
+// {nome} serve em tudo; as outras só nos lembretes da Agenda
+const VARIABLE_TAG = /\{(nome|data|hora|profissional|servico)\}/gi;
+const VARIABLE_AT_START = /^\{(nome|data|hora|profissional|servico)\}/i;
+const VARIABLE_AT_END = /\{(nome|data|hora|profissional|servico)\}[\s.!?,;:]*$/i;
+const OTHER_VARIABLE = /\{\{[^}]*\}\}|\{(?!(?:nome|data|hora|profissional|servico)\})[^{}\s]*\}/i;
+
+/** Variáveis do texto, na ordem em que aparecem. */
+export const templateVariables = (body: string) =>
+  Array.from(String(body ?? "").matchAll(VARIABLE_TAG), (m) => m[1].toLowerCase());
+
+/** Só {nome} (ou nenhuma): o modelo serve para Campanhas. */
+export const templateIsCampaignSafe = (body: string) =>
+  templateVariables(body).every((v) => v === "nome");
+
+/** Exemplos usados na prévia do lembrete da Agenda */
+export const AGENDA_PREVIEW_VALUES: Record<string, string> = {
+  data: "sexta-feira, 28/11",
+  hora: "14:30",
+  profissional: "Dra. Ana",
+  servico: "Consulta",
+};
 
 export type TemplateFieldErrors = {
   name?: string;
@@ -47,11 +66,16 @@ export const validateTemplateFields = (input: MetaTemplateInput): TemplateFieldE
   } else if (body.length > TEMPLATE_BODY_MAX) {
     errors.body = `A mensagem do modelo pode ter no máximo ${TEMPLATE_BODY_MAX} caracteres.`;
   } else if (OTHER_VARIABLE.test(body)) {
-    errors.body = "Use só {nome} como variável. Tire as outras marcações entre chaves.";
-  } else if ((body.match(NAME_TAG) ?? []).length > 1) {
-    errors.body = "Use {nome} só uma vez na mensagem.";
-  } else if (/^{nome}/i.test(body) || /{nome}[s.!?,;:]*$/i.test(body)) {
-    errors.body = "A Meta não aceita {nome} no começo nem no fim da mensagem. Coloque algum texto antes e depois.";
+    errors.body =
+      "Use só {nome}, {data}, {hora}, {profissional} ou {servico} como variável. Tire as outras marcações entre chaves.";
+  } else {
+    const variables = templateVariables(body);
+    const repeated = variables.find((v, i) => variables.indexOf(v) !== i);
+    if (repeated) {
+      errors.body = `Use {${repeated}} só uma vez na mensagem.`;
+    } else if (VARIABLE_AT_START.test(body) || VARIABLE_AT_END.test(body)) {
+      errors.body = "A Meta não aceita variável no começo nem no fim da mensagem. Coloque algum texto antes e depois.";
+    }
   }
 
   if (footer.length > TEMPLATE_FOOTER_MAX) {
@@ -99,10 +123,16 @@ export const validateTemplateDraft = (input: MetaTemplateInput): string | null =
 };
 
 /** Texto do modelo como o cliente recebe (sem nome, a Meta exige um substituto). */
-export const renderTemplatePreview = (body: string, name: string | null | undefined) => {
+export const renderTemplatePreview = (
+  body: string,
+  name: string | null | undefined,
+  values: Record<string, string> = AGENDA_PREVIEW_VALUES,
+) => {
   const value = (name ?? "").trim();
   const resolved = /\p{L}/u.test(value) ? value : TEMPLATE_NAME_FALLBACK;
-  return body.replace(NAME_TAG, resolved);
+  return body.replace(VARIABLE_TAG, (_m, v: string) =>
+    v.toLowerCase() === "nome" ? resolved : values[v.toLowerCase()] ?? "-",
+  );
 };
 
 export const TEMPLATE_STATUS: Record<

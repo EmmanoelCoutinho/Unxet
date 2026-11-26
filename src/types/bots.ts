@@ -85,6 +85,8 @@ export type BotNodeRow = {
   // Etapa de IA: objetivo da etapa e setor que recebe a conversa
   ai_instructions?: string | null;
   ai_handoff_department_id?: string | null;
+  // Etapa de IA: pode consultar e marcar horários na Agenda
+  ai_agenda_enabled?: boolean | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -99,6 +101,7 @@ export type CreateBotNodeInput = {
   sort_order: number;
   ai_instructions?: string | null;
   ai_handoff_department_id?: string | null;
+  ai_agenda_enabled?: boolean | null;
 };
 
 export type UpdateBotNodeInput = Partial<
@@ -111,6 +114,7 @@ export type UpdateBotNodeInput = Partial<
     | "sort_order"
     | "ai_instructions"
     | "ai_handoff_department_id"
+    | "ai_agenda_enabled"
   >
 >;
 

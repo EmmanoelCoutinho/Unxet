@@ -1,8 +1,10 @@
 // Modelos de mensagem do WhatsApp oficial (Meta) usados nas Campanhas.
 // Sem dependência de Deno: testado no Vitest (metaTemplates.test.ts).
 //
-// Na Unxet o modelo é escrito com {nome}; para a Meta ele vira {{1}} e, no
-// envio, o parâmetro 1 recebe o nome do cliente.
+// Na Unxet o modelo é escrito com {nome} (e, nos lembretes da Agenda, também
+// {data}, {hora}, {profissional} e {servico}); para a Meta cada marcação vira
+// {{1}}, {{2}}... na ordem em que aparece, e no envio os parâmetros seguem a
+// mesma ordem.
 
 export const TEMPLATE_LANGUAGE = "pt_BR";
 export const TEMPLATE_BODY_MAX = 1024;
@@ -35,9 +37,31 @@ export type TemplateInput = {
   buttons?: string[] | null;
 };
 
-const NAME_TAG = /\{nome\}/gi;
+/** Variáveis aceitas nos modelos. Só {nome} serve nas Campanhas. */
+export const TEMPLATE_VARIABLES = ["nome", "data", "hora", "profissional", "servico"] as const;
+export type TemplateVariable = (typeof TEMPLATE_VARIABLES)[number];
+const VARIABLE_TAG = /\{(nome|data|hora|profissional|servico)\}/gi;
+const VARIABLE_AT_START = /^\{(nome|data|hora|profissional|servico)\}/i;
+const VARIABLE_AT_END = /\{(nome|data|hora|profissional|servico)\}[\s.!?,;:]*$/i;
 // Qualquer outra marcação entre chaves (a Meta usaria como variável)
-const OTHER_VARIABLE = /\{\{[^}]*\}\}|\{(?!nome\})[^{}\s]*\}/i;
+const OTHER_VARIABLE = /\{\{[^}]*\}\}|\{(?!(?:nome|data|hora|profissional|servico)\})[^{}\s]*\}/i;
+
+// Exemplo que a Meta pede para aprovar cada variável
+const VARIABLE_EXAMPLES: Record<TemplateVariable, string> = {
+  nome: "Maria",
+  data: "sexta-feira, 28/11",
+  hora: "14:30",
+  profissional: "Dra. Ana",
+  servico: "Consulta",
+};
+
+/** Variáveis do texto, na ordem em que aparecem. */
+export const templateVariables = (body: string): TemplateVariable[] =>
+  Array.from(String(body ?? "").matchAll(VARIABLE_TAG), (m) => m[1].toLowerCase() as TemplateVariable);
+
+/** Modelo que só usa {nome} (ou nenhuma variável): serve para Campanhas. */
+export const templateIsCampaignSafe = (body: string) =>
+  templateVariables(body).every((v) => v === "nome");
 
 const usableName = (name: unknown) => {
   const value = typeof name === "string" ? name.trim() : "";
@@ -75,12 +99,13 @@ export const validateTemplateInput = (raw: TemplateInput): string | null => {
     return `A mensagem do modelo pode ter no máximo ${TEMPLATE_BODY_MAX} caracteres.`;
   }
   if (OTHER_VARIABLE.test(body)) {
-    return "Use só {nome} como variável. Tire as outras marcações entre chaves.";
+    return "Use só {nome}, {data}, {hora}, {profissional} ou {servico} como variável. Tire as outras marcações entre chaves.";
   }
-  const nameCount = (body.match(NAME_TAG) ?? []).length;
-  if (nameCount > 1) return "Use {nome} só uma vez na mensagem.";
-  if (/^\{nome\}/i.test(body) || /\{nome\}[\s.!?,;:]*$/i.test(body)) {
-    return "A Meta não aceita {nome} no começo nem no fim da mensagem. Coloque algum texto antes e depois.";
+  const variables = templateVariables(body);
+  const repeated = variables.find((v, i) => variables.indexOf(v) !== i);
+  if (repeated) return `Use {${repeated}} só uma vez na mensagem.`;
+  if (VARIABLE_AT_START.test(body) || VARIABLE_AT_END.test(body)) {
+    return "A Meta não aceita variável no começo nem no fim da mensagem. Coloque algum texto antes e depois.";
   }
 
   const footer = input.footer ?? "";
@@ -124,12 +149,15 @@ export const toMetaTemplateName = (name: string, suffix: string) => {
 /** Componentes do POST /{waba_id}/message_templates. */
 export const buildTemplateComponents = (raw: TemplateInput) => {
   const input = normalizeTemplateInput(raw);
-  const usesName = templateUsesName(input.body);
+  const variables = templateVariables(input.body);
+  let index = 0;
   const components: Record<string, unknown>[] = [
     {
       type: "BODY",
-      text: input.body.replace(NAME_TAG, "{{1}}"),
-      ...(usesName ? { example: { body_text: [["Maria"]] } } : {}),
+      text: input.body.replace(VARIABLE_TAG, () => `{{${++index}}}`),
+      ...(variables.length > 0
+        ? { example: { body_text: [variables.map((v) => VARIABLE_EXAMPLES[v])] } }
+        : {}),
     },
   ];
   if (input.footer) components.push({ type: "FOOTER", text: input.footer });
@@ -193,9 +221,26 @@ export const describeMetaError = (body: any, fallback: string) => {
   return text ? `${fallback} ${text.slice(0, 300)}` : fallback;
 };
 
-/** Texto que o cliente recebe (com o nome, ou o substituto). */
-export const renderTemplateText = (body: string, name: unknown) =>
-  String(body ?? "").replace(NAME_TAG, usableName(name) || TEMPLATE_NAME_FALLBACK);
+/** Valor de cada variável no envio (a Meta não aceita parâmetro vazio). */
+const variableValue = (
+  variable: TemplateVariable,
+  name: unknown,
+  values: Record<string, unknown> | null | undefined,
+) => {
+  if (variable === "nome") return usableName(name) || TEMPLATE_NAME_FALLBACK;
+  const value = String(values?.[variable] ?? "").replace(/\s+/g, " ").trim();
+  return value || "-";
+};
+
+/** Texto que o cliente recebe (com o nome, ou o substituto, e as outras variáveis). */
+export const renderTemplateText = (
+  body: string,
+  name: unknown,
+  values?: Record<string, unknown> | null,
+) =>
+  String(body ?? "").replace(VARIABLE_TAG, (_m, v: string) =>
+    variableValue(v.toLowerCase() as TemplateVariable, name, values),
+  );
 
 /** Corpo do POST /{phone_number_id}/messages para enviar o modelo. */
 export const buildTemplateMessage = (params: {
@@ -204,8 +249,10 @@ export const buildTemplateMessage = (params: {
   languageCode: string;
   body: string;
   name: unknown;
+  /** {data}, {hora}, {profissional}, {servico} (lembretes da Agenda) */
+  values?: Record<string, unknown> | null;
 }) => {
-  const usesName = templateUsesName(params.body);
+  const variables = templateVariables(params.body);
   return {
     messaging_product: "whatsapp",
     to: params.to,
@@ -213,14 +260,15 @@ export const buildTemplateMessage = (params: {
     template: {
       name: params.metaTemplateName,
       language: { code: params.languageCode || TEMPLATE_LANGUAGE },
-      ...(usesName
+      ...(variables.length > 0
         ? {
             components: [
               {
                 type: "body",
-                parameters: [
-                  { type: "text", text: usableName(params.name) || TEMPLATE_NAME_FALLBACK },
-                ],
+                parameters: variables.map((v) => ({
+                  type: "text",
+                  text: variableValue(v, params.name, params.values),
+                })),
               },
             ],
           }

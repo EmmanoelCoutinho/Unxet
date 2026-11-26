@@ -6,6 +6,8 @@ import {
   describeTemplateSendError,
   mapMetaTemplateStatus,
   renderTemplateText,
+  templateIsCampaignSafe,
+  templateVariables,
   toMetaTemplateName,
   validateTemplateInput,
 } from "./metaTemplates";
@@ -124,5 +126,59 @@ describe("status e erros da Meta", () => {
     expect(describeTemplateSendError(400, { error: { code: 131026 } })).toMatch(/^Este número não tem WhatsApp/);
     expect(describeTemplateSendError(400, { error: { code: 131050 } })).toMatch(/^Este número não tem WhatsApp/);
     expect(describeTemplateSendError(500, {})).toBe("Falha no envio (código 500).");
+  });
+});
+
+describe("variáveis do lembrete da Agenda", () => {
+  const reminder = {
+    name: "Lembrete de horário",
+    category: "utility" as const,
+    body: "Olá {nome}! Seu horário de {servico} com {profissional} é {data}, às {hora}. Até lá!",
+  };
+
+  it("aceita {data}, {hora}, {profissional} e {servico}, cada uma uma vez", () => {
+    expect(validateTemplateInput(reminder)).toBeNull();
+    expect(validateTemplateInput({ ...reminder, body: "Lembrete: {data} e de novo {data}, combinado?" })).toMatch(
+      /\{data\} só uma vez/,
+    );
+    expect(validateTemplateInput({ ...reminder, body: "{hora} é o seu horário, combinado?" })).toMatch(/começo/);
+  });
+
+  it("numera na ordem em que aparecem e manda um exemplo de cada", () => {
+    const [body] = buildTemplateComponents(reminder);
+    expect(body).toEqual({
+      type: "BODY",
+      text: "Olá {{1}}! Seu horário de {{2}} com {{3}} é {{4}}, às {{5}}. Até lá!",
+      example: { body_text: [["Maria", "Consulta", "Dra. Ana", "sexta-feira, 28/11", "14:30"]] },
+    });
+  });
+
+  it("envia os valores na mesma ordem; valor vazio vira hífen", () => {
+    const values = { data: "sexta-feira, 28/11", hora: "14:30", profissional: "Dra. Ana" };
+    const payload = buildTemplateMessage({
+      to: "5511999990000",
+      metaTemplateName: "lembrete_ab12",
+      languageCode: "pt_BR",
+      body: reminder.body,
+      name: "Ana",
+      values,
+    });
+    expect(payload.template.components?.[0].parameters.map((p: { text: string }) => p.text)).toEqual([
+      "Ana",
+      "-",
+      "Dra. Ana",
+      "sexta-feira, 28/11",
+      "14:30",
+    ]);
+    expect(renderTemplateText(reminder.body, "Ana", { ...values, servico: "Consulta" })).toBe(
+      "Olá Ana! Seu horário de Consulta com Dra. Ana é sexta-feira, 28/11, às 14:30. Até lá!",
+    );
+  });
+
+  it("só modelos com {nome} servem para Campanhas", () => {
+    expect(templateIsCampaignSafe(valid.body)).toBe(true);
+    expect(templateIsCampaignSafe("Sem variáveis aqui.")).toBe(true);
+    expect(templateIsCampaignSafe(reminder.body)).toBe(false);
+    expect(templateVariables(reminder.body)).toEqual(["nome", "servico", "profissional", "data", "hora"]);
   });
 });
