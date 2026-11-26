@@ -394,6 +394,7 @@ export const botsService = {
         sort_order: n.sort_order,
         ai_instructions: n.ai_instructions ?? null,
         ai_handoff_department_id: n.ai_handoff_department_id ?? null,
+        ai_agenda_enabled: n.ai_agenda_enabled ?? false,
       }));
 
       if (nodePayloads.length === 0) return { data: newBot, error: null };

@@ -25,6 +25,8 @@ export type FlowStage = {
   nodeKey: string;
   aiInstructions: string;
   aiDepartmentId: string;
+  // Etapa de IA: marca, desmarca e confirma horários na Agenda
+  aiAgenda: boolean;
 };
 
 export type FlowOption = {
@@ -97,6 +99,7 @@ export const fromRows = (
     nodeKey: n.node_key,
     aiInstructions: n.ai_instructions ?? "",
     aiDepartmentId: n.ai_handoff_department_id ?? "",
+    aiAgenda: Boolean(n.ai_agenda_enabled),
   }));
 
   const options: FlowOption[] = [];
@@ -153,6 +156,7 @@ export const toStageColumns = (s: FlowStage) => ({
   ai_instructions: s.kind === "ai" ? s.aiInstructions.trim() || null : null,
   ai_handoff_department_id:
     s.kind === "ai" ? s.aiDepartmentId || null : null,
+  ai_agenda_enabled: s.kind === "ai" ? s.aiAgenda : false,
 });
 
 // Colunas gravadas para um botão. `stageRealId` e `resolveStageId` trocam os
@@ -210,7 +214,7 @@ export const nextNodeKey = (stages: Array<Pick<FlowStage, "nodeKey">>) => {
 };
 
 const stageSignature = (s: FlowStage) =>
-  JSON.stringify([s.name, s.message, s.kind, s.aiInstructions, s.aiDepartmentId]);
+  JSON.stringify([s.name, s.message, s.kind, s.aiInstructions, s.aiDepartmentId, s.aiAgenda]);
 const optionSignature = (o: FlowOption, index: number) =>
   JSON.stringify([
     o.stageId,

@@ -39,15 +39,29 @@ const FieldError: React.FC<{ id: string; message?: string }> = ({ id, message })
  * Cria um modelo de mensagem e envia para a Meta aprovar. A aprovação costuma
  * levar de minutos a algumas horas; o status aparece na lista de modelos.
  */
+// Variáveis do lembrete da Agenda (além do nome)
+const AGENDA_VARIABLES: { tag: string; label: string }[] = [
+  { tag: "{data}", label: "Data" },
+  { tag: "{hora}", label: "Hora" },
+  { tag: "{profissional}", label: "Profissional" },
+  { tag: "{servico}", label: "Serviço" },
+];
+
+const AGENDA_SAMPLE_BODY =
+  "Olá, {nome}! Passando para lembrar do seu horário de {servico} com {profissional} em {data}, às {hora}. Se precisar remarcar, é só responder esta mensagem.";
+
 export const TemplateFormModal: React.FC<{
   initialName?: string;
   saving: boolean;
   onSubmit: (input: MetaTemplateInput) => Promise<void>;
   onClose: () => void;
-}> = ({ initialName = "", saving, onSubmit, onClose }) => {
+  /** agenda: lembrete de agendamento, com {data}, {hora}, {profissional} e {servico} */
+  purpose?: "campaign" | "agenda";
+}> = ({ initialName = "", saving, onSubmit, onClose, purpose = "campaign" }) => {
+  const forAgenda = purpose === "agenda";
   const [name, setName] = useState(initialName);
-  const [category, setCategory] = useState<"marketing" | "utility">("marketing");
-  const [body, setBody] = useState("");
+  const [category, setCategory] = useState<"marketing" | "utility">(forAgenda ? "utility" : "marketing");
+  const [body, setBody] = useState(forAgenda ? AGENDA_SAMPLE_BODY : "");
   const [footer, setFooter] = useState("");
   const [buttons, setButtons] = useState<string[]>([]);
   // Os erros aparecem depois da primeira tentativa de enviar e somem conforme
@@ -76,22 +90,23 @@ export const TemplateFormModal: React.FC<{
     textarea.setSelectionRange(cursor, cursor);
   }, [body]);
 
-  const insertName = () => {
-    if (/\{nome\}/i.test(body)) {
-      toast.info("O nome do cliente já está na mensagem.");
+  const insertVariable = (tag: string, already: string) => {
+    if (body.toLowerCase().includes(tag)) {
+      toast.info(already);
       return;
     }
     const textarea = bodyRef.current;
     const start = textarea?.selectionStart ?? body.length;
     const end = textarea?.selectionEnd ?? body.length;
-    const next = body.slice(0, start) + "{nome}" + body.slice(end);
+    const next = body.slice(0, start) + tag + body.slice(end);
     if (next.length > TEMPLATE_BODY_MAX) {
       toast.error("A mensagem já está no tamanho máximo.");
       return;
     }
-    pendingCursor.current = start + "{nome}".length;
+    pendingCursor.current = start + tag.length;
     setBody(next);
   };
+  const insertName = () => insertVariable("{nome}", "O nome do cliente já está na mensagem.");
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -138,7 +153,9 @@ export const TemplateFormModal: React.FC<{
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-slate-900">Novo modelo da Meta</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Pelo WhatsApp oficial, campanhas só saem com um modelo aprovado pela Meta.
+              {forAgenda
+                ? "Pelo WhatsApp oficial, o lembrete do agendamento só sai com um modelo aprovado pela Meta."
+                : "Pelo WhatsApp oficial, campanhas só saem com um modelo aprovado pela Meta."}
             </p>
           </div>
           <CloseButton onClick={onClose} />
@@ -158,7 +175,7 @@ export const TemplateFormModal: React.FC<{
                   value={name}
                   maxLength={TEMPLATE_NAME_MAX}
                   onChange={(event) => setName(event.target.value)}
-                  placeholder="Ex.: Promoção de novembro"
+                  placeholder={forAgenda ? "Ex.: Lembrete de horário" : "Ex.: Promoção de novembro"}
                   aria-invalid={Boolean(errors.name)}
                   aria-describedby={errors.name ? "template-name-error" : undefined}
                   className={`${errors.name ? invalidField(FIELD) : FIELD} mt-1.5`}
@@ -226,8 +243,22 @@ export const TemplateFormModal: React.FC<{
                     <UserPlusIcon className="h-3.5 w-3.5" />
                     Inserir nome do cliente
                   </button>
+                  {forAgenda &&
+                    AGENDA_VARIABLES.map((variable) => (
+                      <button
+                        key={variable.tag}
+                        type="button"
+                        onClick={() => insertVariable(variable.tag, "Essa informação já está na mensagem.")}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <PlusIcon className="h-3.5 w-3.5" />
+                        {variable.label}
+                      </button>
+                    ))}
                   <span className="text-xs text-slate-500">
-                    Uma vez, no meio do texto. Sem nome cadastrado, vira “cliente”.
+                    {forAgenda
+                      ? "Cada informação uma vez, no meio do texto. Este modelo não aparece nas Campanhas."
+                      : "Uma vez, no meio do texto. Sem nome cadastrado, vira “cliente”."}
                   </span>
                 </div>
               </div>

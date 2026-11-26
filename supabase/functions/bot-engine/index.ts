@@ -7,6 +7,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@1.3.0";
 import { AI_TOOL_END, AI_TOOL_TRANSFER, aiUsageNotification, buildChatTurns, buildSystemPrompt } from "../_shared/aiAssistant.ts";
 import { sendPushToUsers } from "../_shared/push.ts";
 import { distributeConversation } from "../_shared/distribution.ts";
+import { AGENDA_TOOLS, AGENDA_TOOL_NAMES, buildAgendaPrompt, loadAgendaCatalog, runAgendaTool } from "../_shared/agendaTools.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INTERNAL_BOT_SECRET = Deno.env.get("INTERNAL_BOT_SECRET") ?? "";
@@ -18,6 +19,8 @@ const AI_TRANSFER_TEXT = "Vou passar sua conversa para alguém da nossa equipe. 
 // Limite de respostas da IA no mesmo atendimento (clinic_ai_settings)
 const AI_DEFAULT_MAX_REPLIES_PER_CONVERSATION = 20;
 const AI_LIMIT_TEXT = "Estamos redirecionando você para um dos nossos atendentes, para poder te dar mais informações. Aguarde só um momento, por favor.";
+// Rodadas de ferramenta da agenda numa mesma resposta (consultar, marcar...)
+const AI_MAX_TOOL_ROUNDS = 6;
 const CHANNEL_WHATSAPP = "whatsapp";
 const STATUS_OPEN = "open";
 const STATUS_PENDING = "pending";
@@ -765,7 +768,7 @@ async function getBot(supabase, clinicId, botId) {
   return data ?? null;
 }
 async function getRootNode(supabase, clinicId, botId) {
-  const { data, error } = await supabase.from("bot_nodes").select("id, bot_id, clinic_id, node_key, title, message, node_type, sort_order, ai_instructions, ai_handoff_department_id").eq("clinic_id", clinicId).eq("bot_id", botId).eq("node_key", "root").maybeSingle();
+  const { data, error } = await supabase.from("bot_nodes").select("id, bot_id, clinic_id, node_key, title, message, node_type, sort_order, ai_instructions, ai_handoff_department_id, ai_agenda_enabled").eq("clinic_id", clinicId).eq("bot_id", botId).eq("node_key", "root").maybeSingle();
   if (error) {
     console.error("getRootNode error:", error);
     return null;
@@ -773,7 +776,7 @@ async function getRootNode(supabase, clinicId, botId) {
   return data ?? null;
 }
 async function getNodeById(supabase, clinicId, nodeId) {
-  const { data, error } = await supabase.from("bot_nodes").select("id, bot_id, clinic_id, node_key, title, message, node_type, sort_order, ai_instructions, ai_handoff_department_id").eq("clinic_id", clinicId).eq("id", nodeId).maybeSingle();
+  const { data, error } = await supabase.from("bot_nodes").select("id, bot_id, clinic_id, node_key, title, message, node_type, sort_order, ai_instructions, ai_handoff_department_id, ai_agenda_enabled").eq("clinic_id", clinicId).eq("id", nodeId).maybeSingle();
   if (error) {
     console.error("getNodeById error:", error);
     return null;
@@ -1059,7 +1062,7 @@ const AI_TOOLS = [
 function supportsServerFallback(model) {
   return /^claude-(opus-5|sonnet-5-5|fable-5)/.test(model);
 }
-async function callClaude(system, turns) {
+async function callClaude(system, turns, tools = AI_TOOLS) {
   const client = new Anthropic({
     apiKey: ANTHROPIC_API_KEY,
     timeout: 60_000,
@@ -1081,7 +1084,7 @@ async function callClaude(system, turns) {
         }
       }
     ],
-    tools: AI_TOOLS,
+    tools,
     messages: turns
   };
   if (supportsServerFallback(AI_MODEL)) {
@@ -1261,26 +1264,109 @@ async function recordAiTokens(supabase, clinicId, usage) {
     return handoff("ai_unavailable", UNRECOGNIZED_HANDOFF_TEXT);
   }
   await notifyAiUsage(supabase, clinicId);
-  const system = buildSystemPrompt({
+  let system = buildSystemPrompt({
     companyName,
     settings,
     node,
     departmentName
   });
-  let response;
-  try {
-    response = await callClaude(system, turns);
-  } catch (err) {
-    console.error("runAiReply Claude error:", err);
-    if (!await isStillAiTurn(supabase, session.id, conversationId, claimedAt)) return;
-    return handoff("ai_error", UNRECOGNIZED_HANDOFF_TEXT);
+  // Etapa com agenda ligada: a IA vê serviços e profissionais e ganha as
+  // ferramentas de horários (só do cliente desta conversa)
+  let tools = AI_TOOLS;
+  let agendaCtx = null;
+  if (node.ai_agenda_enabled) {
+    try {
+      const [catalog, { data: conv }] = await Promise.all([
+        loadAgendaCatalog(supabase, clinicId),
+        supabase.from("conversations").select("contact_id").eq("id", conversationId).maybeSingle()
+      ]);
+      system = `${system}\n\n${buildAgendaPrompt({
+        now: new Date(),
+        timeZone: catalog.timeZone,
+        services: catalog.services,
+        professionals: catalog.professionals
+      })}`;
+      tools = [
+        ...AI_TOOLS,
+        ...AGENDA_TOOLS
+      ];
+      agendaCtx = {
+        supabase,
+        clinicId,
+        conversationId,
+        contactId: conv?.contact_id ?? null,
+        timeZone: catalog.timeZone
+      };
+    } catch (err) {
+      // Sem a agenda a IA ainda atende (e transfere se precisar marcar)
+      console.error("runAiReply agenda catalog error:", err);
+    }
   }
-  await recordAiTokens(supabase, clinicId, response.usage);
-  logStep("ai_response", {
-    conversationId,
-    model: response.model,
-    stopReason: response.stop_reason
-  });
+  const aiTurns = [
+    ...turns
+  ];
+  let response;
+  for(let round = 0;; round++){
+    try {
+      response = await callClaude(system, aiTurns, tools);
+    } catch (err) {
+      console.error("runAiReply Claude error:", err);
+      if (!await isStillAiTurn(supabase, session.id, conversationId, claimedAt)) return;
+      return handoff("ai_error", UNRECOGNIZED_HANDOFF_TEXT);
+    }
+    await recordAiTokens(supabase, clinicId, response.usage);
+    logStep("ai_response", {
+      conversationId,
+      model: response.model,
+      stopReason: response.stop_reason,
+      round
+    });
+    const agendaCalls = agendaCtx && response.stop_reason === "tool_use" ? response.content.filter((block)=>block.type === "tool_use" && AGENDA_TOOL_NAMES.has(block.name)) : [];
+    if (agendaCalls.length === 0) break;
+    // Alguém assumiu a conversa enquanto a IA pensava: não mexe na agenda
+    if (!await isStillAiTurn(supabase, session.id, conversationId, claimedAt)) {
+      logStep("ai_reply_dropped", {
+        conversationId
+      });
+      return;
+    }
+    const results = [];
+    for (const call of agendaCalls){
+      const outcome = await runAgendaTool(agendaCtx, call.name, call.input);
+      logStep("ai_agenda_tool", {
+        conversationId,
+        tool: call.name,
+        isError: Boolean(outcome.isError)
+      });
+      // Aviso na conversa só para a equipe (marcou, desmarcou, confirmou)
+      if (outcome.event) {
+        await insertConversationEvent(supabase, conversationId, outcome.event.type, {
+          ...outcome.event.metadata,
+          bot_id: bot.id,
+          conversation_bot_session_id: session.id
+        });
+      }
+      results.push({
+        type: "tool_result",
+        tool_use_id: call.id,
+        content: outcome.result,
+        ...outcome.isError ? {
+          is_error: true
+        } : {}
+      });
+    }
+    // Transferir/encerrar junto com a agenda, ou rodadas demais: segue com
+    // esta resposta
+    const otherTool = response.content.some((block)=>block.type === "tool_use" && !AGENDA_TOOL_NAMES.has(block.name));
+    if (otherTool || round + 1 >= AI_MAX_TOOL_ROUNDS) break;
+    aiTurns.push({
+      role: "assistant",
+      content: response.content
+    }, {
+      role: "user",
+      content: results
+    });
+  }
   if (!await isStillAiTurn(supabase, session.id, conversationId, claimedAt)) {
     logStep("ai_reply_dropped", {
       conversationId
@@ -1291,7 +1377,7 @@ async function recordAiTokens(supabase, clinicId, usage) {
     return handoff("ai_refusal", AI_TRANSFER_TEXT);
   }
   const text = response.content.filter((block)=>block.type === "text").map((block)=>block.text).join("\n").trim();
-  const toolUse = response.content.find((block)=>block.type === "tool_use");
+  const toolUse = response.content.find((block)=>block.type === "tool_use" && !AGENDA_TOOL_NAMES.has(block.name));
   if (toolUse?.name === AI_TOOL_TRANSFER) {
     const summary = typeof toolUse.input?.motivo === "string" ? toolUse.input.motivo : null;
     return handoff("ai_transfer", text || AI_TRANSFER_TEXT, summary);

@@ -74,6 +74,20 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
  */
 // prettier-ignore
 export const NEXT_RELEASE: ReleaseChange[] = [
+  {
+    kind: "new",
+    text: "Agenda: um calendário da empresa, por dia ou por semana, com a cor de cada profissional. Marque, remarque, confirme presença, registre falta e cancele horários. Cada profissional tem os próprios horários de trabalho, folgas e serviços, e cada serviço tem a sua duração.",
+  },
+  {
+    kind: "new",
+    text: "Lembrete de horário: o cliente recebe uma mensagem no WhatsApp antes do horário marcado (por exemplo, 1 dia antes). No WhatsApp oficial, use um modelo aprovado pela Meta com a data, a hora, o profissional e o serviço.",
+    adminOnly: true,
+  },
+  {
+    kind: "new",
+    text: "Assistente com IA marcando horários: na etapa de IA do bot, ligue \"Pode marcar horários na Agenda\" e a IA consulta os horários livres, marca, remarca, confirma e desmarca pelo WhatsApp. Cada ação aparece na conversa para a equipe.",
+    adminOnly: true,
+  },
 ];
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
