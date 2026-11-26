@@ -9,10 +9,17 @@
 --   platform_set_whatsapp_recovery  liga/desliga para uma empresa; ao desligar,
 --                                   encerra uma recuperação em andamento
 --
+-- Todas as empresas voltam a ter a recuperação ligada (inclusive Unxet DEMO e
+-- Teste Cezar, travadas pela 20261206500000): quem desliga agora é o painel.
+--
 -- Ordem de deploy: antes do front (o painel lê os campos novos).
 -- =============================================================================
 
 begin;
+
+update public.clinics
+   set whatsapp_recovery_disabled = false
+ where whatsapp_recovery_disabled;
 
 create or replace function public.platform_subscriptions()
 returns jsonb
