@@ -244,15 +244,19 @@ const EditSubscriptionModal = ({
   clinic,
   plans,
   today,
+  platformRecoveryEnabled,
   onClose,
   onSaved,
 }: {
   clinic: SubscriberRow;
   plans: SubscriptionPlan[];
   today: string;
+  platformRecoveryEnabled: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) => {
+  const initialRecovery = !clinic.whatsapp_recovery_disabled;
+  const [recoveryEnabled, setRecoveryEnabled] = useState(initialRecovery);
   const [planCode, setPlanCode] = useState<PlanCode>(clinic.plan_code);
   const [status, setStatus] = useState<SubscriptionStatus>(clinic.status);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>(
@@ -349,13 +353,30 @@ const EditSubscriptionModal = ({
       p_whatsapp_numbers_addon: addonValue,
       p_extra_attendants: extraValue,
     });
-    setSaving(false);
     if (error) {
+      setSaving(false);
       toast.error(
         rpcErrorMessage(error, "Não foi possível salvar a assinatura."),
       );
       return;
     }
+    if (recoveryEnabled !== initialRecovery) {
+      const { error: recoveryError } = await adminSupabase.rpc(
+        "platform_set_whatsapp_recovery",
+        { p_clinic_id: clinic.id, p_enabled: recoveryEnabled },
+      );
+      if (recoveryError) {
+        setSaving(false);
+        toast.error(
+          rpcErrorMessage(
+            recoveryError,
+            "A assinatura foi salva, mas não deu para mudar a recuperação de mensagens.",
+          ),
+        );
+        return;
+      }
+    }
+    setSaving(false);
     toast.success(`Assinatura de ${clinic.name} atualizada.`);
     onSaved();
   }
@@ -417,6 +438,37 @@ const EditSubscriptionModal = ({
           onEnabledChange={setAddonEnabled}
           onQuantityChange={setAddonQuantity}
         />
+
+        <fieldset className="rounded-lg border border-slate-200 p-3">
+          <legend className="px-1 text-sm font-medium text-gray-900">
+            WhatsApp por QR Code
+          </legend>
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={recoveryEnabled}
+              onChange={(e) => setRecoveryEnabled(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#003366] focus:ring-[#0A84FF]"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-slate-800">
+                Recuperar mensagens ao reconectar o QR Code
+              </span>
+              <span className="block text-xs text-slate-500">
+                Ao ler o QR Code de novo, traz as mensagens que chegaram no
+                celular enquanto o número estava fora. Desligue em empresas de
+                teste e de demonstração, para as conversas apagadas não
+                voltarem.
+              </span>
+              {!platformRecoveryEnabled && (
+                <span className="mt-1 block text-xs font-medium text-amber-700">
+                  Neste ambiente a recuperação está desligada para todas as
+                  empresas.
+                </span>
+              )}
+            </span>
+          </label>
+        </fieldset>
 
         {alerts.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -1362,6 +1414,7 @@ export const SubscribersPage: React.FC = () => {
           clinic={dialog.clinic}
           plans={data.plans}
           today={today}
+          platformRecoveryEnabled={data.whatsapp_recovery_enabled !== false}
           onClose={() => setDialog(null)}
           onSaved={() => {
             setDialog(null);
