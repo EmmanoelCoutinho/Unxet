@@ -191,3 +191,33 @@ export const defaultHours = (): WorkingHour[] =>
     { weekday, start: "08:00", end: "12:00" },
     { weekday, start: "13:00", end: "18:00" },
   ]);
+
+/** Primeiro dia do mês da data. */
+export const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+
+/** Mesmo dia (ou o último do mês) N meses depois. */
+export const addMonths = (date: Date, months: number) => {
+  const first = new Date(date.getFullYear(), date.getMonth() + months, 1);
+  const lastDay = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  return new Date(first.getFullYear(), first.getMonth(), Math.min(date.getDate(), lastDay));
+};
+
+/**
+ * Dias da grade do mês: semanas completas de segunda a domingo, do começo da
+ * semana do dia 1 ao fim da semana do último dia (5 ou 6 semanas).
+ */
+export const monthGrid = (date: Date) => {
+  const first = startOfMonth(date);
+  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+  const start = startOfWeek(first);
+  const end = addDays(startOfWeek(last), 6);
+  const days: Date[] = [];
+  for (let day = start; day <= end; day = addDays(day, 1)) days.push(day);
+  return days;
+};
+
+/** "Novembro de 2026" */
+export const formatMonthLabel = (date: Date) => {
+  const text = date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};

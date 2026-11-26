@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import {
   CalendarDaysIcon,
   ChevronLeftIcon,
+  EyeIcon,
+  EyeOffIcon,
   ChevronRightIcon,
   PlusIcon,
   Settings2Icon,
@@ -12,18 +14,22 @@ import { useClinic } from "../contexts/ClinicContext";
 import { Button } from "../components/ui/Button";
 import PreTitleIcon from "../components/ui/PreTitleIcon";
 import { AppointmentModal } from "../modules/agenda/components/AppointmentModal";
+import { MonthView } from "../modules/agenda/components/MonthView";
 import { useAgendaServices, useAppointments, useProfessionals, useTimeOff } from "../modules/agenda/hooks/useAgenda";
 import type { Appointment, Professional } from "../modules/agenda/types";
 import {
   STATUS_LABEL,
   WEEKDAY_SHORT,
   addDays,
+  addMonths,
+  formatMonthLabel,
   formatRangeLabel,
   formatTime,
   isActiveStatus,
   isOutsideHours,
   layoutDay,
   minutesOfDay,
+  monthGrid,
   sameDay,
   startOfDay,
   startOfWeek,
@@ -36,12 +42,18 @@ const HOUR_HEIGHT = 56;
 // Clique na grade arredonda para esse passo
 const CLICK_STEP_MINUTES = 30;
 
-type View = "day" | "week";
+type View = "day" | "week" | "month";
+
+const VIEW_OPTIONS: { value: View; label: string }[] = [
+  { value: "day", label: "Dia" },
+  { value: "week", label: "Semana" },
+  { value: "month", label: "Mês" },
+];
 
 const readStoredView = (): View => {
   try {
     const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
-    if (stored === "day" || stored === "week") return stored;
+    if (stored === "day" || stored === "week" || stored === "month") return stored;
   } catch {
     // sem armazenamento: usa o padrão
   }
@@ -80,9 +92,12 @@ export const AgendaPage: React.FC = () => {
   }, []);
 
   const days = useMemo(() => {
+    if (view === "month") return monthGrid(anchor);
     const first = view === "week" ? startOfWeek(anchor) : anchor;
     return Array.from({ length: view === "week" ? 7 : 1 }, (_, i) => addDays(first, i));
   }, [anchor, view]);
+  // No mês a grade tem 35 ou 42 dias; a grade de horas usa só os da semana/dia
+  const gridDays = view === "month" ? [] : days;
   const rangeStart = days[0];
   const rangeEnd = addDays(days[days.length - 1], 1);
 
@@ -110,7 +125,7 @@ export const AgendaPage: React.FC = () => {
     ? activeProfessionals.filter((p) => filter.includes(p.id))
     : activeProfessionals
   ).flatMap((p) => p.hours);
-  const { from: dayFrom, to: dayTo } = visibleHours(hoursForRange, visibleAppointments, days);
+  const { from: dayFrom, to: dayTo } = visibleHours(hoursForRange, visibleAppointments, gridDays);
   const gridHeight = ((dayTo - dayFrom) / 60) * HOUR_HEIGHT;
   const hourMarks = Array.from({ length: (dayTo - dayFrom) / 60 }, (_, i) => dayFrom + i * 60);
 
@@ -127,7 +142,11 @@ export const AgendaPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeStart.getTime()]);
 
-  const move = (direction: -1 | 1) => setAnchor((current) => addDays(current, direction * (view === "week" ? 7 : 1)));
+  const move = (direction: -1 | 1) =>
+    setAnchor((current) =>
+      view === "month" ? addMonths(current, direction) : addDays(current, direction * (view === "week" ? 7 : 1)),
+    );
+  const periodName = view === "month" ? "mês" : view === "week" ? "semana" : "dia";
 
   const toggleProfessional = (id: string) =>
     setSelected((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
@@ -158,7 +177,7 @@ export const AgendaPage: React.FC = () => {
             <div>
               <h1 className="text-2xl font-semibold text-gray-900">Agenda</h1>
               <p className="mt-1 text-sm text-gray-500">
-                {counts.total} {counts.total === 1 ? "horário marcado" : "horários marcados"} neste período
+                {counts.total} {counts.total === 1 ? "horário marcado" : "horários marcados"} neste {periodName}
                 {counts.ai > 0 ? ` · ${counts.ai} pela IA` : ""}
               </p>
             </div>
@@ -194,7 +213,7 @@ export const AgendaPage: React.FC = () => {
               type="button"
               onClick={() => move(-1)}
               className="rounded-full border border-slate-200 p-1.5 text-slate-600 transition hover:bg-slate-50"
-              aria-label={view === "week" ? "Semana anterior" : "Dia anterior"}
+              aria-label={view === "month" ? "Mês anterior" : view === "week" ? "Semana anterior" : "Dia anterior"}
             >
               <ChevronLeftIcon className="h-4 w-4" />
             </button>
@@ -209,35 +228,40 @@ export const AgendaPage: React.FC = () => {
               type="button"
               onClick={() => move(1)}
               className="rounded-full border border-slate-200 p-1.5 text-slate-600 transition hover:bg-slate-50"
-              aria-label={view === "week" ? "Próxima semana" : "Próximo dia"}
+              aria-label={view === "month" ? "Próximo mês" : view === "week" ? "Próxima semana" : "Próximo dia"}
             >
               <ChevronRightIcon className="h-4 w-4" />
             </button>
           </div>
-          <span className="text-sm font-semibold text-slate-800">{formatRangeLabel(days[0], days.length)}</span>
+          <span className="text-sm font-semibold text-slate-800">{view === "month" ? formatMonthLabel(anchor) : formatRangeLabel(days[0], days.length)}</span>
 
           <div className="ml-auto flex items-center gap-2">
-            <label className="flex items-center gap-1.5 text-xs text-slate-600">
-              <input
-                type="checkbox"
-                checked={showCancelled}
-                onChange={(event) => setShowCancelled(event.target.checked)}
-                className="h-3.5 w-3.5 rounded border-slate-300"
-              />
+            <button
+              type="button"
+              onClick={() => setShowCancelled((value) => !value)}
+              aria-pressed={showCancelled}
+              title={showCancelled ? "Esconder os horários cancelados" : "Mostrar os horários cancelados"}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                showCancelled
+                  ? "border-red-200 bg-red-50 text-red-700"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {showCancelled ? <EyeIcon className="h-3.5 w-3.5" /> : <EyeOffIcon className="h-3.5 w-3.5" />}
               Cancelados
-            </label>
+            </button>
             <div className="flex rounded-full border border-slate-200 bg-white p-0.5" role="group" aria-label="Visão">
-              {(["day", "week"] as View[]).map((option) => (
+              {VIEW_OPTIONS.map((option) => (
                 <button
-                  key={option}
+                  key={option.value}
                   type="button"
-                  onClick={() => setView(option)}
-                  aria-pressed={view === option}
+                  onClick={() => setView(option.value)}
+                  aria-pressed={view === option.value}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                    view === option ? "bg-blue-600 text-white" : "text-slate-600 hover:text-slate-900"
+                    view === option.value ? "bg-blue-600 text-white" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  {option === "day" ? "Dia" : "Semana"}
+                  {option.label}
                 </button>
               ))}
             </div>
@@ -300,6 +324,23 @@ export const AgendaPage: React.FC = () => {
               <p className="mt-4 text-xs text-slate-500">Peça a um administrador para cadastrar os profissionais.</p>
             )}
           </div>
+        </div>
+      ) : view === "month" ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+          <MonthView
+            days={days}
+            month={anchor.getMonth()}
+            now={now}
+            appointments={visibleAppointments}
+            professionalById={professionalById}
+            serviceById={serviceById}
+            onOpenDay={(day) => {
+              setAnchor(day);
+              setView("day");
+            }}
+            onOpenAppointment={(appointment) => setModal({ mode: "edit", appointment })}
+          />
+          {loadingAppointments && <p className="py-3 text-center text-xs text-slate-400">Carregando agenda...</p>}
         </div>
       ) : (
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
