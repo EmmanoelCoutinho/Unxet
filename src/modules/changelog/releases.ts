@@ -78,6 +78,33 @@ export const NEXT_RELEASE: ReleaseChange[] = [
 
 const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    date: "2026-11-25",
+    changes: [
+      {
+        kind: "improved",
+        text: "Fotos na conversa: dá para dar zoom sem baixar. Use a roda do mouse, os botões + e −, clique duas vezes na foto ou, no celular, abra com dois dedos. Com a foto ampliada, arraste para ver outra parte.",
+      },
+      {
+        kind: "improved",
+        text: "Campanhas agora saem só pelo WhatsApp oficial (API da Meta), com modelo aprovado. Disparar para muitos clientes pelo WhatsApp por QR Code é o que mais leva o número a ser bloqueado, então essa opção foi desligada para proteger o seu número. As conversas pelo QR Code continuam normalmente.",
+      },
+      {
+        kind: "improved",
+        text: "Plano Essencial: agora com até 4 atendentes, até 3 departamentos (com transferências), Instagram e Messenger, além do Painel e dos Relatórios.",
+        adminOnly: true,
+      },
+    ],
+  },
+  {
+    date: "2026-11-24",
+    changes: [
+      {
+        kind: "fixed",
+        text: "Pesquisa de satisfação: o cliente que volta a escrever depois de 2 horas com um \"Bom dia\" ou \"Boa tarde\" reabre a conversa, em vez de a mensagem ficar escondida no atendimento finalizado. Ao desligar a pesquisa, quem ainda não tinha respondido deixa de ser esperado, e a resposta ao menu do bot não é mais confundida com nota.",
+      },
+    ],
+  },
+  {
     date: "2026-11-22",
     changes: [
       {

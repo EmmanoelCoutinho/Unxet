@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
@@ -30,6 +30,7 @@ import { useMediaUrl } from "../../lib/mediaUrls";
 import { MAX_EDIT_TEXT_LENGTH } from "../../lib/messageEdit";
 import { locationMapsLinkFromText, pixFromText } from "../../lib/messageQuickActions";
 import { CloseButton } from "../ui/CloseButton";
+import { ImageViewer } from "./ZoomableImage";
 import { PollCard } from "./PollCard";
 import { pollFromPayload } from "../../lib/whatsappPoll";
 
@@ -221,6 +222,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const payload = message.payload ?? {};
   const isClient = message.author === "cliente";
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+  const closePreview = useCallback(() => setPreviewSrc(null), []);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -1256,22 +1258,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       )}
 
       {previewSrc && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setPreviewSrc(null)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") setPreviewSrc(null);
-          }}
-        >
-          <img
-            src={previewSrc}
-            alt="Pré-visualização"
-            className="max-h-full max-w-full rounded-lg object-contain"
-            onClick={(event) => event.stopPropagation()}
-          />
-        </div>
+        <ImageViewer
+          src={previewSrc}
+          alt={mediaType === "sticker" ? "Figurinha" : "Imagem"}
+          onClose={closePreview}
+        />
       )}
     </div>
   );
