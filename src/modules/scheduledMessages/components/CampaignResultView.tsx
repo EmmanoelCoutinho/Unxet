@@ -285,8 +285,15 @@ export const CampaignResultView: React.FC<{ scheduledMessage: ScheduledMessage }
                     Confira a conversa (filtro “Com falha”) antes de mandar de novo.
                   </p>
                 )}
+                {!scheduledMessage.templateId && missing.toRetry > 0 && (
+                  <p className="text-xs leading-5">
+                    Campanhas pelo WhatsApp por QR Code foram desativadas para proteger o número, então esta não
+                    pode ser reenviada.
+                  </p>
+                )}
               </div>
-              {missing.toRetry > 0 && (
+              {/* Pelo QR Code o banco recusa o reenvio (risco de bloqueio do número) */}
+              {scheduledMessage.templateId && missing.toRetry > 0 && (
                 <button
                   type="button"
                   onClick={handleRetry}

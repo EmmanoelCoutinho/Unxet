@@ -155,6 +155,13 @@ export const getPlanAlerts = (
     alerts.push(
       `${row.extra_departments} ${row.extra_departments === 1 ? "departamento extra" : "departamentos extras"}`,
     );
+  } else {
+    // O limite conta os ativos com o padrão (extra_departments não conta ele)
+    const departmentLimit = plan.max_departments ?? null;
+    const activeDepartments = row.extra_departments + 1;
+    if (departmentLimit !== null && activeDepartments > departmentLimit) {
+      alerts.push(`${activeDepartments} departamentos ativos (limite ${departmentLimit})`);
+    }
   }
   if (!has("scheduled_messages") && row.pending_scheduled > 0) {
     alerts.push(

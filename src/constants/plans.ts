@@ -38,6 +38,9 @@ export type SubscriptionPlan = {
   // null = ilimitado
   max_attendants: number | null;
   max_whatsapp_numbers: number | null;
+  // Departamentos ativos, o padrão incluído (opcional: banco sem a migration
+  // 20261206000000 não tem a coluna)
+  max_departments?: number | null;
   features: PlanFeature[];
 };
 
@@ -52,8 +55,10 @@ export const PLAN_NAMES: Record<PlanCode, string> = {
 // O que aparece na proposta comercial de cada plano
 export const PLAN_HIGHLIGHTS: Record<PlanCode, string[]> = {
   essencial: [
-    "Até 3 atendentes",
+    "Até 4 atendentes",
+    "Até 3 departamentos, com transferências",
     "1 número de WhatsApp",
+    "WhatsApp, Instagram e Messenger",
     "Caixa de entrada unificada",
     "Etiquetas e mensagens rápidas",
     "Carteira de clientes",
@@ -63,10 +68,10 @@ export const PLAN_HIGHLIGHTS: Record<PlanCode, string[]> = {
   ],
   profissional: [
     "Até 10 atendentes",
-    "WhatsApp, Instagram e Messenger",
+    "Tudo do Essencial",
+    "Departamentos ilimitados",
     "Bots com editor visual",
-    "Departamentos e transferências",
-    "Campanhas no WhatsApp com resultado",
+    "Campanhas pelo WhatsApp oficial com resultado",
     "Transcrição de áudios",
     "Chat interno da equipe",
     "Suporte prioritário no WhatsApp",
@@ -75,7 +80,7 @@ export const PLAN_HIGHLIGHTS: Record<PlanCode, string[]> = {
     "Atendentes ilimitados",
     "Vários números e canais",
     "Tudo do Profissional",
-    "Campanhas com templates da Meta (em breve)",
+    "Cargos e permissões personalizados",
     "Implantação assistida",
     "Treinamento da equipe",
     "Gerente de conta dedicado",

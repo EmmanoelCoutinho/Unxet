@@ -14,6 +14,7 @@ import {
   QrCodeIcon,
   SearchIcon,
   SendIcon,
+  ShieldAlertIcon,
   ShieldCheckIcon,
   TagIcon,
   TargetIcon,
@@ -84,18 +85,12 @@ const STEPS: { key: StepKey; label: string; description: string }[] = [
 type Channel = "official" | "qr";
 
 /**
- * A empresa usa um tipo de WhatsApp por vez. Oficial conectado ganha; senão,
- * QR Code se houver algum número. Nada conectado: oficial se for o único que
- * existe (a revisão avisa que está desconectado), senão QR Code.
+ * Campanha só sai pelo WhatsApp oficial: pelo QR Code o disparo em massa leva
+ * a Meta a bloquear o número (o banco também recusa, ver migration
+ * 20261206000000). Oficial desconectado continua oficial (a revisão avisa).
  */
-const pickChannel = (
-  official: { connected: boolean } | null,
-  qrNumbers: { connected: boolean }[],
-): Channel => {
-  if (official?.connected) return "official";
-  if (qrNumbers.some((n) => n.connected)) return "qr";
-  return official && qrNumbers.length === 0 ? "official" : "qr";
-};
+const pickChannel = (official: { connected: boolean } | null): Channel =>
+  official ? "official" : "qr";
 
 type Source = "all" | "tags" | "wallet" | "manual";
 
@@ -114,11 +109,50 @@ const SOURCES: {
 const plural = (count: number, one: string, many: string) =>
   `${count} ${count === 1 ? one : many}`;
 
+const QrCampaignBlocked: React.FC<{ onBack: () => void; onConnect?: () => void }> = ({
+  onBack,
+  onConnect,
+}) => (
+  <div className="flex h-full items-center justify-center bg-slate-50 px-4">
+    <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
+      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+        <ShieldAlertIcon className="h-7 w-7" />
+      </span>
+      <h2 className="mt-4 text-lg font-semibold text-slate-900">Campanhas só pelo WhatsApp oficial</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-500">
+        Disparar para muitos clientes pelo WhatsApp conectado por QR Code é o que mais leva o número a ser
+        bloqueado. Para proteger o seu número, as campanhas saem só pelo WhatsApp oficial (API da Meta), com um
+        modelo aprovado.
+      </p>
+      <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+        >
+          <ArrowLeftIcon className="h-4 w-4" />
+          Voltar para as campanhas
+        </button>
+        {onConnect && (
+          <button
+            type="button"
+            onClick={onConnect}
+            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          >
+            Conectar o WhatsApp oficial
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
 /* -------------------------------------------------------------------------- */
 
 export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = ({ existing }) => {
   const navigate = useNavigate();
-  const { clinicId } = useClinic();
+  const { clinicId, membership } = useClinic();
+  const isAdmin = membership?.role === "admin";
   const { save, saving } = useScheduledMessageActions();
   const qrConnected = useQrWhatsappConnected(clinicId);
 
@@ -159,7 +193,7 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
     ? existing.templateId
       ? "official"
       : "qr"
-    : pickChannel(official, numbers);
+    : pickChannel(official);
   const isOfficial = channel === "official" && Boolean(official);
   const [templateId, setTemplateId] = useState<string | null>(existing?.templateId ?? null);
   const template = templates.find((t) => t.id === templateId) ?? null;
@@ -258,6 +292,16 @@ export const CampaignWizard: React.FC<{ existing: ScheduledMessage | null }> = (
   // Sem espaço ao lado (abaixo de xl), a prévia só aparece onde ela ajuda
   const previewOnSmall = STEPS[step].key === "message" || STEPS[step].key === "review";
   const previewName = recipients.find((r) => /\p{L}/u.test(r.name ?? ""))?.name ?? "Maria";
+
+  // Sem WhatsApp oficial (ou campanha antiga pelo QR Code): nada de assistente
+  if (channelReady && !isOfficial) {
+    return (
+      <QrCampaignBlocked
+        onBack={() => navigate(CAMPAIGNS_PATH)}
+        onConnect={isAdmin ? () => navigate("/inbox/settings/integrations/meta") : undefined}
+      />
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-50">

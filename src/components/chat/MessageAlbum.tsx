@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, ExternalLinkIcon, Reply } from "lucide-react
 import type { Message as UiMessage } from "../../types";
 import { useMediaUrl } from "../../lib/mediaUrls";
 import { CloseButton } from "../ui/CloseButton";
+import { ZoomableImage } from "./ZoomableImage";
 
 interface MessageAlbumProps {
   messages: UiMessage[];
@@ -41,17 +42,20 @@ const AlbumThumb: React.FC<{
   );
 };
 
-const ViewerImage: React.FC<{ message: UiMessage }> = ({ message }) => {
+const ViewerImage: React.FC<{ message: UiMessage; onBackgroundClick: () => void }> = ({
+  message,
+  onBackgroundClick,
+}) => {
   const url = useMediaUrl(message.mediaUrl);
   if (!url) {
     return <div className="h-64 w-64 animate-pulse rounded-lg bg-white/10" aria-label="Carregando foto" />;
   }
   return (
-    <img
+    <ZoomableImage
       src={url}
       alt="Foto do álbum"
-      className="max-h-[80dvh] max-w-full rounded-lg object-contain"
-      onClick={(event) => event.stopPropagation()}
+      onBackgroundClick={onBackgroundClick}
+      className="self-stretch"
     />
   );
 };
@@ -187,7 +191,7 @@ export const MessageAlbum: React.FC<MessageAlbumProps> = ({ messages, isGroup, o
             </div>
           </div>
           <div className="relative flex min-h-0 flex-1 items-center justify-center px-14 pb-6">
-            <ViewerImage key={current.id} message={current} />
+            <ViewerImage key={current.id} message={current} onBackgroundClick={close} />
             <button
               type="button"
               onClick={(event) => {
