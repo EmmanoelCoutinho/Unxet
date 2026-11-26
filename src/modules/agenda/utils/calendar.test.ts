@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { Appointment } from "../types";
-import { isOutsideHours, layoutDay, startOfWeek, validateHours, visibleHours } from "./calendar";
+import {
+  addMonths,
+  formatMonthLabel,
+  isOutsideHours,
+  layoutDay,
+  monthGrid,
+  startOfWeek,
+  validateHours,
+  visibleHours,
+} from "./calendar";
 
 const appt = (id: string, start: string, end: string): Appointment => ({
   id,
@@ -63,5 +72,22 @@ describe("calendário", () => {
     expect(isOutsideHours(hours, 1, 9 * 60)).toBe(false);
     expect(isOutsideHours(hours, 1, 12 * 60)).toBe(true);
     expect(isOutsideHours(hours, 2, 9 * 60)).toBe(true);
+  });
+});
+
+describe("mês", () => {
+  it("grade cobre semanas inteiras de segunda a domingo", () => {
+    // Novembro/2026 começa num domingo e termina numa segunda
+    const days = monthGrid(new Date(2026, 10, 15));
+    expect(days[0]).toEqual(new Date(2026, 9, 26));
+    expect(days[days.length - 1]).toEqual(new Date(2026, 11, 6));
+    expect(days).toHaveLength(42);
+    // Fevereiro/2027 cabe em 4 semanas
+    expect(monthGrid(new Date(2027, 1, 10))).toHaveLength(28);
+  });
+
+  it("anda de mês sem pular (31 de janeiro + 1 = 28 de fevereiro)", () => {
+    expect(addMonths(new Date(2027, 0, 31), 1)).toEqual(new Date(2027, 1, 28));
+    expect(formatMonthLabel(new Date(2026, 10, 1))).toBe("Novembro de 2026");
   });
 });

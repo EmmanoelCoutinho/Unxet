@@ -76,7 +76,7 @@ export const CHANGE_KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 export const NEXT_RELEASE: ReleaseChange[] = [
   {
     kind: "new",
-    text: "Agenda: um calendário da empresa, por dia ou por semana, com a cor de cada profissional. Marque, remarque, confirme presença, registre falta e cancele horários. Cada profissional tem os próprios horários de trabalho, folgas e serviços, e cada serviço tem a sua duração.",
+    text: "Agenda: um calendário da empresa, por dia, semana ou mês, com a cor de cada profissional. Marque, remarque, confirme presença, registre falta e cancele horários. Cada profissional tem os próprios horários de trabalho, folgas e serviços, e cada serviço tem a sua duração.",
   },
   {
     kind: "new",

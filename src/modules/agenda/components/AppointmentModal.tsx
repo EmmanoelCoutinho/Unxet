@@ -4,7 +4,9 @@ import {
   BellIcon,
   CheckCircle2Icon,
   CheckIcon,
+  ClockIcon,
   MessageCircleIcon,
+  RotateCcwIcon,
   SearchIcon,
   SparklesIcon,
   UserXIcon,
@@ -472,27 +474,54 @@ export const AppointmentModal: React.FC<{
                 </Button>
               </div>
             </div>
-          ) : active ? (
-            <div className="flex flex-wrap gap-2">
-              {appointment.status === "scheduled" && (
-                <StatusButton icon={CheckCircle2Icon} onClick={() => changeStatus("confirmed")} tone="green">
-                  Confirmar presença
-                </StatusButton>
-              )}
-              <StatusButton icon={CheckIcon} onClick={() => changeStatus("completed")}>
-                Atendido
-              </StatusButton>
-              <StatusButton icon={UserXIcon} onClick={() => changeStatus("no_show")} tone="amber">
-                Faltou
-              </StatusButton>
-              <StatusButton icon={XCircleIcon} onClick={() => setCancelling(true)} tone="red">
-                Cancelar horário
-              </StatusButton>
-            </div>
-          ) : (
-            <StatusButton icon={CheckIcon} onClick={() => changeStatus("scheduled")}>
+          ) : appointment.status === "cancelled" ? (
+            <button
+              type="button"
+              onClick={() => changeStatus("scheduled")}
+              disabled={actions.changingStatus}
+              className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3.5 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
+            >
+              <RotateCcwIcon className="h-4 w-4" />
               Reabrir agendamento
-            </StatusButton>
+            </button>
+          ) : (
+            <div>
+              <span className={LABEL_CLASS}>Situação</span>
+              <div
+                role="radiogroup"
+                aria-label="Situação do agendamento"
+                className="mt-2 grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1 sm:grid-cols-4"
+              >
+                {STATUS_STEPS.map((step) => {
+                  const current = appointment.status === step.status;
+                  const Icon = step.icon;
+                  return (
+                    <button
+                      key={step.status}
+                      type="button"
+                      role="radio"
+                      aria-checked={current}
+                      disabled={actions.changingStatus}
+                      onClick={() => !current && changeStatus(step.status)}
+                      className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-sm font-medium transition disabled:opacity-60 ${
+                        current ? `${step.active} shadow-sm` : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4 flex-shrink-0" />
+                      {step.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setCancelling(true)}
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-red-600 transition hover:text-red-700 hover:underline"
+              >
+                <XCircleIcon className="h-4 w-4" />
+                Cancelar horário
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -514,25 +543,15 @@ export const AppointmentModal: React.FC<{
   );
 };
 
-const TONES = {
-  slate: "border-slate-200 text-slate-700 hover:bg-slate-50",
-  green: "border-green-200 text-green-700 hover:bg-green-50",
-  amber: "border-amber-200 text-amber-700 hover:bg-amber-50",
-  red: "border-red-200 text-red-700 hover:bg-red-50",
-};
-
-const StatusButton: React.FC<{
+// Situação do horário, na ordem do atendimento (cancelar fica à parte)
+const STATUS_STEPS: {
+  status: AppointmentStatus;
+  label: string;
   icon: React.ElementType<{ className?: string }>;
-  onClick: () => void;
-  tone?: keyof typeof TONES;
-  children: React.ReactNode;
-}> = ({ icon: Icon, onClick, tone = "slate", children }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-xs font-medium transition ${TONES[tone]}`}
-  >
-    <Icon className="h-3.5 w-3.5" />
-    {children}
-  </button>
-);
+  active: string;
+}[] = [
+  { status: "scheduled", label: "Marcado", icon: ClockIcon, active: "bg-white text-blue-700" },
+  { status: "confirmed", label: "Confirmado", icon: CheckCircle2Icon, active: "bg-green-600 text-white" },
+  { status: "completed", label: "Atendido", icon: CheckIcon, active: "bg-slate-800 text-white" },
+  { status: "no_show", label: "Faltou", icon: UserXIcon, active: "bg-amber-500 text-white" },
+];
