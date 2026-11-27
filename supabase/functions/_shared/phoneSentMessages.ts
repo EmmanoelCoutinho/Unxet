@@ -14,6 +14,7 @@ import { findContactByPhone } from "./startConversation.ts";
 import { findByProviderId, replyColumns } from "./messageReply.ts";
 import { loadConnectionDepartment, pickDefaultDepartmentId } from "./connectionDepartment.ts";
 import { safeStorageContentType } from "./storageContentType.ts";
+import { storageFileName } from "./storageFileName.ts";
 import { isClinicStickerPath } from "./stickerStore.ts";
 // (sem transcription.ts aqui: ele lê Deno.env e o módulo é testado no Vitest;
 // quem chama cria a transcrição do áudio com o storagePath devolvido)
@@ -219,7 +220,8 @@ export async function savePhoneSentMessage(
       const bytes = decodeBase64(media.base64);
       const ext = mediaExtension(mimeType, media.filename);
       const messageFolder = providerMessageId.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120);
-      const fileName = String(media.filename ?? "").trim() || `${messageFolder}.${ext}`;
+      // Sem acento no caminho: o Storage recusa e o arquivo se perdia
+      const fileName = storageFileName(media.filename, `${messageFolder}.${ext}`);
       storagePath = stickerPath ?? `${clinicId}/${waId}/phone-sent/${messageFolder}/${fileName}`;
       const { error: uploadErr } = await supabase.storage
         .from(MEDIA_BUCKET)

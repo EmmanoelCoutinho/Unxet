@@ -27,6 +27,7 @@ import { safeStorageContentType } from "../_shared/storageContentType.ts";
 import { isLateInbound, unansweredSince } from "../_shared/lateInbound.ts";
 import { isClinicStickerPath } from "../_shared/stickerStore.ts";
 import { distributeConversation } from "../_shared/distribution.ts";
+import { storageFileName } from "../_shared/storageFileName.ts";
 // ---------------------------------------------------------------------------
 // Env
 // ---------------------------------------------------------------------------
@@ -284,8 +285,8 @@ serve(async (req)=>{
           console.log('fileBytes', fileBytes);
           const ext = resolveExtension(resolvedContentType, media.filename);
           console.log('ext', ext);
-          const safeFilename = (media.filename ?? "").trim();
-          const fileName = safeFilename || `${media.mediaId ?? providerMessageId ?? Date.now()}.${ext}`;
+          // Sem acento no caminho: o Storage recusa e o arquivo se perdia
+          const fileName = storageFileName(media.filename, `${media.mediaId ?? providerMessageId ?? Date.now()}.${ext}`);
           const folder = isImageMessage ? "inbound-images" : isAudioMessage ? "inbound-audios" : "inbound-documents";
           // Uma pasta por mensagem: dois "comprovante.pdf" do mesmo contato
           // não podem cair no mesmo caminho (o upsert trocava o arquivo antigo)
