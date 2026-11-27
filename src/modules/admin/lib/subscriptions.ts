@@ -42,6 +42,8 @@ export type SubscriberRow = {
   extra_departments: number;
   pending_scheduled: number;
   last_message_at: string | null;
+  // Recuperação das mensagens ao reconectar o QR Code desligada (teste, demonstração)
+  whatsapp_recovery_disabled?: boolean;
 };
 
 export type SubscriptionPayment = {
@@ -62,6 +64,8 @@ export type PlatformSubscriptions = {
   generated_at: string;
   // Hoje em America/Sao_Paulo, segundo o banco (mesma régua da rotina)
   today: string;
+  // Desligada na plataforma inteira (ambiente de testes)
+  whatsapp_recovery_enabled?: boolean;
   plans: SubscriptionPlan[];
   clinics: SubscriberRow[];
 };

@@ -263,7 +263,8 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
     metaTemplateName: template.meta_template_name,
     languageCode: template.language_code,
     body: template.body,
-    name: recipient.name
+    name: recipient.name,
+    values: template.params ?? null
   });
   try {
     const resp = await fetch(`${GRAPH}/${encodeURIComponent(connection.phoneNumberId)}/messages`, {
@@ -287,7 +288,7 @@ async function findOrCreateConversation(supabase, clinicId, contactId, connectio
       };
     }
     return {
-      text: renderTemplateText(template.body, recipient.name),
+      text: renderTemplateText(template.body, recipient.name, template.params ?? null),
       providerResponse
     };
   } catch (err) {
@@ -516,7 +517,7 @@ async function processClinic(supabase, clinicId, recipients) {
   const extras = new Map();
   const extrasFor = async (scheduledMessageId)=>{
     if (!extras.has(scheduledMessageId)) {
-      const { data } = await supabase.from("scheduled_messages").select("media_url, media_mime_type, media_filename, media_kind, template:message_templates(id, meta_template_name, language_code, body, footer, buttons, status)").eq("id", scheduledMessageId).maybeSingle();
+      const { data } = await supabase.from("scheduled_messages").select("media_url, media_mime_type, media_filename, media_kind, template_params, template:message_templates(id, meta_template_name, language_code, body, footer, buttons, status)").eq("id", scheduledMessageId).maybeSingle();
       const template = data?.template ?? null;
       const media = data?.media_url && MEDIA_KINDS.has(data.media_kind) && isClinicMediaUrl(data.media_url, clinicId) ? {
         url: data.media_url,
@@ -525,7 +526,11 @@ async function processClinic(supabase, clinicId, recipients) {
         filename: data.media_filename ?? null
       } : null;
       extras.set(scheduledMessageId, {
-        template: template?.meta_template_name ? template : null,
+        // Lembrete da Agenda: {data}, {hora}, {profissional}, {servico}
+        template: template?.meta_template_name ? {
+          ...template,
+          params: data?.template_params ?? null
+        } : null,
         media
       });
     }

@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import { Link } from "react-router-dom";
 import { CheckIcon, ListIcon, SparklesIcon, Trash2Icon } from "lucide-react";
 import { Button } from "../components/ui/Button";
+import { Toggle } from "../components/ui/Toggle";
 import { Card } from "../components/ui/Card";
 import { useConfirm } from "../components/ui/ConfirmDialog";
 import { useClinic } from "../contexts/ClinicContext";
@@ -146,6 +147,7 @@ export const BotNodesEditor = ({
     kind: "menu",
     aiInstructions: "",
     aiDepartmentId: "",
+    aiAgenda: false,
     name,
     message: "",
     // Inclui as chaves das etapas removidas ainda não salvas
@@ -587,6 +589,13 @@ export const BotNodesEditor = ({
                   </select>
                 </div>
               ) : null}
+              <Toggle
+                checked={current.aiAgenda}
+                disabled={!editable}
+                onChange={(checked) => updateStage({ aiAgenda: checked })}
+                label="Pode marcar horários na Agenda"
+                helper="A IA consulta os horários livres, marca, remarca, confirma e desmarca horários do cliente da conversa, com os serviços e profissionais cadastrados na Agenda."
+              />
               <p className="text-xs leading-relaxed text-slate-500">
                 A IA passa a conversa para a equipe quando o cliente pede uma
                 pessoa, quando não sabe a resposta ou quando o objetivo foi

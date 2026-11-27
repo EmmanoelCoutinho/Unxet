@@ -215,6 +215,32 @@ const getEventText = (event: ConversationEvent) => {
       return "Bot encerrou a sessão";
     }
 
+    // Agenda: a IA marcou, desmarcou ou confirmou um horário
+    case "appointment_booked":
+    case "appointment_cancelled":
+    case "appointment_confirmed": {
+      const verb =
+        event.type === "appointment_booked"
+          ? "marcou"
+          : event.type === "appointment_cancelled"
+            ? "desmarcou"
+            : "confirmou";
+      const when = meta.starts_at
+        ? new Date(meta.starts_at).toLocaleString("pt-BR", {
+            weekday: "short",
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "";
+      const what = [meta.service_name, meta.professional_name ? `com ${meta.professional_name}` : ""]
+        .filter(Boolean)
+        .join(" ");
+      const who = meta.by === "ai" ? "IA" : actor;
+      return `${who} ${verb} ${what || "horário"}${when ? `, ${when}` : ""}`;
+    }
+
     default:
       return `${actor} registrou um evento`;
   }

@@ -14,6 +14,7 @@ export type Permission =
   | "leads.all"
   | "campaigns.all"
   | "meta_templates.create"
+  | "agenda.manage"
   | "bots.manage"
   | "ai.manage"
   | "reports.view";
@@ -95,6 +96,13 @@ export const PERMISSIONS: PermissionInfo[] = [
     group: "Vendas e marketing",
     label: "Criar modelos da Meta",
     description: "Envia modelos de mensagem para a Meta aprovar.",
+  },
+  {
+    key: "agenda.manage",
+    group: "Atendimento",
+    label: "Configurar a agenda",
+    description:
+      "Cadastra profissionais, serviços, horários de trabalho, folgas e lembretes. Sem isso, só marca e desmarca horários.",
   },
   {
     key: "bots.manage",

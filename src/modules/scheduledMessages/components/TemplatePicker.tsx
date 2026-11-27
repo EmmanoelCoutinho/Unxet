@@ -5,6 +5,7 @@ import { useMetaTemplateActions } from "../hooks/useScheduledMessages";
 import type { MetaTemplate, MetaTemplateInput } from "../types/scheduledMessages";
 import { TemplateCard } from "./TemplateCard";
 import { TemplateFormModal } from "./TemplateFormModal";
+import { templateIsCampaignSafe } from "../utils/templates";
 
 /**
  * Escolha do modelo da Meta dentro da campanha. Só os aprovados podem ser
@@ -22,8 +23,11 @@ export const TemplatePicker: React.FC<{
   const { create, sync, creating, syncing } = useMetaTemplateActions(clinicId);
   const [formOpen, setFormOpen] = useState(false);
 
-  // Apagados e desativados só atrapalham a escolha
-  const visible = templates.filter((t) => t.status !== "disabled" && t.status !== "archived");
+  // Apagados e desativados só atrapalham a escolha. Modelos de lembrete da
+  // Agenda ({data}, {hora}...) não servem para campanha.
+  const visible = templates.filter(
+    (t) => t.status !== "disabled" && t.status !== "archived" && templateIsCampaignSafe(t.body),
+  );
   const approved = visible.filter((t) => t.status === "approved");
   const waiting = visible.filter((t) => t.status === "pending" || t.status === "submitted");
 
